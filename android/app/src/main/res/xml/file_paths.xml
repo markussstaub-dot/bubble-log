@@ -4,4 +4,6 @@
     <cache-path name="my_cache_images" path="." />
     <!-- Entwickler-Logs (devlog.js) liegen in Directory.Data/devlog -->
     <files-path name="devlog" path="devlog/" />
+    <!-- Display-Fotos (foto.js) liegen in Directory.Data/fotos, beim CSV-Export teilbar -->
+    <files-path name="fotos" path="fotos/" />
 </paths>

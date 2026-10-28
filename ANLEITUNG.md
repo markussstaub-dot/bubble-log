@@ -194,9 +194,18 @@ Hintergrund-GPS, Benachrichtigungen, Sensor-Plugin und Teilen/Speichern gehen nu
   Leerfahrt `[]`). Befunde 1 und 3 am 28.10.2026 behoben (Punkt nach Neuaufsetzen zählt nicht in die km; GPS-Lücke ≥ 3 min fast ohne Ortswechsel beendet die Fahrt vor der Lücke, Log `stopp nach Lücke`). Befund 2 (Ampel endet nach ≈ 175 s) bleibt todo, bis echte Logs da sind. Weiter mit Meilenstein 2 (Replay im Sim-Tab).
 - Logs aus dem Entwicklermodus von echten Fahrten auswerten und Schwellen abstimmen (Erkennung, Höhenmeter,
   Rauheit, Bremsen), sobald der Nutzer sie schickt.
-- **Nächster Anwendungsfall nach der neuen APK:** Akkustand per Foto vom Tacho-Display ablesen statt mit dem Drehrad
-  (Kamera öffnen, Prozentzahl erkennen, zum Bestätigen ins Drehrad übernehmen). Specsheet: `SPEC-foto.md`
-  (offline, freiwillig bei Start/Ende, Foto in niedriger Auflösung behalten).
+- **Akkustand per Foto vom Tacho-Display** (`SPEC-foto.md`, gebaut 28.10.2026, im Browser durchgespielt):
+  Knopf „📷 Display fotografieren“ im Akku-Dialog bei Start und Ende. Kamera über `<input type="file" capture>`
+  (Capacitor startet damit die Kamera-App, keine Kamera-Berechtigung, nur `<queries>` im Manifest; deshalb kein
+  `@capacitor/camera`). Erkennung offline mit ML Kit (`Texterkennung.java`), Prozentzahl in `fototext.js`; das
+  Drehrad springt auf den Wert, übernommen wird erst mit dem Knopf. Foto 640 px/JPEG 0,6 in `Directory.Data/fotos`,
+  an der Fahrt `fotoStart`/`fotoEnde`, Vorschaubild in der Fahrtenliste (antippen = groß), wird beim Verwerfen und bei
+  „Alle Daten löschen“ mitgelöscht. Einstellung „Fotos beim Export mitgeben“ (Standard aus). Entwicklermodus:
+  `foto`-Zeilen (`erkannt` mit Text, Zahl, km, Dauer; `bestätigt` mit `richtig`). Gesamt-km wird nur geloggt.
+  Im Browser: Dateiauswahl, Zahl aus dem Dateinamen (`akku-48.jpg`, `akku-48-km-007973.jpg`).
+  **Nur am Handy prüfbar:** Start der Kamera-App aus dem WebView, Treffer von ML Kit am echten Display (beide
+  Ansichten), Dauer der Erkennung, Teilen/Speichern mit Fotos. Die APK enthält nur noch `arm64-v8a` (ML Kit ≈ 11 MB
+  je Architektur; für den Emulator `x86_64` in `android/app/build.gradle` ergänzen).
 - **Idee (28.10.2026): Stillstand/Fahrt per Beschleunigungssensor** statt nur GPS. Der Microlino vibriert im Stand
   kaum, fahrend rauscht die Straße (misst Fahrsensoren schon für die Rauheit). Damit: Fahrtende früher bestätigen,
   Tiefgarage sicher als Parken erkennen; Alternative Android Activity Recognition (bisher verschoben). Erst an echten
@@ -230,7 +239,10 @@ Nach einem Neustart des Handys die App einmal öffnen, damit die Erkennung wiede
 | `src/store.js` | Speichern und Laden; übernimmt einmalig eigene Einträge aus dem Browser-Prototyp |
 | `src/sensoren.js` | Anbindung an das Plugin Fahrsensoren, Höhenmeter, Straßenrauheit |
 | `src/wetter.js` | Temperatur von Open-Meteo |
-| `src/export.js` | Fahrtenbuch als CSV-Datei teilen oder unter Dokumente/Bubble Log speichern |
+| `src/export.js` | Fahrtenbuch als CSV-Datei teilen oder unter Dokumente/Bubble Log speichern, auf Wunsch mit Display-Fotos |
+| `src/foto.js` | Foto vom Tacho-Display: Kamera, verkleinert speichern (`Directory.Data/fotos`), Erkennung aufrufen |
+| `src/fototext.js` | aus dem erkannten Text Akkustand („99 %“) und Gesamt-km heraussuchen, Plausibilität (Tests: `tests/fototext.test.js`) |
+| `android/…/Texterkennung.java` | eigenes Plugin: Google ML Kit Text Recognition (Latin, bundled, offline); löscht das Kamera-Original |
 | `src/devlog.js` | Entwicklermodus: Logs schreiben, teilen, löschen, nach 14 Tagen aufräumen |
 | `src/route.js` | Ziel-Check: Ortssuche, Straßenroute, Höhenmeter entlang der Route |
 | `src/laden.js`, `src/ladepunkte.json` | Ladepunkte offline: Umkreis, entlang der Route, Ladezeit |

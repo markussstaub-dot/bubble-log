@@ -1,7 +1,7 @@
 # Spec: Akkustand per Foto vom Tacho-Display
 
 Stand 28.10.2026. **[fest]** entschieden · **[Vorschlag]** Default, gilt, wenn niemand widerspricht · **[offen]** Frage an den Nutzer.
-Umsetzung erst nach der nächsten APK (die mit Replay-Tests und Log-Teilen).
+**Umgesetzt am 28.10.2026** (Stand der Umsetzung in `ANLEITUNG.md` unter „Offen“); Abweichungen unten mit *Umsetzung:* markiert.
 
 ## Entscheidungen des Nutzers
 - [fest] Die Erkennung läuft **offline** auf dem Handy, ohne Netz und ohne Cloud-Dienst.
@@ -14,12 +14,19 @@ Umsetzung erst nach der nächsten APK (die mit Replay-Tests und Log-Teilen).
   Es wird nichts übernommen, ohne dass du bestätigst.
 - [Vorschlag] Erkennt die App keinen oder einen unplausiblen Wert (nicht 0–100, beim Ende höher als beim Start ohne Laden),
   bleibt das Drehrad auf dem alten Wert und zeigt „nicht erkannt“. Das Foto wird trotzdem behalten.
+  *Umsetzung:* 1 Prozentpunkt über dem Start ist erlaubt (die Ansichten runden unterschiedlich). Mehrere verschiedene
+  Prozentzahlen auf dem Foto gelten als „nicht erkannt“.
 - [Vorschlag] Die Bestätigung aus der Benachrichtigung bei Fahrtende bleibt ohne Foto. Fotografieren geht nur in der geöffneten App.
 
 ## Technik
 - [Vorschlag] Kamera über `@capacitor/camera` (offizielles Plugin, Kamera-App des Handys, keine Galerie-Berechtigung nötig).
+  *Umsetzung:* einfacher über `<input type="file" accept="image/*" capture="environment">`: Capacitor startet damit selbst
+  die Kamera-App (keine Kamera-Berechtigung, nur `<queries>` für IMAGE_CAPTURE im Manifest), kein weiteres Plugin.
+  Das Originalfoto der Kamera-App löscht `Texterkennung.aufraeumen()` nach dem Verkleinern.
 - [Vorschlag] Texterkennung mit **Google ML Kit Text Recognition (Latin, „bundled“)** als Erweiterung des eigenen
   Plugins neben `Fahrsensoren.java`. Das Modell steckt in der APK (plus etwa 4 MB), läuft offline und schickt nichts weg.
+  *Umsetzung:* eigenes Plugin `Texterkennung.java`. ML Kit bringt je CPU-Architektur ≈ 11 MB mit; die APK enthält deshalb
+  nur `arm64-v8a` (Fold6, Tab S10). Erkannt wird auf einer 1600-px-Kopie, gespeichert die 640-px-Fassung.
   Aus dem erkannten Text wird die Prozentzahl gesucht (Zahl mit „%“, sonst die passende Zahl in der Nähe des Akkusymbols).
   Verworfen: Tesseract.js in der WebView (langsam, Sprachdaten 10+ MB, bei Display-Schrift schwächer).
 - [Vorschlag] Speichern als JPEG mit 640 px Kantenlänge und Qualität 0,6 (etwa 40–60 KB) in `Directory.Data/fotos/`.
@@ -44,8 +51,19 @@ Umsetzung erst nach der nächsten APK (die mit Replay-Tests und Log-Teilen).
 ## Offen
 - [fest] Beim Laden zeigt das Display eine Lade-Animation statt einer lesbaren Zahl (Nutzer, 28.10.2026). Foto beim Laden
   bleibt deshalb draußen; Fotos nur bei Fahrtbeginn und -ende, Fotos vom Display folgen bei einer Fahrt.
-- [offen] **Foto vom Display:** Bitte beim nächsten Mal im Auto das Tacho-Display mit Akkustand fotografieren, am besten
-  einmal bei Tag und einmal bei Dunkelheit/Spiegelung. Davon hängt ab, wie die Zahl gesucht wird (mit „%“? Balken? mehrere Zahlen wie Reichweite/km?).
+- [fest] **Fotos vom Display liegen vor** (28.10.2026, 19:16, abends, beide Ansichten, im Stand mit Ladekabel-Symbol):
+  - *Ansicht „Rundinstrumente“*: links Tacho (Zahl + „km/h“, R/N/D), rechts Akku-Ring mit **„100%“** in einer Pille
+    in der Mitte, darüber `trip km 0790,5` (Nachkommastelle rot), darunter `total km 007973` (6 Ziffern mit führenden
+    Nullen, Ziffern in Kästchen). Uhrzeit unten links, Datum unten rechts.
+  - *Ansicht „Straße“*: **„99 %“** oben links (mit Leerzeichen), große Tempozahl „00“ in der Mitte, Uhrzeit/Datum oben,
+    `trip km` unten rechts klein, **`total km` nur als leere Kästchen**, also hier nicht lesbar.
+  - Gleiche Minute, aber 100 % gegen 99 %: Die Ansichten runden offenbar unterschiedlich. Unterschiede von 1 Prozentpunkt
+    sind normal; die Plausi-Rückfrage (ab 10 Punkten) bleibt davon unberührt.
+  - Folgerung [Vorschlag]: Akkustand = einzige Zahl mit „%“ (mit oder ohne Leerzeichen), in beiden Ansichten eindeutig.
+    Kilometerstand nur aus der Ansicht „Rundinstrumente“ (6-stellige Zahl unter „total km“); in der Ansicht „Straße“
+    gibt es keinen. Ist ein Kilometerstand erkannt, prüfen: nicht kleiner als der letzte, Differenz passt grob zu den GPS-km.
+  - Nachts gut lesbar (helles Display, wenig Spiegelung). [offen, nicht dringend] Ein Foto bei Tageslicht/Sonne,
+    falls Spiegelungen Probleme machen; erst nötig, wenn die Erkennung am Tag versagt.
 - [fest] Fotoexport ist **optional, als Schalter in den Einstellungen** (Standard: aus).
 - [Vorschlag] Ist er an, bekommt die CSV die Spalten `Foto Start`/`Foto Ende` (Dateinamen), und beim Teilen bzw. Speichern
   unter Dokumente/Bubble Log werden die Fotos der exportierten Fahrten mitgegeben. Ist er aus, ändert sich der Export nicht.

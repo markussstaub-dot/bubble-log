@@ -5,7 +5,9 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 import { laden, speichern, speichernSpaeter, LEER } from './store.js';
 import { createTracker, distanz } from './tracker.js';
 import { temperatur } from './wetter.js';
-import { csvText, teilen, speichern as csvSpeichern } from './export.js';
+import { csvText, fotosVon, teilen, speichern as csvSpeichern } from './export.js';
+import * as foto from './foto.js';
+import { socPlausibel } from './fototext.js';
 import * as sensoren from './sensoren.js';
 import * as devlog from './devlog.js';
 import { suchen, route as routeBerechnen } from './route.js';
@@ -206,7 +208,8 @@ function viewFahrten() {
     <div class="list">${liste.map(f => `
       <section class="card trip">${miniRoute(f)}
         <div style="min-width:0"><b>${titel(f)}</b>
-          <div class="muted small">${esc(f.tag)} · ${km(f.km)} · ${f.start} → ${f.ende} % · ${esc(f.zweck)}${f.temp != null ? ` · ${f.temp} °C` : ''}${f.hm != null ? ` · ↑ ${f.hm} Hm` : ''}${f.brems ? ` · ${f.brems}× stark gebremst` : ''}</div></div>
+          <div class="muted small">${esc(f.tag)} · ${km(f.km)} · ${f.start} → ${f.ende} % · ${esc(f.zweck)}${f.temp != null ? ` · ${f.temp} °C` : ''}${f.hm != null ? ` · ↑ ${f.hm} Hm` : ''}${f.brems ? ` · ${f.brems}× stark gebremst` : ''}</div>
+          ${f.fotoStart || f.fotoEnde ? `<div class="fotos">${[f.fotoStart, f.fotoEnde].filter(Boolean).map(n => `<img class="foto-mini" data-foto="${esc(n)}" data-act="fotoGross" alt="Foto vom Display">`).join('')}</div>` : ''}</div>
         ${badge(f)}</section>`).join('') || '<p class="muted">Keine Fahrten mit diesem Zweck.</p>'}</div>
     ${fahrten().length ? `<section class="card list">
       <div class="label">Fahrtenbuch als CSV</div>
@@ -568,7 +571,7 @@ function render() {
   document.querySelectorAll('[data-tab]').forEach(b => b.setAttribute('aria-current', b.dataset.tab === V.tab ? 'page' : 'false'));
   if (V.tab === 'sim') { simTabZeichnen($('view')); return; }
   $('view').innerHTML = V.tab === 'fahrten' ? viewFahrten() : V.tab === 'reichweite' ? viewReichweite() : V.tab === 'laden' ? viewLaden() : viewHeute();
-  karteZeichnen();
+  karteZeichnen(); fotosZeigen($('view'));
   if (V.tab === 'reichweite') cacheFuellen();
 }
 
@@ -591,11 +594,45 @@ function wheelInit(v) {
   w.addEventListener('keydown', e => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); const nv = Math.max(0, Math.min(100, wheelWert + (e.key === 'ArrowUp' ? 1 : -1))); w.scrollTop = (100 - nv) * 44; } });
 }
 function socSheet(ueberschrift, v, knopf, text, extra = '') {
+  V.fotoZiel = knopf[0] === 'save' ? 'ende' : 'start'; V.fotoErkannt = null;
   sheet(`<h2>${ueberschrift}</h2><p class="small muted" style="margin:0">${text}</p>
-    ${wheelHtml()}${extra}
+    ${wheelHtml()}
+    <button class="btn block" data-act="foto">📷 Display fotografieren</button>
+    <div class="foto-info small" id="fotoInfo" hidden></div>${extra}
     <button class="btn primary block" data-act="${knopf[0]}">${knopf[1]}</button>
     ${knopf[2] ? `<button class="btn block danger" data-act="${knopf[2][0]}">${knopf[2][1]}</button>` : ''}`);
   wheelInit(v);
+}
+
+// Foto vom Tacho-Display: Drehrad auf den erkannten Wert stellen, übernommen wird erst mit dem Knopf darunter
+async function fotoAufnehmen() {
+  const ziel = V.fotoZiel, datei = await foto.aufnehmen(); if (!datei) return;
+  const info = $('fotoInfo'); if (info) { info.hidden = false; info.textContent = 'Foto wird gelesen …'; }
+  let r;
+  try { r = await foto.verarbeiten(datei, ziel, { speichern: !V.sandbox }); }
+  catch (e) { console.warn(e); devlog.log('foto', { schritt: 'fehler', ziel, text: e.message }); if (info) info.textContent = 'Foto konnte nicht gelesen werden.'; return; }
+  // Foto gehört zur Fahrt; beim Start ohne offene Fahrt („Losfahren“) wartet es bis zum Beginn
+  const o = eigen.offen, feld = ziel === 'ende' ? 'fotoEnde' : 'fotoStart';
+  if (r.name) {
+    if (o) { foto.loeschen(o[feld]); o[feld] = r.name; sichern(); }
+    else { foto.loeschen(V.fotoNeu); V.fotoNeu = r.name; }
+  }
+  const ok = socPlausibel(r.soc, { start: ziel === 'ende' ? o?.startSoc : null });
+  devlog.log('foto', { schritt: 'erkannt', ziel, text: r.text, soc: r.soc, kandidaten: r.kandidaten, km: r.km, plausibel: ok, dauer: r.dauer, quelle: r.quelle, fehler: r.fehler, datei: r.name });
+  if (ok) { V.fotoErkannt = { ziel, soc: r.soc }; const w = $('wheel'); if (w) w.scrollTop = (100 - r.soc) * 44; }
+  if (!$('fotoInfo')) return;   // Dialog inzwischen geschlossen
+  $('fotoInfo').innerHTML = `${r.name ? `<img class="foto-mini" data-foto="${r.name}" alt="Foto vom Display">` : ''}
+    <span>${ok ? `Erkannt: <b>${r.soc} %</b>. Bitte prüfen und bestätigen.` : r.soc != null ? `Erkannt: ${r.soc} %, das passt nicht zum Start (${o?.startSoc} %). Drehrad bleibt.` : 'Nicht erkannt. Bitte am Drehrad einstellen.'}</span>`;
+  fotosZeigen($('fotoInfo'));
+}
+// Wert übernommen: im Entwicklermodus festhalten, ob die Erkennung gestimmt hat
+function fotoBestaetigt(wert) {
+  if (!V.fotoErkannt) return;
+  devlog.log('foto', { schritt: 'bestätigt', ziel: V.fotoErkannt.ziel, erkannt: V.fotoErkannt.soc, wert, richtig: V.fotoErkannt.soc === wert });
+  V.fotoErkannt = null;
+}
+function fotosZeigen(wurzel = document) {
+  wurzel.querySelectorAll('img[data-foto]:not([src])').forEach(img => foto.url(img.dataset.foto).then(u => { img.src = u; }, () => img.remove()));
 }
 
 // ---------- Fahrt ----------
@@ -696,6 +733,7 @@ function kurzVerwerfen(o, zeit) {
 }
 function fahrtVerwerfen() {
   if (eigen.offen && 'parkVorher' in eigen.offen) eigen.parkplatz = eigen.offen.parkVorher;
+  if (eigen.offen && !V.sandbox) foto.loeschen(eigen.offen.fotoStart, eigen.offen.fotoEnde);
   eigen.offen = null; sichern(); tracker.setModus(zielModus()); overlay(''); render();
 }
 function fahrtSpeichern() {
@@ -703,6 +741,9 @@ function fahrtSpeichern() {
   const zweck = $('overlay').querySelector('[data-zweck][aria-pressed="true"]')?.dataset.zweck || 'Privat';
   const ende = Math.min(o.startSoc, wheelWert), t1 = o.t1 || Date.now();
   const f = { id: 'f' + o.t0, tag: datum(o.t0), t0: o.t0, t1, von: uhrzeit(o.t0), nach: uhrzeit(t1), km: Math.round(o.km * 10) / 10, start: o.startSoc, ende, temp: o.temp, zweck, punkte: o.punkte };
+  if (o.fotoStart) f.fotoStart = o.fotoStart;
+  if (o.fotoEnde) f.fotoEnde = o.fotoEnde;
+  fotoBestaetigt(wheelWert);
   const hm = sensoren.hoehenmeter(o.punkte), rau = sensoren.rauAnteil(o.punkte);
   if (hm) { f.hm = hm.auf; f.hmAb = hm.ab; }
   if (rau != null) Object.assign(f, { rau, brems: o.brems ?? 0, beschl: o.beschl ?? 0, ausschlaege: o.ausschlaege ?? [] });
@@ -830,6 +871,8 @@ function settingsSheet() {
     <label class="switch card" for="parkplatzMerken"><span><b>Abstellort merken</b><br><span class="small muted">Merkt sich am Ende jeder Fahrt, wo der Microlino steht, und zeigt es unter „Heute“. Bleibt nur auf diesem Handy. Ausschalten löscht den gespeicherten Ort.</span></span>
       <input type="checkbox" id="parkplatzMerken" ${eigen.parkplatzMerken ? 'checked' : ''}></label>
     ${V.standortFehler ? `<button class="btn block" data-act="standort">Standort-Freigabe öffnen</button>` : ''}
+    <label class="switch card" for="fotoExport"><span><b>Fotos beim Export mitgeben</b><br><span class="small muted">Die CSV bekommt die Spalten „Foto Start“ und „Foto Ende“, beim Teilen und Speichern kommen die Display-Fotos der Fahrten mit. Aus: Export wie bisher.</span></span>
+      <input type="checkbox" id="fotoExport" ${eigen.fotoExport ? 'checked' : ''}></label>
     ${fahrten().length ? `<button class="btn block" data-act="csvTeilen">Fahrtenbuch als CSV teilen</button>` : ''}
     <section class="card list">
       <label class="switch" for="entwickler"><span><b>Entwicklermodus</b><br><span class="small muted">Schreibt jede GPS-Position, die Sensorwerte und alle Schritte der Fahrterkennung in eine Datei pro Tag (JSON Lines). Bleibt 14 Tage auf dem Handy, dann wird es gelöscht. Kein zusätzlicher Handy-Akku, nur etwas Speicher.</span></span>
@@ -868,12 +911,17 @@ document.addEventListener('click', e => {
   if (simAktion(d.act)) return;
   switch (d.act) {
     case 'start': if (!eigen.offen) socSheet('Akkustand beim Start', socJetzt(), ['go', 'Losfahren'], 'Wert vom Microlino-Display übernehmen. Vorgeschlagen ist der letzte bekannte Stand.'); break;
-    case 'go': fahrtBeginnen({ startSoc: wheelWert, manuell: true }); fahrtAnsicht(); break;
+    case 'go':
+      fahrtBeginnen({ startSoc: wheelWert, manuell: true }); fotoBestaetigt(wheelWert);
+      if (V.fotoNeu) { eigen.offen.fotoStart = V.fotoNeu; V.fotoNeu = null; sichern(); }
+      fahrtAnsicht(); break;
+    case 'foto': fotoAufnehmen(); break;
+    case 'fotoGross': sheet(`<img class="foto-gross" data-foto="${esc(d.foto)}" alt="Foto vom Display"><button class="btn primary block" data-act="close">Schließen</button>`); fotosZeigen($('overlay')); break;
     case 'zeigen': fahrtAnsicht(); break;
     case 'startsoc': startSocSheet(); break;
     case 'startok': {
       const o = eigen.offen; if (!o) break;
-      o.startSoc = wheelWert; sichern(); devlog.log('eingabe', { startSoc: wheelWert });
+      o.startSoc = wheelWert; sichern(); devlog.log('eingabe', { startSoc: wheelWert }); fotoBestaetigt(wheelWert);
       if (o.status === 'beendet') endeSheet(); else fahrtAnsicht();
       break;
     }
@@ -881,7 +929,7 @@ document.addEventListener('click', e => {
     case 'ende': endeSheet(); break;
     case 'save': if (plausibel()) fahrtSpeichern(); break;
     case 'discard': devlog.log('fahrt', { schritt: 'verworfen', km: eigen.offen?.km }); fahrtVerwerfen(); toast('Fahrt verworfen'); break;
-    case 'close': V.loeschen = false; V.devLoeschen = false; overlay(''); render(); break;
+    case 'close': V.loeschen = false; V.devLoeschen = false; foto.loeschen(V.fotoNeu); V.fotoNeu = null; overlay(''); render(); break;
     case 'charge': V.tab = 'laden'; render(); $('lVon')?.focus(); break;
     case 'settings': settingsSheet(); break;
     case 'standort': tracker.oeffneEinstellungen(); break;
@@ -925,22 +973,22 @@ document.addEventListener('click', e => {
     case 'loeschen': V.loeschen = true; settingsSheet(); break;
     case 'loeschenNein': V.loeschen = false; settingsSheet(); break;
     case 'loeschenJa': {
-      const { erfassung, parkplatzMerken, entwickler, zuhause, favoriten: fav, startlisteGesetzt, ladestrom: a, ladekarte: lk, ladeErfahrung } = eigen;   // Einstellungen, Ziele und Lade-Erfahrung bleiben
-      eigen = { ...LEER, akku: eigen.akku, erfassung, parkplatzMerken, entwickler, zuhause, favoriten: fav, startlisteGesetzt, ladestrom: a, ladekarte: lk, ladeErfahrung }; V.loeschen = false; sichern(); tracker.setModus(zielModus());
+      const { erfassung, parkplatzMerken, entwickler, zuhause, favoriten: fav, startlisteGesetzt, ladestrom: a, ladekarte: lk, ladeErfahrung, fotoExport } = eigen;   // Einstellungen, Ziele und Lade-Erfahrung bleiben
+      eigen = { ...LEER, akku: eigen.akku, erfassung, parkplatzMerken, entwickler, zuhause, favoriten: fav, startlisteGesetzt, ladestrom: a, ladekarte: lk, ladeErfahrung, fotoExport }; foto.alleLoeschen(); V.loeschen = false; sichern(); tracker.setModus(zielModus());
       overlay(''); render(); toast('Alle Daten gelöscht'); break;
     }
     case 'csv':
-      if (navigator.clipboard) navigator.clipboard.writeText(csvText(fahrten())).then(() => toast('Fahrtenbuch als Text kopiert')).catch(() => toast('Kopieren nicht möglich'));
+      if (navigator.clipboard) navigator.clipboard.writeText(csvText(fahrten(), { fotos: eigen.fotoExport })).then(() => toast('Fahrtenbuch als Text kopiert')).catch(() => toast('Kopieren nicht möglich'));
       else toast('Kopieren nicht möglich');
       break;
     case 'csvTeilen':
-      teilen(csvText(fahrten()))
+      teilen(csvText(fahrten(), { fotos: eigen.fotoExport }), eigen.fotoExport ? fotosVon(fahrten()) : [])
         .then(r => { if (r === 'heruntergeladen') toast('CSV heruntergeladen'); })
         .catch(e => { console.warn(e); toast('Teilen nicht möglich'); });
       break;
     case 'csvSpeichern':
-      csvSpeichern(csvText(fahrten()))
-        .then(ort => toast(`Gespeichert: ${ort}`))
+      csvSpeichern(csvText(fahrten(), { fotos: eigen.fotoExport }), eigen.fotoExport ? fotosVon(fahrten()) : [])
+        .then(ort => toast(`Gespeichert: ${ort}${eigen.fotoExport && fotosVon(fahrten()).length ? ` und ${fotosVon(fahrten()).length} Fotos in fotos/` : ''}`))
         .catch(e => { console.warn(e); toast('Speichern nicht möglich. Über „Teilen“ geht es auch, z. B. nach OneDrive.'); });
       break;
   }
@@ -966,6 +1014,7 @@ document.addEventListener('change', e => {
       if (tracker.modus === 'warten' && !V.sandbox) { if (eigen.entwickler) sensoren.start('warten'); else sensoren.stopp(); }   // Messfenster beim Warten
       settingsSheet(); toast(eigen.entwickler ? 'Entwicklermodus an: Logs werden geschrieben' : 'Entwicklermodus aus'); });
   }
+  if (e.target.id === 'fotoExport') { eigen.fotoExport = e.target.checked; sichern(); }
   if (e.target.id === 'parkplatzMerken') {
     eigen.parkplatzMerken = e.target.checked; if (!eigen.parkplatzMerken) eigen.parkplatz = null;
     sichern(); render(); toast(eigen.parkplatzMerken ? 'Abstellort wird ab der nächsten Fahrt gemerkt' : 'Abstellort gelöscht und aus');

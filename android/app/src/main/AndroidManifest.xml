@@ -35,6 +35,13 @@
         </provider>
     </application>
 
+    <!-- foto.js: <input capture> startet die Kamera-App; ab Android 11 muss die App sie dafür sehen dürfen -->
+    <queries>
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+    </queries>
+
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />

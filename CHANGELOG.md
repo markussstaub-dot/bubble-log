@@ -4,6 +4,10 @@ Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten
 
 ## Unveröffentlicht
 - Versionsnummer in den Einstellungen, `apk.ps1` (bauen, prüfen, aufs Handy kopieren), lokales git.
+- Akkustand per Foto vom Tacho-Display (`SPEC-foto.md`): Knopf „📷 Display fotografieren“ bei Start und Ende, Erkennung
+  offline mit ML Kit, Drehrad springt auf den Wert, Bestätigen wie bisher. Foto bleibt klein an der Fahrt, Vorschaubild
+  in der Fahrtenliste, Einstellung „Fotos beim Export mitgeben“, Entwicklermodus loggt `foto`.
+- APK nur noch für `arm64-v8a` (sonst 47 MB wegen ML Kit).
 
 ## Bubble-Log-1415 (28.10.2026, noch ohne Versionsnummer in der App)
 - Log-Teilen repariert (bis 1903 kamen geteilte Logs nie an).

@@ -11,6 +11,9 @@ android {
         versionCode((project.findProperty("blVersionCode") ?: "1") as Integer)
         versionName((project.findProperty("blVersionName") ?: "1.0") as String)
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        // Nur 64-Bit-ARM (Z Fold6, Tab S10): ML Kit bringt je Architektur ≈ 11 MB mit, alle vier ergäben 47 MB statt ≈ 17 MB.
+        // Für den Android-Emulator auf dem PC hier "x86_64" ergänzen.
+        ndk { abiFilters "arm64-v8a" }
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
@@ -37,6 +40,8 @@ dependencies {
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation project(':capacitor-android')
+    // Texterkennung.java: Display-Foto offline lesen, Modell in der APK (bundled, lateinische Schrift)
+    implementation "com.google.mlkit:text-recognition:16.0.1"
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
