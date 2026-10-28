@@ -1,0 +1,13 @@
+{
+  "appId": "app.bubblelog.microlino",
+  "appName": "Bubble Log",
+  "webDir": "dist",
+  "android": {
+    "useLegacyBridge": true
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "iconColor": "#0E8F7E"
+    }
+  }
+}
