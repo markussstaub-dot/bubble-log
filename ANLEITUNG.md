@@ -106,7 +106,7 @@ Auf diesem PC eingerichtet (27.10.2026):
   eingetragen in `android/local.properties`.
 - **Android Studio** 2026.2.1.8, nur nötig zum Ausführen per USB.
 
-**Einfachster Weg:** Handy anstecken und entsperren, dann `.pk.ps1` im Projektordner (Tests, Build, Prüfen,
+**Einfachster Weg:** Handy anstecken und entsperren, dann `.\apk.ps1` im Projektordner (Tests, Build, Prüfen,
 Kopie aufs Fold6; Ablauf in `ENTWICKLUNG.md`). Von Hand geht es so:
 
 APK bauen (PowerShell). `npm run apk` findet `gradlew.bat` aus manchen Shells nicht; so klappt es zuverlässig,
