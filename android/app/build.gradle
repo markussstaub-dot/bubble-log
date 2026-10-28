@@ -8,8 +8,8 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         // apk.ps1 setzt beides aus Datum und Uhrzeit (-PblVersionCode/-PblVersionName)
-        versionCode (project.findProperty("blVersionCode") ?: "1") as Integer
-        versionName project.findProperty("blVersionName") ?: "1.0"
+        versionCode((project.findProperty("blVersionCode") ?: "1") as Integer)
+        versionName((project.findProperty("blVersionName") ?: "1.0") as String)
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
