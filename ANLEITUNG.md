@@ -217,6 +217,8 @@ Hintergrund-GPS, Benachrichtigungen, Sensor-Plugin und Teilen/Speichern gehen nu
   am Rand (0/100) etwas kräftiger. Weg: `@capacitor/haptics` (`selectionChanged()`), ≈ 5 Zeilen in `wheelInit`
   (`src/main.js`), dann `npx cap sync`. Nur am Handy spürbar; prüfen, ob One UI es auch bei ausgeschalteter
   „Vibration bei Berührung“ spielt. Aufwand etwa eine halbe Stunde.
+- **Idee (29.10.2026): Fahrzeugdaten über Microlino Open Telemetry (MOT).** Akkustand, Kilometerstand und Laden
+  direkt vom CAN-Bus per MQTT statt Drehrad/Foto/GPS. Spec: `SPEC-mot.md` (noch offen: Adapter, Weg zum Handy).
 - 12-V-Batteriewächter (BM6/BM2) anbinden, sobald er da ist.
 - Später: Frankreich-Ladepunkte, Display-Firmware
   für den Knopf.

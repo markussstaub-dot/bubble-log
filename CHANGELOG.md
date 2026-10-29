@@ -8,6 +8,9 @@ Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten
   offline mit ML Kit, Drehrad springt auf den Wert, Bestätigen wie bisher. Foto bleibt klein an der Fahrt, Vorschaubild
   in der Fahrtenliste, Einstellung „Fotos beim Export mitgeben“, Entwicklermodus loggt `foto`.
 - APK nur noch für `arm64-v8a` (sonst 47 MB wegen ML Kit).
+- Herkunft der Akkuwerte (`src/herkunft.js`, `SPEC-mot.md`): Fahrten speichern `startQuelle`/`endeQuelle`
+  (`vorschlag`, `drehrad`, `foto`). Ist der Endwert nur die unverändert bestätigte Schätzung, zählt die Fahrt nicht in den
+  Verbrauchsschnitt, mit Hinweis im Ergebnis. Vorbereitung für Fahrzeugdaten (MOT) als weitere Quelle.
 - Akku-Drehrad neu nach dem Standard Scrollrad MK IV (`src/scrollrad.js`, aus `../gods-own-ui/`): Trommel mit Physik
   (Schwung, Rastung, Gummi-Anschlag), Klick und kurzer Vibration je Zahl (Berechtigung `VIBRATE`). Nach der
   Foto-Erkennung dreht das Rad sichtbar auf den Wert. Tests in `tests/scrollrad.test.js`.

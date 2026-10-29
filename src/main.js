@@ -9,6 +9,7 @@ import { csvText, fotosVon, teilen, speichern as csvSpeichern } from './export.j
 import * as foto from './foto.js';
 import { socPlausibel } from './fototext.js';
 import { scrollrad } from './scrollrad.js';
+import { herkunft, nurSchaetzung } from './herkunft.js';
 import * as sensoren from './sensoren.js';
 import * as devlog from './devlog.js';
 import { suchen, route as routeBerechnen } from './route.js';
@@ -51,7 +52,8 @@ const ladungen = () => eigen.laden;
 const socJetzt = () => eigen.soc ?? 80;
 const tempJetzt = () => eigen.temp ?? 10;
 // Nur Fahrten ab 1 km mit glaubhaftem Verbrauch gehen in den Schnitt; ein Tippfehler am Drehrad verdirbt sonst die Reichweite
-const zaehlt = x => x.km >= 1 && x.start >= x.ende && (x.start - x.ende) / x.km <= MAX_VERBRAUCH;
+// Ebenso nicht, wenn der Endwert nur die unverändert bestätigte Schätzung ist (src/herkunft.js)
+const zaehlt = x => !nurSchaetzung(x) && x.km >= 1 && x.start >= x.ende && (x.start - x.ende) / x.km <= MAX_VERBRAUCH;
 const gelernt = (liste = fahrten()) => liste.filter(x => zaehlt(x) && x.start - x.ende >= 3).length >= 3;
 const avg = (liste = fahrten()) => {
   if (!gelernt(liste)) return STARTWERT;
@@ -590,6 +592,8 @@ function wheelHtml() { return `<div class="wheel-wrap"><canvas class="wheel" id=
 function leseWheel() { if (rad && $('wheel')) wheelWert = 100 - rad.index(); return wheelWert; }
 function wheelInit(v) {
   wheelWert = v; $('wheel').setAttribute('aria-valuenow', v);
+  V.socVorschlag = v; V.radBeruehrt = false;
+  for (const ev of ['pointerdown', 'keydown', 'wheel']) $('wheel').addEventListener(ev, () => { V.radBeruehrt = true; }, { passive: true });
   rad = scrollrad($('wheel'), { anzahl: 101, index: 100 - v, text: i => String(100 - i), einheit: '%',
     onChange: i => { wheelWert = 100 - i; $('wheel')?.setAttribute('aria-valuenow', wheelWert); } });
 }
@@ -626,6 +630,8 @@ async function fotoAufnehmen() {
     <span>${ok ? `Erkannt: <b>${r.soc} %</b>. Bitte prüfen und bestätigen.` : r.soc != null ? `Erkannt: ${r.soc} %, das passt nicht zum Start (${o?.startSoc} %). Drehrad bleibt.` : 'Nicht erkannt. Bitte am Drehrad einstellen.'}</span>`;
   fotosZeigen($('fotoInfo'));
 }
+// Herkunft des gerade bestätigten Werts; vor fotoBestaetigt() fragen, das V.fotoErkannt zurücksetzt
+const wheelHerkunft = () => herkunft({ wert: wheelWert, vorschlag: V.socVorschlag, foto: V.fotoErkannt?.soc, beruehrt: V.radBeruehrt });
 // Wert übernommen: im Entwicklermodus festhalten, ob die Erkennung gestimmt hat
 function fotoBestaetigt(wert) {
   if (!V.fotoErkannt) return;
@@ -651,10 +657,10 @@ async function temperaturHolen(p) {
 }
 function zielModus() { return eigen.offen?.status === 'faehrt' ? 'fahrt' : eigen.erfassung ? 'warten' : 'aus'; }
 
-function fahrtBeginnen({ startSoc, punkte = [], km: strecke = 0, manuell }) {
-  eigen.offen = { t0: Date.now(), km: strecke, punkte, startSoc, status: 'faehrt', manuell, temp: null, brems: 0, beschl: 0, ausschlaege: [] };
+function fahrtBeginnen({ startSoc, startQuelle, punkte = [], km: strecke = 0, manuell }) {
+  eigen.offen = { t0: Date.now(), km: strecke, punkte, startSoc, startQuelle, status: 'faehrt', manuell, temp: null, brems: 0, beschl: 0, ausschlaege: [] };
   verlauf = []; wartend = [];
-  devlog.log('fahrt', { schritt: 'beginn', manuell, startSoc, km: strecke });
+  devlog.log('fahrt', { schritt: 'beginn', manuell, startSoc, startQuelle, km: strecke });
   sichern(); tracker.setModus('fahrt');
   if (punkte[0]) temperaturHolen(punkte[0]);
 }
@@ -742,6 +748,7 @@ function fahrtSpeichern() {
   const zweck = $('overlay').querySelector('[data-zweck][aria-pressed="true"]')?.dataset.zweck || 'Privat';
   const ende = Math.min(o.startSoc, wheelWert), t1 = o.t1 || Date.now();
   const f = { id: 'f' + o.t0, tag: datum(o.t0), t0: o.t0, t1, von: uhrzeit(o.t0), nach: uhrzeit(t1), km: Math.round(o.km * 10) / 10, start: o.startSoc, ende, temp: o.temp, zweck, punkte: o.punkte };
+  f.startQuelle = o.startQuelle || 'drehrad'; f.endeQuelle = wheelHerkunft();
   if (o.fotoStart) f.fotoStart = o.fotoStart;
   if (o.fotoEnde) f.fotoEnde = o.fotoEnde;
   fotoBestaetigt(wheelWert);
@@ -756,6 +763,7 @@ function fahrtSpeichern() {
   const h = (t1 - o.t0) / 3600000, tempo = h > 0 ? f.km / h : 0;
   sheet(`<div class="label">${km(f.km)} · ${f.start} → ${f.ende} % · ${esc(zweck)}</div>
     ${kurz ? `<h2 class="warn">Kurze Fahrt</h2><p class="small" style="margin:0">${f.km < 1 ? 'Unter 1 km zählt sie nicht in den Schnitt, die Fahrt bleibt aber im Fahrtenbuch.' : 'Zu wenig Prozent für einen genauen Einzelwert. Die Fahrt zählt trotzdem im Schnitt mit.'}</p>`
+      : nurSchaetzung(f) ? `<h2>Schätzung übernommen</h2><p class="small" style="margin:0">Der Akkustand am Ende war die unveränderte Schätzung. Damit der Verbrauch nicht sich selbst bestätigt, zählt die Fahrt nicht in den Schnitt. Beim nächsten Mal den Wert vom Display einstellen oder fotografieren.</p>`
       : !zaehlt(f) ? `<h2 class="warn">${de(v, 1)} %/km</h2><p class="small" style="margin:0">Das ist mehr, als der Microlino verbrauchen kann (über ${MAX_VERBRAUCH} %/km). Vermutlich stimmt ein Akkuwert nicht; die Fahrt zählt nicht in den Schnitt.</p>`
       : `<div class="big">${de(v, 2)} %/km</div><div class="muted">${de(v * eigen.akku, 1)} kWh/100 km</div>
          <p style="margin:0" class="${d > 5 ? 'warn' : d < -5 ? 'good' : 'muted'}">${d > 5 ? `${d} % mehr als ${gelernt(eigen.fahrten.slice(0, -1)) ? 'üblich' : 'der Startwert'}` : d < -5 ? `${-d} % sparsamer als ${gelernt(eigen.fahrten.slice(0, -1)) ? 'üblich' : 'der Startwert'}` : 'Verbrauch wie üblich'}</p>
@@ -807,7 +815,7 @@ const tracker = createTracker({
     if (eigen.offen) return;
     fahrtBeginnen({ startSoc: null, punkte: [start.p, punkt.p], km: distanz(start.p, punkt.p) / 1000, manuell: false });
     if (V.sandbox) {   // im Simulator nicht unterbrechen: Start-Akku = aktueller Stand, Anzeige oben im Sim-Tab
-      eigen.offen.startSoc = socJetzt(); toast('Fahrt erkannt (Simulation)'); simHud(); return;
+      eigen.offen.startSoc = socJetzt(); eigen.offen.startQuelle = 'vorschlag'; toast('Fahrt erkannt (Simulation)'); simHud(); return;
     }
     melde(1, 'Fahrt erkannt', 'Tippen, um den Akkustand beim Start einzutragen.');
     if (document.visibilityState === 'visible') { fahrtAnsicht(); startSocSheet(); } else render();
@@ -913,7 +921,7 @@ document.addEventListener('click', e => {
   switch (d.act) {
     case 'start': if (!eigen.offen) socSheet('Akkustand beim Start', socJetzt(), ['go', 'Losfahren'], 'Wert vom Microlino-Display übernehmen. Vorgeschlagen ist der letzte bekannte Stand.'); break;
     case 'go':
-      fahrtBeginnen({ startSoc: wheelWert, manuell: true }); fotoBestaetigt(wheelWert);
+      fahrtBeginnen({ startSoc: wheelWert, startQuelle: wheelHerkunft(), manuell: true }); fotoBestaetigt(wheelWert);
       if (V.fotoNeu) { eigen.offen.fotoStart = V.fotoNeu; V.fotoNeu = null; sichern(); }
       fahrtAnsicht(); break;
     case 'foto': fotoAufnehmen(); break;
@@ -922,7 +930,8 @@ document.addEventListener('click', e => {
     case 'startsoc': startSocSheet(); break;
     case 'startok': {
       const o = eigen.offen; if (!o) break;
-      o.startSoc = wheelWert; sichern(); devlog.log('eingabe', { startSoc: wheelWert }); fotoBestaetigt(wheelWert);
+      o.startSoc = wheelWert; o.startQuelle = wheelHerkunft(); sichern();
+      devlog.log('eingabe', { startSoc: wheelWert, quelle: o.startQuelle }); fotoBestaetigt(wheelWert);
       if (o.status === 'beendet') endeSheet(); else fahrtAnsicht();
       break;
     }
