@@ -192,6 +192,9 @@ Hintergrund-GPS, Benachrichtigungen, Sensor-Plugin und Teilen/Speichern gehen nu
   `tests/fahrten/NAME.jsonl` ablegen (nur lokal), mit `npm run replay -- DATEI` ansehen und daraus
   `NAME.erwartet.json` machen (`{ "fahrten": [{ "start": "HH:MM:SS", "ende": "…", "toleranz_s": 60, "km": 3.2 }] }`,
   Leerfahrt `[]`). Befunde 1 und 3 am 28.10.2026 behoben (Punkt nach Neuaufsetzen zählt nicht in die km; GPS-Lücke ≥ 3 min fast ohne Ortswechsel beendet die Fahrt vor der Lücke, Log `stopp nach Lücke`). Befund 2 (Ampel endet nach ≈ 175 s) bleibt todo, bis echte Logs da sind. Weiter mit Meilenstein 2 (Replay im Sim-Tab).
+- **GPS-Abbruch (29.10.2026, `SPEC-gps-abbruch.md`, offen):** Logs vom 27.–29.10. per adb geholt
+  (`tests/fahrten/handy-*.jsonl`). Am 29.10. hat Android den GPS-Dienst mitten in der Fahrt beendet, die Fahrt blieb offen;
+  am 28.10. fehlt vermutlich die Heimfahrt. Erst Stufe 0 (Akku „Nicht eingeschränkt“, Standort „Immer“) + Stufe 1 (Wächter).
 - Logs aus dem Entwicklermodus von echten Fahrten auswerten und Schwellen abstimmen (Erkennung, Höhenmeter,
   Rauheit, Bremsen), sobald der Nutzer sie schickt.
 - **Akkustand per Foto vom Tacho-Display** (`SPEC-foto.md`, gebaut 28.10.2026, im Browser durchgespielt):
