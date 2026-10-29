@@ -27,6 +27,7 @@ export function createErkennung({ onStart = () => {}, onPunkt = () => {}, onStop
   let modus = 'aus';
   let kandidat = null, letzter = null, ruhe = null, bewegt = null;   // bewegt: letzter Punkt mit echtem Tempo = Fahrtende
   let spruenge = 0;   // verworfene Sprünge in Folge; ab SPRUNG_NEU gilt die neue Position (der alte Punkt war wohl der Fehler)
+  let vorModus = null;   // letzter Punkt beim Moduswechsel: stammt er aus dem Warten, ist er für die Fahrt kein Bezug
 
   function verarbeite(loc) {
     if (!loc) return;
@@ -55,6 +56,12 @@ export function createErkennung({ onStart = () => {}, onPunkt = () => {}, onStop
         }
       } else if (kandidat && t - kandidat.t > S.KANDIDAT_MAX) { kandidat = null; onLog('erkennung', { schritt: 'kandidat verworfen' }); }
     } else if (modus === 'fahrt') {
+      // Start per Hand nach langer Pause (29.10.2026): der alte Punkt aus dem Warten ist kein Bezug, sonst endet die
+      // Fahrt mit dem ersten Punkt gleich wieder als „stopp nach Lücke“
+      if (letzter && letzter === vorModus && t - letzter.t >= S.STOPP_DAUER) {
+        onLog('erkennung', { schritt: 'alter Punkt verworfen', alter: t - letzter.t });
+        letzter = null;
+      }
       // Lange Lücke ohne GPS (Tiefgarage, Handy aus) und dabei kaum vom Fleck: hat gestanden, Fahrt endet vor der Lücke
       const luecke = letzter ? t - letzter.t : 0;
       if (luecke >= S.STOPP_DAUER && distanz(letzter.p, p) / (luecke / 1000) < S.BEWEGT_TEMPO) {
@@ -85,7 +92,7 @@ export function createErkennung({ onStart = () => {}, onPunkt = () => {}, onStop
     setModus(neu) {
       if (neu === modus) return false;
       onLog('modus', { von: modus, nach: neu });
-      modus = neu; kandidat = null; ruhe = null; bewegt = null;
+      modus = neu; kandidat = null; ruhe = null; bewegt = null; vorModus = letzter;
       return true;
     },
     // Wächter beim Öffnen der App (SPEC-gps-abbruch.md): Beendet Android den GPS-Dienst, kommen keine Punkte mehr und

@@ -128,6 +128,31 @@ test('Wächter: Punkt aus dem Warten zählt nicht, nur Punkte der Fahrt selbst',
   assert.equal(e.pruefeAusfall(T0 + SCHWELLEN.STOPP_DAUER, stand), true);
 });
 
+// Testfahrt 29.10.2026: Fahrt vergessen, um 17:00 zu Hause Akku eingetippt → Start per Hand, letzter Punkt von 16:22
+const loc = (t, [lat, lon], speed = 0) => ({ latitude: lat, longitude: lon, accuracy: 4, speed, time: t });
+
+test('Start per Hand nach 38 min Pause: Fahrt endet nicht sofort am alten Punkt aus dem Warten', () => {
+  const stopps = [], log = [];
+  const e = createErkennung({ onStopp: p => stopps.push(p), onLog: (typ, d) => log.push(d.schritt) });
+  e.setModus('warten');
+  e.verarbeite(loc(T0, BEXBACH));
+  e.setModus('fahrt');
+  e.verarbeite(loc(T0 + 38 * 60000, [BEXBACH[0] + 0.00005, BEXBACH[1]]));
+  assert.deepEqual(stopps, []);
+  assert.ok(log.includes('alter Punkt verworfen'));
+  assert.ok(!log.includes('stopp nach Lücke'));
+});
+
+test('Lücke mitten in der Fahrt beendet sie weiterhin (alter Punkt stammt aus der Fahrt)', () => {
+  const stopps = [];
+  const e = createErkennung({ onStopp: p => stopps.push(p) });
+  e.setModus('fahrt');
+  e.verarbeite(loc(T0, BEXBACH, 5));
+  e.verarbeite(loc(T0 + 1000, [BEXBACH[0], BEXBACH[1] + 0.0001], 5));
+  e.verarbeite(loc(T0 + 1000 + 20 * 60000, [BEXBACH[0], BEXBACH[1] + 0.0002]));
+  assert.equal(stopps.length, 1);
+});
+
 test('gpsStand merkt den letzten bewegten Punkt, Stillstand danach ändert ihn nicht', () => {
   let s = gpsStand(null, { p: [1, 1], t: 1, tempo: 10 });
   s = gpsStand(s, { p: [1, 2], t: 2, tempo: 0.2 });

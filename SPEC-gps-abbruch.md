@@ -19,6 +19,15 @@ und `adb shell dumpsys location / usagestats / activity exit-info` vom 29.10.202
   `setInterval` (15 s) abholt und Android JavaScript-Timer im Hintergrund drosselt (29.10.: letzte Zeile 41 s nach
   Bildschirm aus, Fahrt lief weiter).
 
+- **29.10., Testfahrt abends (16:22–17:00) fehlt ganz:** Auf dem Fold6 lief noch die APK vom 28.10. 17:14, die 1418 lag nur
+  unter Downloads. Start vergessen; nach 16:22:42 (App im Hintergrund, Modus `warten`) kein GPS-Punkt und kein Sensor bis
+  16:59. Zu Hause um 17:00 wollte der Nutzer den Akku am Ende eintragen; die App stand auf `warten`, die Eingabe (74 %)
+  startete also eine Fahrt per Hand, die in derselben Sekunde als „stopp nach Lücke“ endete: der erste Punkt der Fahrt wurde
+  mit dem alten Punkt von 16:22 verglichen (38 min, 8 m). **Behoben am 29.10.2026** in `erkennung.js` (Punkt aus dem Warten
+  ist kein Bezug, Log `alter Punkt verworfen`), Tests in `tests/erkennung.test.js`, Log `tests/fahrten/handy-2026-10-29-testfahrt.jsonl`.
+- **[Vorschlag] Fahrt nachtragen:** Steht die App auf `warten` und man gibt den Akku ein, fragt sie „Fahrt beginnen“ oder
+  „Vergessene Fahrt nachtragen“ (Start-Akku, End-Akku, ungefähre km oder Ziel aus den Favoriten). Etwa 1–2 Stunden, eigene Runde.
+
 ## Ziel
 - [fest] Eine Fahrt darf nicht stillschweigend offen bleiben oder verloren gehen, wenn das GPS ausfällt.
 - [Vorschlag] Ursache sichtbar machen (Log + Hinweis in der App), statt nur die Folgen zu reparieren.
