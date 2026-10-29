@@ -1,4 +1,4 @@
-// Scrollrad nach dem Standard aus „God's Own UI Elements“ (../gods-own-ui/scrollrad, Scrollrad MK IV):
+// Scrollrad nach dem Standard aus „God's Own UI Elements“ (../../design/gods-own-ui/scrollrad, Scrollrad MK IV):
 // Trommel mit echter Physik (Masse, Reibung, Rastung, Gummi-Anschlag), Klick per Web Audio und Vibration je Rastung.
 // RadPhysik ist ohne DOM und wird in tests/scrollrad.test.js geprüft.
 
