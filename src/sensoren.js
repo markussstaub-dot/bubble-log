@@ -13,9 +13,9 @@ const HOEHE_SCHWELLE = 2;        // m: kleinere Schwankungen (Lüftung, Tür) z�
 // Entwicklermodus, nur zum Mitschreiben (entscheidet nichts): darunter wäre laut Vibration Stillstand. Geschätzt,
 // wird an echten Logs abgestimmt.
 export const RUHE_VIBRATION = 0.15;   // m/s² Effektivwert senkrecht
-const ABHOLEN = 15000;                // ms: Messfenster so oft ins Log holen
+const ABHOLEN = 15000;                // ms: Messfenster höchstens so oft ins Log holen
 
-let laeuft = false, modus = null, abholTimer = 0;
+let laeuft = false, modus = null, zuletztGeholt = 0;
 // Im Entwicklermodus laufen die Sensoren auch beim Warten mit (kostet etwas Akku), damit Stillstand und Anfahren im Log stehen
 export const auchBeimWarten = () => devlog.aktiv();
 
@@ -25,18 +25,20 @@ export async function start(neuerModus = 'fahrt') {
   if (laeuft) await fensterHolen();
   modus = neuerModus; laeuft = true;
   try { await Fahrsensoren.start(); } catch (e) { laeuft = false; console.warn('Sensoren nicht verfügbar', e); return; }
-  clearInterval(abholTimer);
-  if (devlog.aktiv()) abholTimer = setInterval(fensterHolen, ABHOLEN);
 }
 export async function stopp() {
   if (!laeuft) return;
-  clearInterval(abholTimer); abholTimer = 0;
   await fensterHolen();
   laeuft = false;
   await Fahrsensoren.stop().catch(() => {});
 }
-// 5-s-Messfenster vom Plugin ins Entwickler-Log; das Plugin puffert sie, falls Android die App im Hintergrund drosselt
+// Bei jedem GPS-Punkt (tracker.js): GPS weckt JavaScript ohnehin, ein setInterval wird im Hintergrund gedrosselt
+export function beiGpsPunkt() {
+  if (Date.now() - zuletztGeholt >= ABHOLEN) fensterHolen();
+}
+// 5-s-Messfenster vom Plugin ins Entwickler-Log; das Plugin puffert sie bis zum nächsten Abholen
 async function fensterHolen() {
+  zuletztGeholt = Date.now();
   if (!laeuft || !devlog.aktiv()) return;
   try {
     const { fenster = [] } = await Fahrsensoren.messfenster();
@@ -48,6 +50,24 @@ export async function abholen() {
   if (!laeuft) return null;
   try { return await Fahrsensoren.abholen(); } catch { return null; }
 }
+
+// Lebenszeichen des GPS-Dienstes (SPEC-gps-abbruch.md, Stufe 2): Das Plugin prüft nativ jede Minute, ob noch Punkte
+// kommen, meldet in "fahrt" einen Ausfall per Benachrichtigung und schickt Ereignisse (gpsAusfall, gpsZurueck,
+// dienstWeg, energie) an onEreignis(name, daten).
+export function lebenszeichen(gpsModus) {
+  if (NATIV) Fahrsensoren.lebenszeichen({ modus: gpsModus }).catch(() => {});
+}
+export function aufEreignisse(onEreignis) {
+  if (!NATIV) return;
+  for (const name of ['gpsAusfall', 'gpsZurueck', 'dienstWeg', 'energie'])
+    Fahrsensoren.addListener(name, d => onEreignis(name, d)).catch(() => {});
+}
+// { akkuEingeschraenkt, energiesparen, standort: 'immer' | 'nutzung' | 'nein' }; null im Browser oder mit älterem Plugin
+export async function systemStatus() {
+  if (!NATIV) return null;
+  try { return await Fahrsensoren.status(); } catch { return null; }
+}
+export function appInfos() { if (NATIV) Fahrsensoren.appInfos().catch(() => {}); }
 
 // Höhenmeter auf und ab aus den Punkthöhen ([lat, lon, höhe, rau]); null ohne Barometerwerte
 export function hoehenmeter(punkte) {

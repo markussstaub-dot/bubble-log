@@ -2,7 +2,8 @@
 // Ein Punkt pro Sekunde, Strecke geradeaus nach Osten. Uhrzeiten ab 12:00:00, siehe tests/hilfe.js.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fahrplan } from './hilfe.js';
+import { fahrplan, BEXBACH, T0 } from './hilfe.js';
+import { createErkennung, gpsStand, gpsAusfall, SCHWELLEN } from '../src/erkennung.js';
 import { spieleAb, pruefe } from '../src/replay.js';
 
 const fahrten = plan => spieleAb(fahrplan(plan)).fahrten;
@@ -95,4 +96,41 @@ test('Befund: Ampel von 178 s beendet die Fahrt schon (Stillstand zählt ab bis 
 
 test('Parken ohne GPS (Tiefgarage) mit ungenauem erstem Fix danach: zwei getrennte Fahrten', () => {
   assert.equal(fahrten([{ s: 120, v: 10 }, { s: 1200, v: 0, luecke: true }, { s: 10, v: 10, gen: 60 }, { s: 120, v: 10 }, { s: 240, v: 0 }]).length, 2);
+});
+
+// Wächter beim Öffnen der App (SPEC-gps-abbruch.md, Stufe 1): GPS-Dienst beendet, es kommen keine Punkte mehr
+const geoeffnet = (plan, nachS) => { const z = fahrplan(plan); return spieleAb(z, { geoeffnet: z.at(-1).t + nachS * 1000 }); };
+
+test('GPS-Ausfall: offene Fahrt + 10 min ohne Punkte endet beim Öffnen am letzten bewegten Punkt', () => {
+  const r = geoeffnet([{ s: 120, v: 10 }, { s: 60, v: 0 }], 600);
+  assert.equal(r.fahrten.length, 1);
+  assert.deepEqual(pruefe(r, { tag: '2026-10-28', fahrten: [{ start: '12:00:00', ende: '12:02:00', toleranz_s: 2, km: 1.2 }] }), []);
+  assert.ok(typen(r).includes('stopp nach GPS-Ausfall'));
+});
+
+test('GPS-Ausfall mitten in der Fahrt (Tempo beim letzten Punkt): Ende am letzten Punkt', () => {
+  const r = geoeffnet([{ s: 120, v: 10 }], 600);
+  assert.deepEqual(pruefe(r, { tag: '2026-10-28', fahrten: [{ start: '12:00:00', ende: '12:02:00', toleranz_s: 2 }] }), []);
+});
+
+test('Öffnen mit frischen Punkten (Ampel, Stau): Fahrt bleibt offen', () => {
+  const r = geoeffnet([{ s: 120, v: 10 }, { s: 60, v: 0 }], 30);
+  assert.equal(r.fahrten.length, 1);
+  assert.equal(r.fahrten[0].ende, null);
+});
+
+test('Wächter: Punkt aus dem Warten zählt nicht, nur Punkte der Fahrt selbst', () => {
+  const e = createErkennung();
+  e.setModus('fahrt');
+  assert.equal(e.pruefeAusfall(Date.now(), undefined), false);
+  const stand = gpsStand(null, { p: BEXBACH, t: T0, tempo: 5 });
+  assert.equal(e.pruefeAusfall(T0 + SCHWELLEN.STOPP_DAUER - 1, stand), false);
+  assert.equal(e.pruefeAusfall(T0 + SCHWELLEN.STOPP_DAUER, stand), true);
+});
+
+test('gpsStand merkt den letzten bewegten Punkt, Stillstand danach ändert ihn nicht', () => {
+  let s = gpsStand(null, { p: [1, 1], t: 1, tempo: 10 });
+  s = gpsStand(s, { p: [1, 2], t: 2, tempo: 0.2 });
+  assert.deepEqual(s, { letzter: { p: [1, 2], t: 2 }, bewegt: { p: [1, 1], t: 1 } });
+  assert.deepEqual(gpsAusfall(s, 2 + SCHWELLEN.STOPP_DAUER), { p: [1, 1], t: 1, luecke: SCHWELLEN.STOPP_DAUER });
 });

@@ -1,6 +1,15 @@
 package app.bubblelog.microlino;
 
+import android.Manifest;
+import android.app.ActivityManager;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -8,7 +17,14 @@ import android.hardware.SensorManager;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.PowerManager;
+import android.net.Uri;
+import android.os.Build;
 import android.os.SystemClock;
+import android.provider.Settings;
+
+import androidx.core.app.NotificationCompat;
+import androidx.core.content.ContextCompat;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -20,6 +36,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 // Barometer und Beschleunigung während einer Fahrt. Nativ gelesen, weil der WebView im Hintergrund
 // keine devicemotion-Ereignisse bekommt. Die App holt bei jedem Streckenpunkt (25 m) eine Zusammenfassung ab;
 // Rohdaten werden nicht gespeichert. Läuft nur zwischen start() und stop(); im Entwicklermodus auch beim Warten.
+// Dazu (SPEC-gps-abbruch.md, Stufe 2): Lebenszeichen des GPS-Dienstes, Energiesparmodus, Zustand von Akku und Standort.
 @CapacitorPlugin(name = "Fahrsensoren")
 public class Fahrsensoren extends Plugin implements SensorEventListener {
     private static final float G = SensorManager.GRAVITY_EARTH;
@@ -55,9 +72,146 @@ public class Fahrsensoren extends Plugin implements SensorEventListener {
     private float fVertMax, fWaagMax;
     private JSArray fenster = new JSArray();
 
+    // Lebenszeichen: Der Dienst von background-geolocation schickt jede Position als lokalen Broadcast. Hier wird nur
+    // die Zeit des letzten Punkts gemerkt und jede Minute geprüft; JavaScript-Timer taugen dafür nicht (gedrosselt).
+    private static final String GPS_BROADCAST = "com.equimaps.capacitor_background_geolocation.broadcast";
+    private static final String GPS_DIENST = "com.equimaps.capacitor_background_geolocation.BackgroundGeolocationService";
+    private static final long PRUEF_MS = 60_000;      // so oft prüfen
+    private static final long AUSFALL_MS = 90_000;    // in "fahrt" kommt jede Sekunde ein Punkt; so lange keiner = Ausfall
+    private static final String KANAL = "gps-ausfall";
+    private static final int MELDUNG_ID = 4711;
+    private String gpsModus = "aus";
+    private long letzterPunkt, modusSeit;
+    private boolean ausfallGemeldet, dienstLief;
+    private HandlerThread pruefThread;
+    private Handler pruefer;
+    private final BroadcastReceiver gpsEmpfaenger = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context c, Intent i) {
+            synchronized (Fahrsensoren.this) {
+                letzterPunkt = System.currentTimeMillis();
+                if (ausfallGemeldet) { ausfallGemeldet = false; meldungWeg(); ereignis("gpsZurueck", null); }
+            }
+        }
+    };
+    private final Runnable pruefen = new Runnable() {
+        @Override
+        public void run() {
+            lebenszeichenPruefen();
+            Handler h = pruefer;
+            if (h != null) h.postDelayed(this, PRUEF_MS);
+        }
+    };
+    // Energiesparmodus und Doze an/aus: nur fürs Log, damit ein Ausfall sich selbst erklärt
+    private final BroadcastReceiver energieEmpfaenger = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context c, Intent i) {
+            PowerManager pm = (PowerManager) getContext().getSystemService(Context.POWER_SERVICE);
+            JSObject d = new JSObject();
+            if (PowerManager.ACTION_POWER_SAVE_MODE_CHANGED.equals(i.getAction())) d.put("energiesparen", pm.isPowerSaveMode());
+            else d.put("doze", pm.isDeviceIdleMode());
+            ereignis("energie", d);
+        }
+    };
+
     @Override
     public void load() {
         sm = (SensorManager) getContext().getSystemService(Context.SENSOR_SERVICE);
+        LocalBroadcastManager.getInstance(getContext()).registerReceiver(gpsEmpfaenger, new IntentFilter(GPS_BROADCAST));
+        IntentFilter energie = new IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED);
+        energie.addAction(PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED);
+        ContextCompat.registerReceiver(getContext(), energieEmpfaenger, energie, ContextCompat.RECEIVER_NOT_EXPORTED);
+        pruefThread = new HandlerThread("Lebenszeichen");
+        pruefThread.start();
+        pruefer = new Handler(pruefThread.getLooper());
+        pruefer.postDelayed(pruefen, PRUEF_MS);
+    }
+
+    // Die App meldet jeden GPS-Modus (aus, warten, fahrt); nur in "fahrt" kommen sicher laufend Punkte
+    @PluginMethod
+    public synchronized void lebenszeichen(PluginCall call) {
+        String neu = call.getString("modus", "aus");
+        if (!neu.equals(gpsModus)) { gpsModus = neu; modusSeit = System.currentTimeMillis(); }
+        if (!"fahrt".equals(neu) && ausfallGemeldet) { ausfallGemeldet = false; meldungWeg(); }
+        call.resolve();
+    }
+
+    private synchronized void lebenszeichenPruefen() {
+        long jetzt = System.currentTimeMillis();
+        boolean dienst = dienstLaeuft();
+        if (dienstLief && !dienst && !"aus".equals(gpsModus)) {   // Dienst weg, obwohl die App GPS will
+            JSObject d = new JSObject();
+            d.put("modus", gpsModus); d.put("dienst", false); d.put("letzterPunkt", letzterPunkt);
+            ereignis("dienstWeg", d);
+        }
+        dienstLief = dienst;
+        if (!"fahrt".equals(gpsModus) || ausfallGemeldet) return;   // beim Warten kommen im Stand kaum Punkte
+        long seit = Math.max(letzterPunkt, modusSeit);
+        if (jetzt - seit < AUSFALL_MS) return;
+        ausfallGemeldet = true;
+        JSObject d = new JSObject();
+        d.put("modus", gpsModus); d.put("dienst", dienst); d.put("letzterPunkt", letzterPunkt); d.put("luecke", jetzt - seit);
+        ereignis("gpsAusfall", d);
+        meldungZeigen();
+    }
+
+    @SuppressWarnings("deprecation")
+    private boolean dienstLaeuft() {
+        ActivityManager am = (ActivityManager) getContext().getSystemService(Context.ACTIVITY_SERVICE);
+        // getRunningServices liefert seit Android 8 nur noch die eigenen Dienste, genau das reicht hier
+        for (ActivityManager.RunningServiceInfo s : am.getRunningServices(50))
+            if (GPS_DIENST.equals(s.service.getClassName())) return s.foreground;
+        return false;
+    }
+
+    private void ereignis(String name, JSObject d) {
+        JSObject x = d != null ? d : new JSObject();
+        x.put("t", System.currentTimeMillis());
+        notifyListeners(name, x, true);   // ohne Zuhörer (App lädt noch) aufheben bis zum ersten addListener
+    }
+
+    private void meldungZeigen() {
+        Context c = getContext();
+        NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (Build.VERSION.SDK_INT >= 26 && nm.getNotificationChannel(KANAL) == null)
+            nm.createNotificationChannel(new NotificationChannel(KANAL, "GPS-Ausfall", NotificationManager.IMPORTANCE_HIGH));
+        Intent oeffnen = c.getPackageManager().getLaunchIntentForPackage(c.getPackageName());
+        PendingIntent pi = PendingIntent.getActivity(c, MELDUNG_ID, oeffnen, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+        nm.notify(MELDUNG_ID, new NotificationCompat.Builder(c, KANAL)
+            .setSmallIcon(c.getApplicationInfo().icon)
+            .setContentTitle("Fahrtaufzeichnung unterbrochen")
+            .setContentText("Tippen zum Fortsetzen")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pi).setAutoCancel(true).build());
+    }
+
+    private void meldungWeg() {
+        ((NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE)).cancel(MELDUNG_ID);
+    }
+
+    // Für die Einstellungen: { akkuEingeschraenkt, energiesparen, standort: "immer" | "nutzung" | "nein" }
+    @PluginMethod
+    public void status(PluginCall call) {
+        Context c = getContext();
+        PowerManager pm = (PowerManager) c.getSystemService(Context.POWER_SERVICE);
+        boolean erlaubt = ContextCompat.checkSelfPermission(c, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            || ContextCompat.checkSelfPermission(c, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+        boolean immer = Build.VERSION.SDK_INT < 29 ? erlaubt
+            : ContextCompat.checkSelfPermission(c, Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED;
+        JSObject r = new JSObject();
+        r.put("akkuEingeschraenkt", !pm.isIgnoringBatteryOptimizations(c.getPackageName()));
+        r.put("energiesparen", pm.isPowerSaveMode());
+        r.put("standort", immer ? "immer" : erlaubt ? "nutzung" : "nein");
+        call.resolve(r);
+    }
+
+    // App-Infos von Bubble Log: dort stehen Akku („Nicht eingeschränkt“) und Berechtigungen (Standort)
+    @PluginMethod
+    public void appInfos(PluginCall call) {
+        Intent i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", getContext().getPackageName(), null));
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        getContext().startActivity(i);
+        call.resolve();
     }
 
     @PluginMethod
@@ -127,6 +281,11 @@ public class Fahrsensoren extends Plugin implements SensorEventListener {
     @Override
     protected void handleOnDestroy() {
         beenden();
+        LocalBroadcastManager.getInstance(getContext()).unregisterReceiver(gpsEmpfaenger);
+        try { getContext().unregisterReceiver(energieEmpfaenger); } catch (IllegalArgumentException e) { /* nie angemeldet */ }
+        Handler h = pruefer; pruefer = null;
+        if (h != null) h.removeCallbacksAndMessages(null);
+        if (pruefThread != null) { pruefThread.quitSafely(); pruefThread = null; }
     }
 
     private synchronized void beenden() {

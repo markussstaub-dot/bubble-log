@@ -3,7 +3,7 @@
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { laden, speichern, speichernSpaeter, LEER } from './store.js';
-import { createTracker, distanz } from './tracker.js';
+import { createTracker, distanz, gpsStand } from './tracker.js';
 import { temperatur } from './wetter.js';
 import { csvText, fotosVon, teilen, speichern as csvSpeichern } from './export.js';
 import * as foto from './foto.js';
@@ -167,6 +167,9 @@ function viewHeute() {
       </div>
     </section>
     ${parkplatzKarte()}
+    ${eigen.erfassung && V.system?.akkuEingeschraenkt ? `<button class="card between" data-act="settings" style="text-align:left">
+      <span><span class="label warn">Akku-Optimierung an</span><br><span class="small">Android kann die Fahrterkennung im Hintergrund beenden. In den Einstellungen ändern.</span></span>
+      <span class="pill warn">Ändern</span></button>` : ''}
     <div class="grid2"><button class="btn primary" data-act="start" ${o ? 'disabled' : ''}>Fahrt starten</button><button class="btn" data-act="charge">Laden eintragen</button></div>
     <button class="card switch" data-act="settings" style="text-align:left">
       <span><span class="label">Fahrterkennung</span><br><span class="small">${eigen.erfassung ? 'An: Fahrten starten von selbst' : 'Aus: Fahrten von Hand starten'}</span></span>
@@ -814,6 +817,7 @@ const tracker = createTracker({
   onStart(start, punkt) {
     if (eigen.offen) return;
     fahrtBeginnen({ startSoc: null, punkte: [start.p, punkt.p], km: distanz(start.p, punkt.p) / 1000, manuell: false });
+    eigen.offen.gps = gpsStand(null, punkt);
     if (V.sandbox) {   // im Simulator nicht unterbrechen: Start-Akku = aktueller Stand, Anzeige oben im Sim-Tab
       eigen.offen.startSoc = socJetzt(); eigen.offen.startQuelle = 'vorschlag'; toast('Fahrt erkannt (Simulation)'); simHud(); return;
     }
@@ -828,6 +832,7 @@ const tracker = createTracker({
       const d = distanz(letzter, punkt.p);
       if (d >= PUNKT_ABSTAND) { o.km += d / 1000; const neu = [+punkt.p[0].toFixed(5), +punkt.p[1].toFixed(5)]; o.punkte.push(neu); sensorenAnhaengen(neu); }
     }
+    o.gps = gpsStand(o.gps, punkt);   // für den Wächter, auch nach einem Neustart der App
     verlauf.push([punkt.t, punkt.tempo]); while (verlauf[0][0] < punkt.t - 60000) verlauf.shift();
     ausschlaegeEinordnen(o, punkt.t);
     if (o.temp == null && o.punkte.length === 1) temperaturHolen(punkt.p);
@@ -845,6 +850,42 @@ const tracker = createTracker({
     if (code === 'standort') { V.standortFehler = true; toast('Standort nicht erlaubt. In den Einstellungen freigeben.'); }
     else console.warn('GPS-Fehler', code);
   },
+});
+
+// Wächter (SPEC-gps-abbruch.md, Stufe 1): Hat Android den GPS-Dienst mitten in der Fahrt beendet, kommen keine Punkte
+// mehr und die Erkennung kommt nie zum Stopp. Beim Start und Sichtbarwerden: letzter Punkt älter als STOPP_DAUER →
+// Fahrt endet am letzten bewegten Punkt (onStopp, dann die gewohnte Akku-Abfrage). Sonst GPS neu anfordern.
+function waechter({ neuStarten = true } = {}) {
+  const o = eigen.offen;
+  if (o?.status === 'faehrt' && !V.sandbox && tracker.pruefeAusfall(Date.now(), o.gps)) return;
+  if (neuStarten && !V.sandbox) tracker.neuStarten();
+}
+// Akku-Optimierung, Energiesparmodus und Standortrecht (nur in der App); true, wenn sich etwas geändert hat
+async function systemPruefen() {
+  const s = await sensoren.systemStatus(); if (!s) return false;
+  const neu = JSON.stringify(s) !== JSON.stringify(V.system);
+  V.system = s; if (neu) devlog.log('app', { system: s });
+  return neu;
+}
+function systemKarte() {
+  const s = V.system;
+  const zeile = (name, wert, klasse) => `<div class="between"><span>${name}</span><span class="pill ${klasse}">${wert}</span></div>`;
+  return `<section class="card list">
+    <div class="label">Akku und Standort</div>
+    ${s ? zeile('Akku', s.akkuEingeschraenkt ? 'eingeschränkt' : 'nicht eingeschränkt', s.akkuEingeschraenkt ? 'warn' : 'good')
+      + zeile('Standort', { immer: 'immer', nutzung: 'nur bei Nutzung', nein: 'nicht erlaubt' }[s.standort] ?? s.standort, s.standort === 'nein' ? 'bad' : 'good')
+      + (s.energiesparen ? zeile('Energiesparmodus', 'an', 'warn') : '')
+      : `<p class="small muted" style="margin:0">Nur in der App abfragbar.</p>`}
+    <p class="small muted" style="margin:0">Damit Android die Fahrterkennung nicht beendet: Akku <b>„Nicht eingeschränkt“</b>. Für den Standort reicht „Während der Nutzung“, solange die Dauer-Benachrichtigung zu sehen ist. Beides steht in den App-Infos.</p>
+    <div class="grid2"><button class="btn" data-act="appInfosAkku">Akku-Einstellung</button><button class="btn" data-act="appInfosStandort">Standort-Recht</button></div>
+  </section>`;
+}
+// Ereignisse vom nativen Lebenszeichen ins Entwickler-Log
+sensoren.aufEreignisse((name, d) => {
+  if (name === 'gpsAusfall') devlog.log('fehler', { quelle: 'gps-ausfall', ...d });
+  else if (name === 'dienstWeg') devlog.log('fehler', { quelle: 'gps-dienst', text: 'Dienst beendet', ...d });
+  else if (name === 'gpsZurueck') devlog.log('modus', { gps: 'zurück', ...d });
+  else if (name === 'energie') devlog.log('modus', d);
 });
 
 // Beim Öffnen der App: offene Fahrt fortsetzen oder nachfragen
@@ -868,6 +909,7 @@ function settingsSheet() {
     <div class="field"><label for="akku">Akku deines Microlino</label><select id="akku">${[5.5, 10.5, 15].map(k => `<option value="${k}" ${k === eigen.akku ? 'selected' : ''}>${k === 5.5 ? 'Short Range' : k === 10.5 ? 'Mid Range' : 'Long Range'} · ${de(k, 1)} kWh</option>`).join('')}</select></div>
     <label class="switch card" for="erfassung"><span><b>Fahrterkennung</b><br><span class="small muted">Erkennt Fahrten ab etwa 11 km/h und beendet sie nach 3 Minuten Stillstand. Solange sie an ist, zeigt Android eine Dauer-Benachrichtigung und das GPS bleibt aktiv; das kostet etwas Akku am Handy. Nach einem Neustart des Handys die App einmal öffnen.</span></span>
       <input type="checkbox" id="erfassung" ${eigen.erfassung ? 'checked' : ''}></label>
+    ${systemKarte()}
     <div class="field"><label for="ladekarte">Deine Ladekarte</label><input id="ladekarte" type="search" value="${esc(ladekarte())}" maxlength="30">
       <span class="small muted">${Object.keys(erfahrung().punkte).length} Säulen und ${Object.keys(erfahrung().betreiber).length} Betreiber markiert. Markieren: in einer Ladepunkt-Liste auf die Säule tippen.</span></div>
     <div class="field"><label for="ladestrom">Ladestrom unterwegs (Ampere)</label><input id="ladestrom" type="number" inputmode="numeric" min="6" max="32" step="1" value="${ladestrom()}">
@@ -896,6 +938,7 @@ function settingsSheet() {
     <p class="small muted" style="margin:0">Alle Daten bleiben auf diesem Handy. Nur die Temperatur wird bei Open-Meteo abgefragt.</p>
     <p class="small muted mono" style="margin:0;text-align:center">Bubble Log ${__APP_VERSION__}</p>
     <button class="btn primary block" data-act="close">Fertig</button>`);
+  systemPruefen().then(neu => { if (neu && $('overlay').querySelector('.sheet h2')?.textContent === 'Einstellungen') settingsSheet(); });
   if (devlog.aktiv()) devlog.flush().then(devlog.dateien).then(liste => {
     const el = $('devInfo'); if (!el) return;
     const kb = liste.reduce((s, f) => s + f.groesse, 0) / 1024;
@@ -943,6 +986,7 @@ document.addEventListener('click', e => {
     case 'charge': V.tab = 'laden'; render(); $('lVon')?.focus(); break;
     case 'settings': settingsSheet(); break;
     case 'standort': tracker.oeffneEinstellungen(); break;
+    case 'appInfosAkku': case 'appInfosStandort': devlog.log('app', { appInfos: d.act }); sensoren.appInfos(); break;
     case 'rwListe': V.rwListe = d.wert; render(); break;
     case 'ladepunkt': ladepunktSheet(d.key); break;
     case 'markePunkt': markieren('punkt', d.key, d.wert); break;
@@ -1057,8 +1101,10 @@ document.addEventListener('submit', e => {
 document.addEventListener('visibilitychange', () => {
   devlog.log('app', { sichtbar: document.visibilityState === 'visible' });
   if (document.visibilityState !== 'visible') { sichern(); devlog.flush(); return; }   // beim Wegwechseln sofort sichern
+  waechter();
   if (!sheetOffen()) { if (V.fahrtAnsicht) fahrtAnzeigeAktualisieren(); else render(); }
   pruefeOffen();
+  systemPruefen().then(neu => { if (neu && V.tab === 'heute' && !sheetOffen() && !V.fahrtAnsicht) render(); });
 });
 setInterval(fahrtAnzeigeAktualisieren, 1000);
 
@@ -1074,7 +1120,10 @@ setInterval(fahrtAnzeigeAktualisieren, 1000);
   devlog.log('app', { start: true, offen: eigen.offen?.status ?? null, erfassung: eigen.erfassung, fahrten: eigen.fahrten.length });
   render();
   if (NATIV) LocalNotifications.addListener('localNotificationActionPerformed', a => { devlog.log('meldung', { getippt: a?.notification?.id }); setTimeout(pruefeOffen, 300); }).catch(() => {});
-  await tracker.setModus(zielModus());
+  const gps = tracker.setModus(zielModus());
+  waechter({ neuStarten: false });   // GPS startet gerade ohnehin; vor dem ersten neuen Punkt prüfen
+  await gps;
+  systemPruefen().then(neu => { if (neu && V.tab === 'heute' && !sheetOffen() && !V.fahrtAnsicht) render(); });
   setTimeout(cacheFuellen, 5000);   // fehlende Wege ab Zuhause im Hintergrund holen
   const ort = eigen.fahrten.at(-1)?.punkte?.at(-1);
   if (ort) temperaturHolen(ort);

@@ -92,6 +92,9 @@ mit `t` (Zeit in ms) und `typ`:
 | `sensor` | Barometer und Beschleunigung pro 25-m-Punkt (Rohwerte aus dem Fahrsensoren-Plugin) |
 | `fahrt` | `beginn`, `ende` (von Hand oder im Hintergrund), `gespeichert` (Zusammenfassung), `verworfen` |
 | `eingabe`, `meldung`, `app`, `fehler` | Akku-Eingaben, Benachrichtigungen, App sichtbar/unsichtbar, GPS-Fehler |
+| `modus` (Zusatz) | `gpsDienst`: `start`/`stopp`/`neu anfordern`; `energiesparen`/`doze`: an/aus; `gps: 'zurück'` nach einem Ausfall |
+| `fehler` (Zusatz) | `quelle: 'gps-ausfall'` (Fahrt, 90 s kein Punkt; `luecke`, `dienst` läuft noch?), `quelle: 'gps-dienst'` (Dienst weg) |
+| `app` (Zusatz) | `system`: Akku eingeschränkt, Energiesparmodus, Standortrecht (bei Änderung) |
 
 Auswerten zum Beispiel mit Python: `pandas.read_json("bubble-log-2026-10-27.jsonl", lines=True)`.
 In der Fahrt-Ansicht zeigt eine DEV-Zeile live Genauigkeit, Tempo, Alter der letzten Position und den Modus.
@@ -191,10 +194,16 @@ Hintergrund-GPS, Benachrichtigungen, Sensor-Plugin und Teilen/Speichern gehen nu
   `npm test`, erste Datei `tests/fahrten/sim-2026-10-28-stadt.jsonl`). Echte Logs unverändert als
   `tests/fahrten/NAME.jsonl` ablegen (nur lokal), mit `npm run replay -- DATEI` ansehen und daraus
   `NAME.erwartet.json` machen (`{ "fahrten": [{ "start": "HH:MM:SS", "ende": "…", "toleranz_s": 60, "km": 3.2 }] }`,
-  Leerfahrt `[]`). Befunde 1 und 3 am 28.10.2026 behoben (Punkt nach Neuaufsetzen zählt nicht in die km; GPS-Lücke ≥ 3 min fast ohne Ortswechsel beendet die Fahrt vor der Lücke, Log `stopp nach Lücke`). Befund 2 (Ampel endet nach ≈ 175 s) bleibt todo, bis echte Logs da sind. Weiter mit Meilenstein 2 (Replay im Sim-Tab).
-- **GPS-Abbruch (29.10.2026, `SPEC-gps-abbruch.md`, offen):** Logs vom 27.–29.10. per adb geholt
+  Leerfahrt `[]`; `"geoeffnet": "HH:MM:SS"`, wenn die App danach geöffnet wurde, ohne dass es im Log steht). Befunde 1 und 3 am 28.10.2026 behoben (Punkt nach Neuaufsetzen zählt nicht in die km; GPS-Lücke ≥ 3 min fast ohne Ortswechsel beendet die Fahrt vor der Lücke, Log `stopp nach Lücke`). Befund 2 (Ampel endet nach ≈ 175 s) bleibt todo, bis echte Logs da sind. Weiter mit Meilenstein 2 (Replay im Sim-Tab).
+- **GPS-Abbruch (29.10.2026, `SPEC-gps-abbruch.md`):** Logs vom 27.–29.10. per adb geholt
   (`tests/fahrten/handy-*.jsonl`). Am 29.10. hat Android den GPS-Dienst mitten in der Fahrt beendet, die Fahrt blieb offen;
-  am 28.10. fehlt vermutlich die Heimfahrt. Erst Stufe 0 (Akku „Nicht eingeschränkt“, Standort „Immer“) + Stufe 1 (Wächter).
+  am 28.10. fehlt die Heimfahrt. Stufe 0 erledigt (Akku „Nicht eingeschränkt“). **Stufe 1 und 2 gebaut (29.10.2026),
+  im Browser geprüft, in `Bubble-Log-1418.apk` (Live-Test steht aus):** Wächter beim Start/Sichtbarwerden (`pruefeAusfall` in `erkennung.js`,
+  Tests in `tests/erkennung.test.js`, Replay-Fall `handy-2026-10-29` mit `"geoeffnet"`), GPS neu anfordern
+  (`tracker.neuStarten`), Lebenszeichen und Benachrichtigung nativ in `Fahrsensoren.java`, Anzeige „Akku und Standort“ in
+  den Einstellungen, Log von GPS-Dienst und Energiesparmodus, Vibrationsfenster pro GPS-Punkt.
+  **Nur am Handy prüfbar:** ob der Broadcast des GPS-Plugins ankommt (Lebenszeichen), die Benachrichtigung nach 90 s,
+  `status()` (Akku/Standort), die Energiespar-/Doze-Zeilen. Stufe 3 (Heimfahrt ohne laufendes GPS) erst nach neuen Logs.
 - Logs aus dem Entwicklermodus von echten Fahrten auswerten und Schwellen abstimmen (Erkennung, Höhenmeter,
   Rauheit, Bremsen), sobald der Nutzer sie schickt.
 - **Akkustand per Foto vom Tacho-Display** (`SPEC-foto.md`, gebaut 28.10.2026, im Browser durchgespielt):
@@ -236,6 +245,10 @@ Hintergrund-GPS, Benachrichtigungen, Sensor-Plugin und Teilen/Speichern gehen nu
    Sonst beendet Android die Erkennung nach einiger Zeit.
 
 Nach einem Neustart des Handys die App einmal öffnen, damit die Erkennung wieder läuft.
+Den Zustand von Akku und Standort zeigt Einstellungen → „Akku und Standort“; die Knöpfe öffnen die App-Infos.
+Beendet Android das GPS während einer Fahrt, kommt nach etwa 1,5 Minuten die Benachrichtigung „Fahrtaufzeichnung
+unterbrochen“. Tippen öffnet die App und fordert das GPS neu an; liegt der letzte Punkt mehr als 3 Minuten zurück, endet
+die Fahrt dort und die App fragt den Akkustand ab.
 
 ## Aufbau
 

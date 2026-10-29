@@ -1,7 +1,7 @@
 // Replay: Entwickler-Log (JSON Lines aus devlog.js) noch einmal durch die Fahrterkennung schicken.
 // Läuft ohne GPS und Capacitor (Browser und node --test). Speichert nichts.
 // Ergebnis: was die Erkennung heute entscheidet (ereignisse, fahrten) und was das Handy damals geloggt hat (damals).
-import { createErkennung, distanz } from './erkennung.js';
+import { createErkennung, distanz, gpsStand } from './erkennung.js';
 
 const PUNKT_ABSTAND = 25;   // m zwischen gespeicherten Streckenpunkten, wie in main.js (dort zählt so die Strecke)
 
@@ -24,10 +24,12 @@ export const gpsZuLoc = z => ({ latitude: z.lat, longitude: z.lon, accuracy: z.g
 // eingabe: JSONL-Text oder schon gelesene Zeilen. schwellen: einzelne Werte aus SCHWELLEN überschreiben.
 // startModus: sonst der Modus der ersten gps-Zeile. Danach wechselt der Modus wie in der App: Start → fahrt, Stopp → warten.
 // Bei einer sim-Zeile (Simulator an/aus) beginnt die Erkennung frisch wie in der App, der Modus kommt aus der nächsten gps-Zeile.
-export function spieleAb(eingabe, { schwellen, startModus } = {}) {
+// Bei einer app-Zeile (Start oder sichtbar) läuft der Wächter wie in der App (SPEC-gps-abbruch.md). geoeffnet: ms, zu denen
+// die App danach noch geöffnet wurde, ohne dass es im Log steht (GPS-Dienst tot, Log-Ende); dort läuft der Wächter auch.
+export function spieleAb(eingabe, { schwellen, startModus, geoeffnet = [] } = {}) {
   const zeilen = typeof eingabe === 'string' ? leseLog(eingabe) : eingabe;
   const ereignisse = [], fahrten = [], damals = [];
-  let jetzt = null, offen = null, punkte = 0, verworfen = { ungenau: 0, sprung: 0 };
+  let jetzt = null, offen = null, punkte = 0, verworfen = { ungenau: 0, sprung: 0 }, ausfall = null;
 
   const ereignis = (typ, zeit, ort, mehr = {}) => ereignisse.push({ typ, zeit, uhr: uhr(zeit), ort, ...mehr });
   const erkennung = createErkennung({
@@ -39,30 +41,39 @@ export function spieleAb(eingabe, { schwellen, startModus } = {}) {
       if (d.schritt === 'kandidat') ereignis('kandidat', t, ort);
       else if (d.schritt === 'kandidat verworfen') ereignis('kandidat verworfen', t, ort);
       else if (d.schritt.startsWith('neu aufgesetzt')) ereignis('neu aufgesetzt', t, ort, { spruenge: d.spruenge });
+      else if (d.schritt === 'stopp nach GPS-Ausfall') ausfall = d.luecke;
     },
     onStart(start, punkt) {
       if (offen) return;   // wie main.js: läuft schon eine Fahrt, zählt der Start nicht
-      offen = { start: start.t, erkannt: punkt.t, ende: null, gestoppt: null, km: distanz(start.p, punkt.p) / 1000, von: start.p, nach: null, letzter: punkt.p };
+      offen = { start: start.t, erkannt: punkt.t, ende: null, gestoppt: null, km: distanz(start.p, punkt.p) / 1000, von: start.p, nach: null, letzter: punkt.p, gps: gpsStand(null, punkt) };
       ereignis('start', start.t, start.p, { erkannt: punkt.t, km: runde(offen.km) });
       erkennung.setModus('fahrt');
     },
     onPunkt(punkt) {
       if (!offen) return;
+      offen.gps = gpsStand(offen.gps, punkt);
       const d = distanz(offen.letzter, punkt.p);
       if (d >= PUNKT_ABSTAND) { offen.km += d / 1000; offen.letzter = [+punkt.p[0].toFixed(5), +punkt.p[1].toFixed(5)]; }
     },
     onStopp(ende) {
       if (!offen) return;
       Object.assign(offen, { ende: ende.t, gestoppt: jetzt.zeit ?? jetzt.t, nach: ende.p });
-      ereignis('stopp', ende.t, ende.p, { erkannt: offen.gestoppt, km: runde(offen.km) });
+      if (ausfall != null) { offen.gpsAusfall = ausfall; ausfall = null; }
+      ereignis(offen.gpsAusfall != null ? 'stopp nach GPS-Ausfall' : 'stopp', ende.t, ende.p, { erkannt: offen.gestoppt, km: runde(offen.km) });
       abschliessen();
       erkennung.setModus('warten');
     },
   });
   function abschliessen() {
-    const { letzter, ...f } = offen;
+    const { letzter, gps, ...f } = offen;
     fahrten.push({ ...f, km: runde(f.km), startUhr: f.start != null ? uhr(f.start) : null, endeUhr: f.ende != null ? uhr(f.ende) : null });
     offen = null;
+  }
+
+  function waechter(t) {
+    if (!offen || !jetzt) return;
+    jetzt = { ...jetzt, t, zeit: t };
+    erkennung.pruefeAusfall(t, offen.gps);
   }
 
   let modusOffen = true;   // Modus noch aus der nächsten gps-Zeile übernehmen
@@ -83,8 +94,9 @@ export function spieleAb(eingabe, { schwellen, startModus } = {}) {
         if (offen) { offen.abgebrochen = true; abschliessen(); }
         erkennung.zuruecksetzen(); modusOffen = true;
       }
-    }
+    } else if (z.typ === 'app' && (z.start || z.sichtbar)) waechter(z.t);
   }
+  for (const t of [].concat(geoeffnet)) waechter(t);
   if (offen) abschliessen();   // Fahrt läuft am Log-Ende noch (ende: null)
   return { ereignisse, fahrten, damals, punkte, verworfen };
 }

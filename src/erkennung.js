@@ -88,7 +88,32 @@ export function createErkennung({ onStart = () => {}, onPunkt = () => {}, onStop
       modus = neu; kandidat = null; ruhe = null; bewegt = null;
       return true;
     },
+    // Wächter beim Öffnen der App (SPEC-gps-abbruch.md): Beendet Android den GPS-Dienst, kommen keine Punkte mehr und
+    // der Stopp oben greift nie. Ist der letzte Punkt älter als STOPP_DAUER, endet die Fahrt am letzten bewegten Punkt.
+    // stand: gpsStand() der offenen Fahrt; die Fahrt merkt ihn sich selbst, damit er auch nach einem Neustart der App
+    // gilt und kein alter Punkt aus dem Warten zählt. true, wenn die Fahrt dabei endete.
+    pruefeAusfall(jetztT, stand) {
+      if (modus !== 'fahrt' || !stand) return false;
+      const ende = gpsAusfall(stand, jetztT, S);
+      if (!ende) return false;
+      onLog('erkennung', { schritt: 'stopp nach GPS-Ausfall', luecke: ende.luecke, ende: ende.t });
+      ruhe = null; bewegt = null;
+      onStopp(ende);
+      return true;
+    },
     // alles vergessen, auch den letzten Punkt (Wechsel zwischen echtem GPS und Simulator)
     zuruecksetzen() { kandidat = null; letzter = null; ruhe = null; bewegt = null; spruenge = 0; },
   };
+}
+
+// Stand für den Wächter, bei jedem Punkt der Fahrt fortgeschrieben: { letzter, bewegt } je { p, t }
+export function gpsStand(alt, punkt, S = SCHWELLEN) {
+  const jetzt = { p: punkt.p, t: punkt.t };
+  return { letzter: jetzt, bewegt: !alt?.bewegt || (punkt.tempo ?? 0) >= S.BEWEGT_TEMPO ? jetzt : alt.bewegt };
+}
+// Fahrtende nach GPS-Ausfall: letzter bewegter Punkt ({ p, t, luecke }), oder null, solange der letzte Punkt frisch ist
+export function gpsAusfall({ letzter, bewegt }, jetztT, S = SCHWELLEN) {
+  if (!letzter || jetztT - letzter.t < S.STOPP_DAUER) return null;
+  const ende = bewegt && bewegt.t <= letzter.t ? bewegt : letzter;
+  return { p: ende.p, t: ende.t, luecke: jetztT - letzter.t };
 }

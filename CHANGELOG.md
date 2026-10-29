@@ -3,6 +3,8 @@
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
 ## Unveröffentlicht
+
+## Bubble-Log-1418 (29.10.2026, Version 2026.10.29-1418)
 - Versionsnummer in den Einstellungen, `apk.ps1` (bauen, prüfen, aufs Handy kopieren), lokales git.
 - Akkustand per Foto vom Tacho-Display (`SPEC-foto.md`): Knopf „📷 Display fotografieren“ bei Start und Ende, Erkennung
   offline mit ML Kit, Drehrad springt auf den Wert, Bestätigen wie bisher. Foto bleibt klein an der Fahrt, Vorschaubild
@@ -14,6 +16,14 @@ Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten
 - Akku-Drehrad neu nach dem Standard Scrollrad MK IV (`src/scrollrad.js`, aus `../gods-own-ui/`): Trommel mit Physik
   (Schwung, Rastung, Gummi-Anschlag), Klick und kurzer Vibration je Zahl (Berechtigung `VIBRATE`). Nach der
   Foto-Erkennung dreht das Rad sichtbar auf den Wert. Tests in `tests/scrollrad.test.js`.
+- GPS-Abbruch (`SPEC-gps-abbruch.md`, Stufe 1 und 2): **Wächter** beim Start und Sichtbarwerden der App: Ist eine Fahrt
+  offen und der letzte GPS-Punkt älter als 3 min, endet sie am letzten bewegten Punkt (Log `stopp nach GPS-Ausfall`),
+  danach die gewohnte Akku-Abfrage; sonst wird das GPS neu angefordert, auch ohne Moduswechsel. **Lebenszeichen nativ**
+  in `Fahrsensoren.java`: prüft jede Minute, ob der GPS-Dienst noch Punkte liefert; während einer Fahrt nach 90 s ohne
+  Punkt Benachrichtigung „Fahrtaufzeichnung unterbrochen – Tippen zum Fortsetzen“. Einstellungen zeigen Akku
+  (eingeschränkt/nicht eingeschränkt), Standort und Energiesparmodus mit Knopf zu den App-Infos, unter „Heute“ ein
+  Hinweis bei Akku-Optimierung. Entwicklermodus loggt Start/Stopp des GPS-Dienstes, GPS-Ausfall, Energiesparmodus und
+  Doze. Vibrations-Messfenster kommen jetzt mit den GPS-Punkten statt per `setInterval` (lief im Hintergrund nicht).
 
 ## Bubble-Log-1415 (28.10.2026, noch ohne Versionsnummer in der App)
 - Log-Teilen repariert (bis 1903 kamen geteilte Logs nie an).

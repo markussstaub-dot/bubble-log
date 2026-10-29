@@ -1,7 +1,7 @@
 # Spec: GPS-Abbruch erkennen und Fahrten nicht verlieren
 
 Stand 29.10.2026. **[fest]** entschieden · **[Vorschlag]** Default, gilt, wenn niemand widerspricht · **[offen]** Frage an den Nutzer.
-Noch nicht umgesetzt. Grundlage: Entwickler-Logs vom Fold6 (27.–29.10.2026, `tests/fahrten/handy-*.jsonl`, nur lokal)
+Stufe 1 und 2 umgesetzt am 29.10.2026 (in Bubble-Log-1418.apk), Stufe 3 offen. Grundlage: Entwickler-Logs vom Fold6 (27.–29.10.2026, `tests/fahrten/handy-*.jsonl`, nur lokal)
 und `adb shell dumpsys location / usagestats / activity exit-info` vom 29.10.2026, 13:50.
 
 ## Was passiert ist
