@@ -47,4 +47,6 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Fahrsensoren: CPU während einer Fahrt wach halten, sonst gehen bei dunklem Bildschirm Sensorwerte verloren -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Akku-Drehrad: kurzer Tick je Rastung (navigator.vibrate im WebView) -->
+    <uses-permission android:name="android.permission.VIBRATE" />
 </manifest>

@@ -8,6 +8,7 @@ import { temperatur } from './wetter.js';
 import { csvText, fotosVon, teilen, speichern as csvSpeichern } from './export.js';
 import * as foto from './foto.js';
 import { socPlausibel } from './fototext.js';
+import { scrollrad } from './scrollrad.js';
 import * as sensoren from './sensoren.js';
 import * as devlog from './devlog.js';
 import { suchen, route as routeBerechnen } from './route.js';
@@ -582,17 +583,17 @@ const overlay = html => { $('overlay').innerHTML = html; V.fahrtAnsicht = html.i
 const sheetOffen = () => !!$('overlay').querySelector('.sheet');
 const sheet = inner => overlay(`<div class="backdrop" data-act="close"></div><div class="sheet" role="dialog" aria-modal="true"><div class="grip"></div>${inner}</div>`);
 
-let wheelWert = 0;
-function wheelHtml() { return `<div class="wheel-wrap"><div class="wheel" id="wheel" tabindex="0" role="spinbutton" aria-label="Akkustand in Prozent" aria-valuemin="0" aria-valuemax="100"><div class="pad"></div>${Array.from({ length: 101 }, (_, i) => `<div class="it" data-v="${100 - i}">${100 - i}</div>`).join('')}<div class="pad"></div></div><div class="wheel-mark"></div><div class="wheel-unit">%</div></div>`; }
-// Wert immer aus der echten Scroll-Position lesen, nicht aus einem zwischengespeicherten Stand
-function leseWheel() { const w = $('wheel'); if (w) wheelWert = Math.max(0, Math.min(100, 100 - Math.round(w.scrollTop / 44))); return wheelWert; }
+let wheelWert = 0, rad = null;
+// Akkustand-Rad nach dem Standard Scrollrad MK IV (src/scrollrad.js): Index 0 = 100 %, Index 100 = 0 %
+function wheelHtml() { return `<div class="wheel-wrap"><canvas class="wheel" id="wheel" tabindex="0" role="spinbutton" aria-label="Akkustand in Prozent" aria-valuemin="0" aria-valuemax="100"></canvas></div>`; }
+// Wert immer aus der echten Radstellung lesen, nicht aus einem zwischengespeicherten Stand
+function leseWheel() { if (rad && $('wheel')) wheelWert = 100 - rad.index(); return wheelWert; }
 function wheelInit(v) {
-  const w = $('wheel'); wheelWert = v;
-  const markiere = () => { w.querySelectorAll('.it').forEach(it => it.classList.toggle('on', Number(it.dataset.v) === wheelWert)); w.setAttribute('aria-valuenow', wheelWert); };
-  w.scrollTop = (100 - v) * 44; markiere();
-  w.addEventListener('scroll', () => { leseWheel(); markiere(); }, { passive: true });
-  w.addEventListener('keydown', e => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); const nv = Math.max(0, Math.min(100, wheelWert + (e.key === 'ArrowUp' ? 1 : -1))); w.scrollTop = (100 - nv) * 44; } });
+  wheelWert = v; $('wheel').setAttribute('aria-valuenow', v);
+  rad = scrollrad($('wheel'), { anzahl: 101, index: 100 - v, text: i => String(100 - i), einheit: '%',
+    onChange: i => { wheelWert = 100 - i; $('wheel')?.setAttribute('aria-valuenow', wheelWert); } });
 }
+function wheelSetze(v) { if (rad && $('wheel')) rad.setze(100 - v); }
 function socSheet(ueberschrift, v, knopf, text, extra = '') {
   V.fotoZiel = knopf[0] === 'save' ? 'ende' : 'start'; V.fotoErkannt = null;
   sheet(`<h2>${ueberschrift}</h2><p class="small muted" style="margin:0">${text}</p>
@@ -619,7 +620,7 @@ async function fotoAufnehmen() {
   }
   const ok = socPlausibel(r.soc, { start: ziel === 'ende' ? o?.startSoc : null });
   devlog.log('foto', { schritt: 'erkannt', ziel, text: r.text, soc: r.soc, kandidaten: r.kandidaten, km: r.km, plausibel: ok, dauer: r.dauer, quelle: r.quelle, fehler: r.fehler, datei: r.name });
-  if (ok) { V.fotoErkannt = { ziel, soc: r.soc }; const w = $('wheel'); if (w) w.scrollTop = (100 - r.soc) * 44; }
+  if (ok) { V.fotoErkannt = { ziel, soc: r.soc }; wheelSetze(r.soc); }
   if (!$('fotoInfo')) return;   // Dialog inzwischen geschlossen
   $('fotoInfo').innerHTML = `${r.name ? `<img class="foto-mini" data-foto="${r.name}" alt="Foto vom Display">` : ''}
     <span>${ok ? `Erkannt: <b>${r.soc} %</b>. Bitte prüfen und bestätigen.` : r.soc != null ? `Erkannt: ${r.soc} %, das passt nicht zum Start (${o?.startSoc} %). Drehrad bleibt.` : 'Nicht erkannt. Bitte am Drehrad einstellen.'}</span>`;

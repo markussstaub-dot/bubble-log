@@ -211,7 +211,9 @@ Hintergrund-GPS, Benachrichtigungen, Sensor-Plugin und Teilen/Speichern gehen nu
   Tiefgarage sicher als Parken erkennen; Alternative Android Activity Recognition (bisher verschoben). Erst an echten
   Logs prüfen, wie klar sich Stand und Fahrt trennen. Reine Trägheitsnavigation verworfen (Drift nach Sekunden;
   Tunnel-Überbrückung mit Kreisel + GPS-Tempo + Karte ginge, lohnt hier kaum).
-- **Idee (28.10.2026): Haptik-Feedback fürs Drehrad.** Bei jedem Wechsel auf eine neue Zahl ein kurzes Tick,
+- **Erledigt 29.10.2026 anders als geplant:** Haptik kommt jetzt über `navigator.vibrate` im neuen Scrollrad
+  (`src/scrollrad.js`), ohne `@capacitor/haptics`. Am Fold6 prüfen, ob es spürbar ist; sonst doch das Plugin.
+- ~~**Idee (28.10.2026): Haptik-Feedback fürs Drehrad.**~~ Bei jedem Wechsel auf eine neue Zahl ein kurzes Tick,
   am Rand (0/100) etwas kräftiger. Weg: `@capacitor/haptics` (`selectionChanged()`), ≈ 5 Zeilen in `wheelInit`
   (`src/main.js`), dann `npx cap sync`. Nur am Handy spürbar; prüfen, ob One UI es auch bei ausgeschalteter
   „Vibration bei Berührung“ spielt. Aufwand etwa eine halbe Stunde.
