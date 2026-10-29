@@ -25,8 +25,20 @@ und `adb shell dumpsys location / usagestats / activity exit-info` vom 29.10.202
   startete also eine Fahrt per Hand, die in derselben Sekunde als „stopp nach Lücke“ endete: der erste Punkt der Fahrt wurde
   mit dem alten Punkt von 16:22 verglichen (38 min, 8 m). **Behoben am 29.10.2026** in `erkennung.js` (Punkt aus dem Warten
   ist kein Bezug, Log `alter Punkt verworfen`), Tests in `tests/erkennung.test.js`, Log `tests/fahrten/handy-2026-10-29-testfahrt.jsonl`.
-- **[Vorschlag] Fahrt nachtragen:** Steht die App auf `warten` und man gibt den Akku ein, fragt sie „Fahrt beginnen“ oder
-  „Vergessene Fahrt nachtragen“ (Start-Akku, End-Akku, ungefähre km oder Ziel aus den Favoriten). Etwa 1–2 Stunden, eigene Runde.
+- **[fest, 29.10.2026] Fahrt nachtragen**, so bauen wie im Mockup https://claude.ai/artifact/SQzdUhe7JTw7SNr793dEvx
+  (drei Screens, alle Vorschläge dort vom Nutzer bestätigt). Etwa 1–2 Stunden plus Tests, eine APK.
+  - Akku-Eingabe im Modus `warten` bietet drei Wege: **Fahrt nachtragen**, „Fahrt jetzt starten“, „Nur Akkustand merken“.
+    War die App länger als 10 min nicht sichtbar und gab es in der Zeit Bewegung (Vibrations-Fenster `ruhig: false` oder
+    GPS-Punkte mit Tempo), steht „Nachtragen“ oben mit Hinweis auf die Lücke („Seit 16:22 war die App zu …“).
+  - Formular: Zeitraum vorgeschlagen von „App zuletzt sichtbar“ bis jetzt, änderbar; Start-Akku = letzter bekannter Stand,
+    Ende = eben eingegeben, Verbrauch daneben; Strecke über gemerktes Ziel (Route aus dem Cache) mit Schalter „hin und
+    zurück“ (verdoppelt) oder km von Hand; Zweck wie bei normalen Fahrten.
+  - Im Fahrtenbuch: Siegel „nachgetragen“, keine Spur, keine Höhenmeter; zählt bei km und Akku-Verbrauch, nicht bei Tempo,
+    Bremsen, Rauheit. Antippen öffnet sie zum Ändern oder Löschen. Meldung „Fahrt nachgetragen · Rückgängig“.
+  - Die drei offenen Fragen des Mockups entschieden (Vorgaben, der Nutzer hat alles durchgewunken): **eine** Fahrt je Lücke;
+    zusätzlich Knopf **„+ Fahrt nachtragen“** im Fahrtenbuch (ohne Lücken-Vorschlag, Felder leer bzw. letzter Akku);
+    Verbrauch nachgetragener Fahrten **fließt in die Reichweite** ein (echte Akkuwerte), km als geschätzt markiert.
+  - Log: `fahrt` mit `schritt: 'nachgetragen'` und Quelle der Strecke (`ziel` / `hand`).
 
 ## Ziel
 - [fest] Eine Fahrt darf nicht stillschweigend offen bleiben oder verloren gehen, wenn das GPS ausfällt.
