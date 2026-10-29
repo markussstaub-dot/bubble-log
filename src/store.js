@@ -5,7 +5,7 @@ import { Preferences } from '@capacitor/preferences';
 const KEY = 'bubble-log.v2';
 const ALT_KEY = 'bubble-log.v1';   // Prototyp im Browser
 
-export const LEER = { fahrten: [], laden: [], akku: 10.5, soc: null, offen: null, erfassung: false, temp: null, parkplatzMerken: true, parkplatz: null, entwickler: false, ladestrom: 8, fotoExport: false };
+export const LEER = { fahrten: [], laden: [], akku: 10.5, soc: null, offen: null, erfassung: false, temp: null, parkplatzMerken: true, parkplatz: null, entwickler: false, ladestrom: 8, fotoExport: false, socT: null, spur: [] };
 
 export async function laden() {
   try {

@@ -25,7 +25,12 @@ export async function setAktiv(neu) {
   log('devlog', { an: true, plattform: Capacitor.getPlatform(), ua: navigator.userAgent });
 }
 
+let mitleser = null;
+// Liest jede Zeile mit, auch wenn der Entwicklermodus aus ist (Spur für „Fahrt nachtragen“, src/nachtragen.js)
+export function mitlesen(f) { mitleser = f; }
+
 export function log(typ, daten = {}) {
+  mitleser?.(typ, daten);
   if (!an) return;
   puffer.push(JSON.stringify({ t: Date.now(), typ, ...daten }));
   if (puffer.length >= MAX_PUFFER) flush();

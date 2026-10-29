@@ -14,6 +14,7 @@ import * as sensoren from './sensoren.js';
 import * as devlog from './devlog.js';
 import { suchen, route as routeBerechnen } from './route.js';
 import * as lade from './laden.js';
+import * as nt from './nachtragen.js';
 import { simTabVerbinden, simTabZeichnen, simTabStoppen, simHud, simAktion } from './simtab.js';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -76,6 +77,9 @@ const socKlasse = p => p > 50 ? 'good' : p > 20 ? 'warn' : 'bad';
 const datum = t => { const d = new Date(t); return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.`; };
 const uhrzeit = t => new Date(t).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
 const schaetzung = o => Math.max(0, Math.round((o.startSoc ?? socJetzt()) - o.km * avg()));
+// Zeitpunkt des letzten bekannten Akkustands; ältere Daten ohne socT: Ende der letzten Fahrt bzw. letzter Ladevorgang
+const socZeit = () => eigen.socT ?? Math.max(0, fahrten().at(-1)?.t1 ?? 0, Number(ladungen().at(-1)?.id?.slice(1)) || 0);
+const zeitpunkt = t => datum(t) === datum(Date.now()) ? uhrzeit(t) : `${datum(t)} ${uhrzeit(t)}`;
 
 // ---------- Kleine Grafiken ----------
 function ring(p, size = 132, stroke = 12) {
@@ -93,6 +97,7 @@ function projiziere(punkte, w, h, rand) {
 }
 const pfad = pts => 'M' + pts.map(p => p.map(n => n.toFixed(1)).join(' ')).join(' L');
 function miniRoute(f) {
+  if (f.nachgetragen) return `<svg viewBox="0 0 44 44" aria-hidden="true"><rect width="44" height="44" fill="var(--land)"/><path d="M22 31h9M26 13a2.1 2.1 0 0 1 3 3L17.5 27.5l-4 1 1-4z" fill="none" stroke="var(--muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   if (!f.punkte || f.punkte.length < 2) return `<svg viewBox="0 0 44 44" aria-hidden="true"><rect width="44" height="44" fill="var(--land)"/></svg>`;
   const pts = projiziere(f.punkte, 44, 44, 6);
   return `<svg viewBox="0 0 44 44" aria-hidden="true"><rect width="44" height="44" fill="var(--land)"/><path d="${pfad(pts)}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="${pts[0][0]}" cy="${pts[0][1]}" r="2.5" fill="var(--ink)"/></svg>`;
@@ -212,11 +217,12 @@ function viewFahrten() {
       </div>
     </section>
     <div class="list">${liste.map(f => `
-      <section class="card trip">${miniRoute(f)}
-        <div style="min-width:0"><b>${titel(f)}</b>
-          <div class="muted small">${esc(f.tag)} · ${km(f.km)} · ${f.start} → ${f.ende} % · ${esc(f.zweck)}${f.temp != null ? ` · ${f.temp} °C` : ''}${f.hm != null ? ` · ↑ ${f.hm} Hm` : ''}${f.brems ? ` · ${f.brems}× stark gebremst` : ''}</div>
+      <section class="card trip"${f.nachgetragen ? ` data-act="ntBearbeiten" data-id="${esc(f.id)}" role="button" style="cursor:pointer"` : ''}>${miniRoute(f)}
+        <div style="min-width:0"><b>${titel(f)}</b>${f.nachgetragen ? '<span class="pill siegel">nachgetragen</span>' : ''}
+          <div class="muted small">${esc(f.tag)} · ${f.nachgetragen ? '≈ ' : ''}${km(f.km)} · ${f.start} → ${f.ende} % · ${esc(f.zweck)}${f.temp != null ? ` · ${f.temp} °C` : ''}${f.hm != null ? ` · ↑ ${f.hm} Hm` : ''}${f.brems ? ` · ${f.brems}× stark gebremst` : ''}${f.nachgetragen ? ` · ${f.strecke?.quelle === 'ziel' ? `${esc(f.strecke.ziel)}${f.strecke.retour ? ', hin und zurück' : ''}` : 'km von Hand'}` : ''}</div>
           ${f.fotoStart || f.fotoEnde ? `<div class="fotos">${[f.fotoStart, f.fotoEnde].filter(Boolean).map(n => `<img class="foto-mini" data-foto="${esc(n)}" data-act="fotoGross" alt="Foto vom Display">`).join('')}</div>` : ''}</div>
         ${badge(f)}</section>`).join('') || '<p class="muted">Keine Fahrten mit diesem Zweck.</p>'}</div>
+    <button class="btn block gestrichelt" data-act="ntNeu">+ Fahrt nachtragen</button>
     ${fahrten().length ? `<section class="card list">
       <div class="label">Fahrtenbuch als CSV</div>
       <div class="grid2"><button class="btn primary" data-act="csvTeilen">Teilen</button><button class="btn" data-act="csvSpeichern">Speichern</button></div>
@@ -583,7 +589,12 @@ function render() {
 
 // ---------- Overlays ----------
 let toastT;
-function toast(t) { const el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => el.hidden = true, 3000); }
+// rueckgaengig: Funktion für den Knopf „Rückgängig“ in der Meldung (steht dann 6 s)
+function toast(t, rueckgaengig = null) {
+  const el = $('toast'); V.rueckgaengig = rueckgaengig;
+  el.innerHTML = esc(t) + (rueckgaengig ? '<button class="toast-knopf" data-act="rueckgaengig">Rückgängig</button>' : '');
+  el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { el.hidden = true; V.rueckgaengig = null; }, rueckgaengig ? 6000 : 3000);
+}
 const overlay = html => { $('overlay').innerHTML = html; V.fahrtAnsicht = html.includes('class="drive"'); };
 const sheetOffen = () => !!$('overlay').querySelector('.sheet');
 const sheet = inner => overlay(`<div class="backdrop" data-act="close"></div><div class="sheet" role="dialog" aria-modal="true"><div class="grip"></div>${inner}</div>`);
@@ -598,7 +609,7 @@ function wheelInit(v) {
   V.socVorschlag = v; V.radBeruehrt = false;
   for (const ev of ['pointerdown', 'keydown', 'wheel']) $('wheel').addEventListener(ev, () => { V.radBeruehrt = true; }, { passive: true });
   rad = scrollrad($('wheel'), { anzahl: 101, index: 100 - v, text: i => String(100 - i), einheit: '%',
-    onChange: i => { wheelWert = 100 - i; $('wheel')?.setAttribute('aria-valuenow', wheelWert); } });
+    onChange: i => { wheelWert = 100 - i; $('wheel')?.setAttribute('aria-valuenow', wheelWert); if ($('lueckeSoc')) $('lueckeSoc').textContent = wheelWert; } });
 }
 function wheelSetze(v) { if (rad && $('wheel')) rad.setze(100 - v); }
 function socSheet(ueberschrift, v, knopf, text, extra = '') {
@@ -698,6 +709,125 @@ function fahrtAnzeigeAktualisieren() {
 function startSocSheet() {
   socSheet('Akkustand beim Start', socJetzt(), ['startok', 'Übernehmen'], 'Wert vom Microlino-Display übernehmen. Vorgeschlagen ist der letzte bekannte Stand.');
 }
+
+// ---------- Fahrt nachtragen (SPEC-gps-abbruch.md, src/nachtragen.js) ----------
+// Akku eintragen, während die App auf die nächste Fahrt wartet: jetzt starten, eine verpasste Fahrt nachtragen oder nur merken.
+// War die App länger zu und hat sich das Handy bewegt, steht „Nachtragen“ oben.
+function wartenSheet() {
+  const l = nt.lueckeFinden(eigen.spur || [], { seit: socZeit(), jetzt: Date.now() }), oben = !!l?.bewegt;
+  V.luecke = l; V.fotoZiel = 'start'; V.fotoErkannt = null;
+  const nachtragen = `<button class="btn block${oben ? ' primary' : ''}" data-act="ntAusAkku">Fahrt nachtragen</button>`;
+  const starten = `<button class="btn block${oben ? '' : ' primary'}" data-act="go">Fahrt jetzt starten</button>`;
+  sheet(`<div class="between"><h2>Akkustand jetzt</h2><span class="small muted">${uhrzeit(Date.now())}</span></div>
+    <p class="small muted" style="margin:0">Wert vom Microlino-Display übernehmen. Vorgeschlagen ist der letzte bekannte Stand.</p>
+    ${wheelHtml()}
+    <button class="btn block" data-act="foto">📷 Display fotografieren</button>
+    <div class="foto-info small" id="fotoInfo" hidden></div>
+    ${oben ? `<div class="hinweis"><b class="warn">Unterwegs gewesen?</b><span>Seit ${zeitpunkt(l.von)} war die App zu, und das Handy hat sich bewegt. Akku seitdem ${socJetzt()} → <span id="lueckeSoc">${socJetzt()}</span> %.</span></div>` : ''}
+    ${oben ? nachtragen + starten : starten + nachtragen}
+    <button class="btn-link" data-act="socMerken">Nur Akkustand merken</button>`);
+  wheelInit(socJetzt());
+}
+// Gemerkte Ziele mit gespeichertem Weg ab Zuhause ({ kurz, km } einfach)
+const ntZiele = () => favoriten().filter(f => f.cache?.km).map(f => ({ kurz: f.kurz, km: f.cache.km }));
+const ntKm = (n = V.nt) => nt.strecke({ quelle: n.quelle, zielKm: ntZiele().find(z => z.kurz === n.ziel)?.km, retour: n.retour, handKm: n.handKm });
+const zahlOderNull = s => s === '' || s == null ? null : Number(s);
+const eingabeZeit = t => Number.isFinite(t) ? nt.alsEingabe(t) : '';
+// n: { id (beim Bearbeiten), t0, t1, start, ende, quelle, ziel, retour, handKm, zweck, ausAkku, vorgeschlagen, startQuelle, endeQuelle, fotoEnde }
+function ntOeffnen(n) {
+  V.nt = { quelle: 'ziel', retour: true, zweck: 'Privat', startQuelle: 'vorschlag', endeQuelle: 'hand', ...n, startAnfang: n.start, endeAnfang: n.ende };
+  ntSheet();
+}
+function ntLesen() {   // Formular → V.nt, damit ein Neuzeichnen nichts verliert
+  const n = V.nt, wert = id => $(id)?.value;
+  n.t0 = nt.ausEingabe(wert('ntVon')); n.t1 = nt.ausEingabe(wert('ntBis'));
+  n.start = zahlOderNull(wert('ntStart')); n.ende = zahlOderNull(wert('ntEnde'));
+  if ($('ntKm')) n.handKm = wert('ntKm');
+  if ($('ntRetour')) n.retour = $('ntRetour').checked;
+  n.zweck = $('overlay').querySelector('#ntZweck [aria-pressed="true"]')?.dataset.zweck || n.zweck;
+}
+function ntSheet() {
+  const offen = $('ntVon') ? $('overlay').querySelector('.sheet') : null;   // Neuzeichnen: Eingaben und Scrollstand behalten
+  if (offen) ntLesen();
+  const n = V.nt, ziele = ntZiele();
+  if (!ziele.length) n.quelle = 'hand';
+  const verbrauch = n.start != null && n.ende != null ? n.start - n.ende : 0;
+  const sortiert = nt.zielVorschlaege(ziele, { verbrauch, proKm: avg(), retour: n.retour });
+  if (!ziele.some(z => z.kurz === n.ziel)) n.ziel = sortiert[0]?.kurz;
+  const zeigen = n.alle ? sortiert : sortiert.slice(0, 4);
+  if (n.ziel && !zeigen.some(z => z.kurz === n.ziel)) zeigen.push(sortiert.find(z => z.kurz === n.ziel));
+  sheet(`<div class="between"><h2>${n.id ? 'Nachgetragene Fahrt' : 'Fahrt nachtragen'}</h2><button class="btn" data-act="close">Abbrechen</button></div>
+    <section class="card list">
+      <div class="between"><div class="label">Wann</div>${n.vorgeschlagen ? '<span class="small" style="color:var(--accent)">aus dem Log vorgeschlagen</span>' : ''}</div>
+      <div class="field"><label for="ntVon">Von</label><input id="ntVon" type="datetime-local" value="${eingabeZeit(n.t0)}"></div>
+      <div class="field"><label for="ntBis">Bis</label><input id="ntBis" type="datetime-local" value="${eingabeZeit(n.t1)}"></div>
+    </section>
+    <section class="card list">
+      <div class="label">Akku</div>
+      <div class="nt-akku">
+        <div class="field"><label for="ntStart">Start${n.id ? '' : ` · Stand ${zeitpunkt(socZeit())}`}</label><input id="ntStart" type="number" inputmode="numeric" min="0" max="100" value="${n.start ?? ''}"></div>
+        <span aria-hidden="true">→</span>
+        <div class="field"><label for="ntEnde">Ende${n.ausAkku ? ' · eben eingegeben' : ''}</label><input id="ntEnde" type="number" inputmode="numeric" min="0" max="100" value="${n.ende ?? ''}"></div>
+        <span class="pill mono warn" id="ntVerbrauch"></span>
+      </div>
+      <div class="nt-balken" aria-hidden="true"><div id="ntBalkenStart"></div><div id="ntBalkenEnde"></div></div>
+    </section>
+    <section class="card list">
+      <div class="label">Strecke</div>
+      ${ziele.length ? `<div class="seg" role="group" aria-label="Strecke angeben">
+        <button data-act="ntQuelle" data-wert="ziel" aria-pressed="${n.quelle === 'ziel'}">Ziel wählen</button>
+        <button data-act="ntQuelle" data-wert="hand" aria-pressed="${n.quelle === 'hand'}">km eingeben</button></div>`
+        : '<p class="small muted" style="margin:0">Keine gemerkten Ziele mit Weg ab Zuhause. Die km von Hand eingeben.</p>'}
+      ${n.quelle === 'ziel' ? `${zeigen.map(z => `<button class="nt-ziel" data-act="ntZiel" data-ziel="${esc(z.kurz)}" aria-pressed="${z.kurz === n.ziel}"><span class="radio" aria-hidden="true"></span><b>${esc(z.kurz)}</b><span class="mono small muted">${km(z.km)}</span></button>`).join('')}
+        ${zeigen.length < sortiert.length ? `<button class="btn-link" data-act="ntAlleZiele">Alle ${sortiert.length} Ziele zeigen</button>` : ''}
+        <label class="switch" for="ntRetour"><span>Hin und zurück</span><input type="checkbox" id="ntRetour" ${n.retour ? 'checked' : ''}></label>`
+      : `<div class="field"><label for="ntKm">Gefahrene km</label><input id="ntKm" type="number" inputmode="decimal" min="0" step="0.1" value="${esc(n.handKm ?? '')}"></div>`}
+      <div class="between nt-summe"><span class="small muted">Strecke geschätzt, ohne GPS-Spur</span><b id="ntSumme"></b></div>
+    </section>
+    <div class="chips" id="ntZweck">${ZWECKE.map(z => `<button class="chip" data-zweck="${z}" aria-pressed="${z === n.zweck}">${z}</button>`).join('')}</div>
+    <p class="small bad" id="ntFehler" style="margin:0" hidden></p>
+    <button class="btn primary block" data-act="ntSpeichern">Fahrt speichern</button>
+    ${n.id ? `<button class="btn danger block" data-act="ntLoeschen">${n.loeschen ? 'Wirklich löschen' : 'Fahrt löschen'}</button>` : ''}`);
+  if (offen) $('overlay').querySelector('.sheet').scrollTop = offen.scrollTop;
+  ntAnzeige();
+}
+function ntAnzeige() {   // Verbrauch, Balken und Strecke nach jeder Eingabe
+  const n = V.nt; if (!n || !$('ntSumme')) return;
+  const v = n.start != null && n.ende != null ? n.start - n.ende : null, k = ntKm();
+  $('ntVerbrauch').textContent = v == null ? '–' : `${v >= 0 ? '−' : '+'}${Math.abs(v)} %`;
+  $('ntBalkenStart').style.width = `${n.start ?? 0}%`; $('ntBalkenEnde').style.width = `${Math.min(n.ende ?? 0, n.start ?? 0)}%`;
+  $('ntSumme').textContent = k == null ? '–' : `≈ ${km(k)}`;
+}
+function ntSpeichern() {
+  ntLesen();
+  const n = V.nt, jetzt = Date.now(), strecke = ntKm();
+  const fehler = nt.pruefen({ t0: n.t0, t1: n.t1, start: n.start, ende: n.ende, km: strecke, jetzt });
+  if (fehler) { $('ntFehler').hidden = false; $('ntFehler').textContent = fehler; return; }
+  const f = nt.nachtragFahrt({ id: n.id, t0: n.t0, t1: n.t1, start: n.start, ende: n.ende, km: strecke, zweck: n.zweck, quelle: n.quelle, ziel: n.ziel, retour: n.retour,
+    startQuelle: n.start === n.startAnfang ? n.startQuelle : 'hand', endeQuelle: n.ende === n.endeAnfang ? n.endeQuelle : 'hand', fotoEnde: n.fotoEnde });
+  const vorher = { fahrten: eigen.fahrten.slice(), soc: eigen.soc, socT: eigen.socT };
+  eigen.fahrten = eigen.fahrten.filter(x => x.id !== n.id);   // beim Bearbeiten ersetzen, sonst nach Beginn einsortieren
+  eigen.fahrten.splice(eigen.fahrten.findLastIndex(x => x.t0 <= f.t0) + 1, 0, f);
+  if (n.ausAkku) { eigen.soc = f.ende; eigen.socT = jetzt; }
+  else if (f.t1 >= socZeit()) { eigen.soc = f.ende; eigen.socT = f.t1; }
+  { const { punkte, ...kurzfassung } = f; devlog.log('fahrt', { schritt: 'nachgetragen', bearbeitet: !!n.id, ...kurzfassung }); }
+  V.nt = null; sichern(); overlay(''); V.tab = 'fahrten'; render();
+  toast(n.id ? 'Fahrt geändert' : 'Fahrt nachgetragen', () => {
+    Object.assign(eigen, vorher); sichern(); render();
+    devlog.log('fahrt', { schritt: 'nachtrag rückgängig', id: f.id });
+  });
+}
+function ntLoeschen() {
+  const id = V.nt.id, vorher = eigen.fahrten.slice();
+  eigen.fahrten = eigen.fahrten.filter(x => x.id !== id);
+  devlog.log('fahrt', { schritt: 'nachtrag gelöscht', id });
+  V.nt = null; sichern(); overlay(''); render();
+  toast('Fahrt gelöscht', () => { eigen.fahrten = vorher; sichern(); render(); devlog.log('fahrt', { schritt: 'löschen rückgängig', id }); });
+}
+// Spur für die Lücken-Erkennung: App sichtbar/verborgen und Bewegung, auch ohne Entwicklermodus
+devlog.mitlesen((typ, daten) => {
+  if (!V.sandbox && nt.spurAnhaengen(eigen.spur ??= [], nt.spurZeile(typ, daten, Date.now()))) speichernSpaeter(eigen);
+});
 // Abstellort = letzter Streckenpunkt. Der vorige wird gemerkt, falls die Fahrt verworfen wird (Bus, Velo …).
 function parkplatzSetzen(o) {
   o.parkVorher = eigen.parkplatz;
@@ -759,7 +889,7 @@ function fahrtSpeichern() {
   if (hm) { f.hm = hm.auf; f.hmAb = hm.ab; }
   if (rau != null) Object.assign(f, { rau, brems: o.brems ?? 0, beschl: o.beschl ?? 0, ausschlaege: o.ausschlaege ?? [] });
   { const { punkte, ausschlaege, ...kurzfassung } = f; devlog.log('fahrt', { schritt: 'gespeichert', ...kurzfassung, punkte: punkte.length }); }
-  const vorher = avg(); eigen.fahrten.push(f); eigen.soc = ende; eigen.offen = null; sichern();
+  const vorher = avg(); eigen.fahrten.push(f); eigen.soc = ende; eigen.socT = t1; eigen.offen = null; sichern();
   tracker.setModus(zielModus());
   const kurz = f.start - f.ende < 3 || f.km < 1, v = kurz ? 0 : (f.start - f.ende) / f.km, steig = steigAnteil(f);
   const d = kurz ? 0 : Math.round(((v - steig / f.km) / vorher - 1) * 100);   // Vergleich ohne den Anteil der Steigung
@@ -962,7 +1092,7 @@ document.addEventListener('click', e => {
   if (d.zweck) { t.parentElement.querySelectorAll('[data-zweck]').forEach(b => b.setAttribute('aria-pressed', String(b === t))); return; }
   if (simAktion(d.act)) return;
   switch (d.act) {
-    case 'start': if (!eigen.offen) socSheet('Akkustand beim Start', socJetzt(), ['go', 'Losfahren'], 'Wert vom Microlino-Display übernehmen. Vorgeschlagen ist der letzte bekannte Stand.'); break;
+    case 'start': if (!eigen.offen && zielModus() === 'warten') wartenSheet(); else if (!eigen.offen) socSheet('Akkustand beim Start', socJetzt(), ['go', 'Losfahren'], 'Wert vom Microlino-Display übernehmen. Vorgeschlagen ist der letzte bekannte Stand.'); break;
     case 'go':
       fahrtBeginnen({ startSoc: wheelWert, startQuelle: wheelHerkunft(), manuell: true }); fotoBestaetigt(wheelWert);
       if (V.fotoNeu) { eigen.offen.fotoStart = V.fotoNeu; V.fotoNeu = null; sichern(); }
@@ -982,7 +1112,33 @@ document.addEventListener('click', e => {
     case 'ende': endeSheet(); break;
     case 'save': if (plausibel()) fahrtSpeichern(); break;
     case 'discard': devlog.log('fahrt', { schritt: 'verworfen', km: eigen.offen?.km }); fahrtVerwerfen(); toast('Fahrt verworfen'); break;
-    case 'close': V.loeschen = false; V.devLoeschen = false; foto.loeschen(V.fotoNeu); V.fotoNeu = null; overlay(''); render(); break;
+    case 'close':
+      V.loeschen = false; V.devLoeschen = false; foto.loeschen(V.fotoNeu); V.fotoNeu = null;
+      if (V.nt && !V.nt.id) foto.loeschen(V.nt.fotoEnde);   // abgebrochener Nachtrag: Foto gehört zu keiner Fahrt
+      V.nt = null; overlay(''); render(); break;
+    case 'socMerken':
+      eigen.soc = wheelWert; eigen.socT = Date.now(); sichern();
+      devlog.log('eingabe', { soc: wheelWert, quelle: wheelHerkunft(), nurMerken: true }); fotoBestaetigt(wheelWert);
+      foto.loeschen(V.fotoNeu); V.fotoNeu = null; overlay(''); render(); toast(`Akkustand ${wheelWert} % gemerkt`); break;
+    case 'ntAusAkku': {
+      const l = V.luecke;
+      ntOeffnen({ ausAkku: true, vorgeschlagen: !!l, t0: l?.von ?? NaN, t1: Date.now(), start: socJetzt(), ende: wheelWert, endeQuelle: wheelHerkunft(), fotoEnde: V.fotoNeu });
+      fotoBestaetigt(wheelWert); V.fotoNeu = null; break;
+    }
+    case 'ntNeu': ntOeffnen({ t0: NaN, t1: NaN, start: eigen.soc, ende: null }); break;
+    case 'ntBearbeiten': {
+      const f = fahrten().find(x => x.id === d.id); if (!f) break;
+      const s = f.strecke || { quelle: 'hand' };
+      ntOeffnen({ id: f.id, t0: f.t0, t1: f.t1, start: f.start, ende: f.ende, zweck: f.zweck, quelle: s.quelle, ziel: s.ziel, retour: s.retour ?? true,
+        handKm: s.quelle === 'hand' ? String(f.km) : '', startQuelle: f.startQuelle, endeQuelle: f.endeQuelle, fotoEnde: f.fotoEnde });
+      break;
+    }
+    case 'ntQuelle': V.nt.quelle = d.wert; ntSheet(); break;
+    case 'ntZiel': V.nt.ziel = d.ziel; ntSheet(); break;
+    case 'ntAlleZiele': V.nt.alle = true; ntSheet(); break;
+    case 'ntSpeichern': ntSpeichern(); break;
+    case 'ntLoeschen': if (V.nt.loeschen) ntLoeschen(); else { V.nt.loeschen = true; ntSheet(); } break;
+    case 'rueckgaengig': { const f = V.rueckgaengig; V.rueckgaengig = null; $('toast').hidden = true; f?.(); break; }
     case 'charge': V.tab = 'laden'; render(); $('lVon')?.focus(); break;
     case 'settings': settingsSheet(); break;
     case 'standort': tracker.oeffneEinstellungen(); break;
@@ -1047,7 +1203,10 @@ document.addEventListener('click', e => {
       break;
   }
 });
-document.addEventListener('input', e => { if (e.target.id === 'zSuche') V.zsuche = e.target.value; });
+document.addEventListener('input', e => {
+  if (e.target.id === 'zSuche') V.zsuche = e.target.value;
+  if (V.nt && e.target.id?.startsWith('nt')) { ntLesen(); ntAnzeige(); }
+});
 document.addEventListener('change', e => {
   if (e.target.id === 'retour') { V.retour = e.target.checked; render(); }
   if (e.target.id === 'akku') { eigen.akku = Number(e.target.value); sichern(); render(); }
@@ -1093,7 +1252,7 @@ document.addEventListener('submit', e => {
   const ort = $('lOrt').value, punkt = ort === 'Öffentlich' ? $('lPunkt')?.value || null : null, s = punkt && lade.finde(punkt);
   const eintrag = { id: 'l' + Date.now(), tag: datum(Date.now()), ort, von, bis, preis: preis >= 0 ? preis : 0 };
   if (s) Object.assign(eintrag, { ladepunkt: punkt, ladepunktName: s.b });
-  eigen.laden.push(eintrag); eigen.soc = bis; sichern();
+  eigen.laden.push(eintrag); eigen.soc = bis; eigen.socT = Date.now(); sichern();
   devlog.log('laden', { ort, von, bis, preis: eintrag.preis, ladepunkt: punkt });
   V.lOrt = ort; render(); toast(`Geladen: ${de((bis - von) / 100 * eigen.akku, 1)} kWh`);
   if (s) ladepunktSheet(punkt);   // gleich festhalten, ob die Ladekarte dort ging

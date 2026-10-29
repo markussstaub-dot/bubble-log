@@ -3,6 +3,16 @@
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
 ## Unveröffentlicht
+- **Fahrt nachtragen** (`SPEC-gps-abbruch.md`, Mockup „Fahrt nachtragen“): „Fahrt starten“ bei laufender
+  Fahrterkennung öffnet „Akkustand jetzt“ mit drei Wegen: Fahrt nachtragen, Fahrt jetzt starten, Nur Akkustand merken.
+  War die App über 10 min zu und hat sich das Handy bewegt (GPS mit Tempo oder Vibration), steht „Nachtragen“ oben mit
+  Hinweis „Seit 16:22 war die App zu …“. Dafür merkt sich die App eine kleine Spur (sichtbar/verborgen/bewegt, 2 Tage),
+  auch ohne Entwicklermodus (`src/nachtragen.js`, Tests in `tests/nachtragen.test.js`).
+- Formular: Zeitraum aus der Lücke vorgeschlagen, Start-Akku = letzter Stand, Ende = eben eingegeben, Strecke über
+  gemerktes Ziel (Weg ab Zuhause, passendstes Ziel zum Verbrauch vorausgewählt, „hin und zurück“) oder km von Hand, Zweck.
+- Fahrtenbuch: Siegel „nachgetragen“, Stift statt Spur, km mit „≈“; zählt für km, Verbrauch und Reichweite. Antippen
+  öffnet sie zum Ändern oder Löschen, Knopf „+ Fahrt nachtragen“, Meldung mit „Rückgängig“. Log: `fahrt` mit
+  `schritt: 'nachgetragen'` und `strecke.quelle` (`ziel`/`hand`). Akkustand merkt sich jetzt auch die Uhrzeit (`socT`).
 
 ## Bubble-Log-1418 (29.10.2026, Version 2026.10.29-1418)
 - Versionsnummer in den Einstellungen, `apk.ps1` (bauen, prüfen, aufs Handy kopieren), lokales git.

@@ -105,7 +105,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .sim-spalte { flex-direction: column; justify-content: center; }
 .zkarte { height: 280px; border-radius: 18px; overflow: hidden; border: 1px solid var(--line); background: var(--land); flex: none; z-index: 0; }
 input[type=search] { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 11px 12px; min-width: 0; }
-input[type=number], select { font: inherit; color: var(--ink); background: var(--sunk); border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; width: 100%; min-width: 0; }
+input[type=number], input[type=datetime-local], select { font: inherit; color: var(--ink); background: var(--sunk); border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; width: 100%; min-width: 0; }
 .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .field label { font-size: 12.5px; color: var(--muted); }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -127,4 +127,30 @@ input[type=number], select { font: inherit; color: var(--ink); background: var(-
 .wheel { display: block; width: 100%; height: 220px; touch-action: none; user-select: none; -webkit-user-select: none; }
 
 .toast { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(86px + env(safe-area-inset-bottom, 0px)); z-index: 50; background: var(--ink); color: var(--bg); border-radius: 12px; padding: 9px 14px; font-size: 13.5px; max-width: calc(100% - 32px); }
+.toast:not([hidden]) { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.toast-knopf { border: 0; background: none; color: #3CC3AE; font-weight: 600; padding: 6px 0; white-space: nowrap; }
+@media (prefers-color-scheme: dark) { .toast-knopf { color: #0b6e61; } }
 .small { font-size: 13px; }
+
+/* Fahrt nachtragen (src/nachtragen.js) */
+.hinweis { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 12px; font-size: 13.5px; background: color-mix(in srgb, var(--warn) 12%, var(--surface)); border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line)); }
+.btn-link { border: 0; background: none; color: var(--muted); text-decoration: underline; min-height: 44px; font-size: 14px; }
+.btn.gestrichelt { border-style: dashed; color: var(--muted); background: transparent; font-weight: 600; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; padding: 4px; border-radius: 12px; background: var(--sunk); }
+.seg button { border: 0; background: transparent; border-radius: 9px; min-height: 40px; color: var(--muted); font-weight: 600; font-size: 14px; }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--line); }
+.nt-ziel { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 12px; border-radius: 10px; background: var(--sunk); border: 1px solid var(--line); text-align: left; }
+.nt-ziel[aria-pressed="true"] { border-color: var(--accent); }
+.nt-ziel .radio { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--muted); flex: none; }
+.nt-ziel[aria-pressed="true"] .radio { border: 5px solid var(--accent); }
+.nt-ziel b { flex: 1; font-weight: 500; }
+.nt-akku { display: grid; grid-template-columns: 1fr auto 1fr auto; gap: 8px; align-items: end; }
+.nt-akku input { font: 600 24px var(--f-display); padding: 4px 10px; }
+.nt-akku > span { padding-bottom: 10px; }
+.nt-balken { position: relative; height: 10px; border-radius: 5px; background: var(--sunk); overflow: hidden; }
+.nt-balken div { position: absolute; left: 0; top: 0; bottom: 0; }
+.nt-balken div:first-child { background: var(--line); }
+.nt-balken div:last-child { background: var(--accent); }
+.nt-summe { border-top: 1px solid var(--line); padding-top: 8px; align-items: baseline; }
+.nt-summe b { font: 600 22px var(--f-display); }
+.siegel { color: var(--accent); font-size: 11px; font-weight: 600; margin-left: 6px; vertical-align: 2px; }
