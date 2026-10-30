@@ -13,6 +13,9 @@ daraus deinen Verbrauch.
 
 Fahrten bleiben auf dem Handy, es gibt kein Konto und keinen Server.
 
+**Die ganze Geschichte in knapp drei Minuten:** [Bubble Log Gesamtstory](https://markussstaub-dot.github.io/bubble-log/)
+(gezeichnet und animiert, im Browser; Quelle: [`docs/index.html`](docs/index.html)).
+
 ## Stand
 
 Privates Experiment, entstanden im Oktober 2026 zusammen mit Claude (KI). Android-App mit Capacitor, getestet auf

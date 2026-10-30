@@ -1,0 +1,1756 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bubble Log Gesamtstory</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Saira+Condensed:wght@500;600;700&display=swap">
+<style>
+/* Bubble Log – Gesamtstory in sechs Kapiteln plus Schluss (Storyboard: storyboard-gesamtstory.md).
+   Szenen übernommen aus erklaervideo-schweigsam (w*), -humanes-obd (h*) und -ziel-check (z*), neu: i*, s* (12 V) und m*.
+   Jede Szene trägt Länge (data-len), Kapitel (data-kap) und optional ihre Uhr-Funktion (data-tick).
+   Eine Uhr (JS) treibt alles, CSS-Animationen starten beim Szenenwechsel neu. Farben aus bubble-log-app/src/style.css. */
+:root {
+  --bg: #E9EEEC; --ink: #15201E; --muted: #5B6865; --line: #D5DDDA;
+  --stage: #0D1312; --stage-2: #172120; --stage-ink: #E6EEEC; --stage-muted: #94A3A0; --stage-accent: #3CC3AE;
+  --f-display: "Saira Condensed", "Arial Narrow", sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #080C0B; --ink: #E6EEEC; --muted: #94A3A0; --line: #263331; } }
+:root[data-theme="dark"] { --bg: #080C0B; --ink: #E6EEEC; --muted: #94A3A0; --line: #263331; }
+
+/* App-Farben wie in der App, hell und dunkel */
+.av {
+  --a-bg: #E9EEEC; --a-surface: #FFFFFF; --a-sunk: #F2F5F4; --a-ink: #15201E; --a-muted: #5B6865; --a-line: #D5DDDA;
+  --a-accent: #0E8F7E; --a-accent-ink: #FFFFFF; --good: #2F8A4F; --warn: #B7791F; --bad: #C2453A; --lade: #2D6FD0; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .av {
+  --a-bg: #0D1312; --a-surface: #172120; --a-sunk: #111A19; --a-ink: #E6EEEC; --a-muted: #94A3A0; --a-line: #263331;
+  --a-accent: #3CC3AE; --a-accent-ink: #06211D; --good: #6CC08A; --warn: #E0A84A; --bad: #EB7A6E; --lade: #6FA8F5; } }
+:root[data-theme="dark"] .av {
+  --a-bg: #0D1312; --a-surface: #172120; --a-sunk: #111A19; --a-ink: #E6EEEC; --a-muted: #94A3A0; --a-line: #263331;
+  --a-accent: #3CC3AE; --a-accent-ink: #06211D; --good: #6CC08A; --warn: #E0A84A; --bad: #EB7A6E; --lade: #6FA8F5; }
+
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink); font-family: var(--f-body);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; }
+
+.frame { width: calc(360px * var(--s, 1)); height: calc(640px * var(--s, 1)); border-radius: calc(28px * var(--s, 1));
+  overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,.25); flex: none; }
+.stage { width: 360px; height: 640px; transform: scale(var(--s, 1)); transform-origin: 0 0; position: relative;
+  background: var(--stage); color: var(--stage-ink); overflow: hidden; }
+.paused .stage *, .paused .stage *::before, .paused .stage *::after { animation-play-state: paused !important; }
+
+.scene { position: absolute; inset: 0; opacity: 0; transition: opacity .5s ease; pointer-events: none; }
+.scene.on { opacity: 1; }
+.abs { position: absolute; }
+
+.cap { position: absolute; left: 20px; right: 20px; bottom: 34px; z-index: 6;
+  font-family: var(--f-display); font-weight: 600; font-size: 29px; line-height: 1.08; color: #fff;
+  background: rgba(20,30,29,.9); border: 1px solid rgba(60,195,174,.35); border-radius: 14px; padding: 12px 16px 14px; text-wrap: balance;
+  opacity: 0; transform: translateY(14px); }
+.on .cap { animation: rise .6s ease .35s forwards; }
+.cap small { display: block; font-family: var(--f-mono); font-size: 11px; font-weight: 500; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--stage-accent); margin-bottom: 4px; }
+.cap em { font-style: normal; color: var(--stage-accent); }
+@keyframes rise { to { opacity: 1; transform: none; } }
+@keyframes fade { to { opacity: 1; } }
+@keyframes pop { 0% { opacity: 1; transform: scale(0); } 70% { transform: scale(1.15); } 100% { opacity: 1; transform: none; } }
+.later { opacity: 0; }
+.on .later { animation: fade .4s ease var(--d, 0s) forwards; }
+.on .pops { opacity: 0; animation: pop .45s ease var(--d, 0s) forwards; }
+
+/* Kapitel-Schild am Anfang jedes Kapitels */
+.kap { position: absolute; top: 8px; left: 50%; z-index: 7; transform: translateX(-50%); white-space: nowrap;
+  font: 500 11px var(--f-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--stage-accent);
+  background: rgba(13,19,18,.9); border: 1px solid rgba(60,195,174,.45); border-radius: 99px; padding: 4px 12px; opacity: 0; }
+.on .kap { animation: kap 3s ease .1s forwards; }
+@keyframes kap { 10%, 80% { opacity: 1; } 100% { opacity: 0; } }
+
+/* 1 · Frage */
+.z1 { background: radial-gradient(120% 70% at 50% 30%, #1E2B29, var(--stage)); }
+.z1 .soc { position: absolute; top: 46px; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.z1 .soc .k { font-family: var(--f-mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--stage-muted); }
+.z1 .bat { width: 168px; height: 66px; border: 3px solid var(--stage-ink); border-radius: 12px; padding: 5px; position: relative; }
+.z1 .bat::after { content: ""; position: absolute; right: -10px; top: 20px; width: 6px; height: 20px; border-radius: 0 3px 3px 0; background: var(--stage-ink); }
+.z1 .bat i { display: block; height: 100%; width: 64%; border-radius: 6px; background: var(--stage-accent); }
+.z1.on .bat i { animation: glow 1.6s ease-in-out infinite; }
+@keyframes glow { 50% { opacity: .6; } }
+.z1 .bat b { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--f-display); font-size: 38px; font-weight: 700; color: #fff; text-shadow: 0 1px 6px rgba(0,0,0,.5); }
+.zroad { position: absolute; left: 0; right: 0; top: 352px; height: 70px; background: #1B2524; border-top: 2px solid #2A3836; }
+.zroad::before { content: ""; position: absolute; left: 0; width: 720px; top: 33px; height: 4px;
+  background: repeating-linear-gradient(90deg, #6F7E7B 0 28px, transparent 28px 56px); }
+.z1.on .zroad::before { animation: zlane .7s linear infinite; }
+@keyframes zlane { to { transform: translateX(-56px); } }
+.zcar { position: absolute; left: 70px; top: 238px; width: 220px; }
+.z1.on .zcar { animation: bob .5s ease-in-out infinite alternate; }
+@keyframes bob { to { transform: translateY(-2px); } }
+.zcar .rad { transform-box: fill-box; transform-origin: center; }
+.z1.on .zcar .rad { animation: spin .5s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.z1 .q { position: absolute; top: 172px; right: 46px; font-family: var(--f-display); font-size: 54px; font-weight: 700; color: var(--stage-accent); opacity: 0; }
+.z1.on .q { animation: fade .5s ease 1.2s forwards, znod 1.2s ease-in-out 1.7s infinite; }
+@keyframes znod { 50% { transform: rotate(10deg); } }
+
+/* App-Oberfläche (Szenen 2, 4, 5, 6) */
+.screen { position: absolute; inset: 0; background: var(--a-bg); color: var(--a-ink); font-family: var(--f-body); font-size: 14px; }
+.screen .appbar { display: flex; justify-content: space-between; align-items: center; padding: 30px 16px 8px; }
+.screen .appbar h1 { font-family: var(--f-display); font-size: 28px; font-weight: 600; margin: 0; line-height: 1; }
+.screen .gear { width: 34px; height: 34px; border: 1px solid var(--a-line); border-radius: 50%; background: var(--a-surface); display: grid; place-items: center; color: var(--a-muted); }
+.screen .view { padding: 0 12px; display: flex; flex-direction: column; gap: 10px; }
+.screen .card { background: var(--a-surface); border: 1px solid var(--a-line); border-radius: 18px; padding: 12px 14px; }
+.screen .label { font-size: 10.5px; text-transform: uppercase; letter-spacing: .09em; color: var(--a-muted); font-weight: 500; }
+.screen .small { font-size: 12px; } .screen .muted { color: var(--a-muted); }
+.screen .mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.screen .between { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.screen .good { color: var(--good); } .screen .warn { color: var(--warn); } .screen .bad { color: var(--bad); } .screen .lade { color: var(--lade); }
+.screen .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.screen .chip { border: 1px solid var(--a-line); background: var(--a-surface); border-radius: 999px; padding: 5px 11px; font-size: 12.5px; }
+.screen .chip.on { background: var(--a-ink); color: var(--a-bg); border-color: var(--a-ink); }
+.screen .pill { font-size: 10.5px; border-radius: 999px; padding: 1px 7px; border: 1px solid currentColor; white-space: nowrap; font-weight: 500; }
+.screen .tabbar { position: absolute; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--a-line);
+  background: var(--a-surface); padding: 6px 4px 12px; }
+.screen .tab { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 10.5px; color: var(--a-muted); }
+.screen .tab svg { width: 20px; height: 20px; }
+.screen .tab.on { color: var(--a-accent); font-weight: 600; }
+
+.search { display: flex; gap: 8px; }
+.search .in { flex: 1; height: 42px; border: 1.5px solid var(--a-accent); border-radius: 12px; background: var(--a-surface); display: flex; align-items: center; padding: 0 12px; font-size: 15px; }
+.search .in .ph { color: var(--a-muted); }
+.search .in .caret { display: inline-block; width: 1.5px; height: 18px; background: var(--a-accent); margin-left: 1px; }
+.on .search .caret { animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.btnp { height: 42px; padding: 0 14px; border-radius: 12px; background: var(--a-accent); color: var(--a-accent-ink); font-weight: 500; display: grid; place-items: center; position: relative; overflow: hidden; }
+.on .tap { animation: press .35s ease var(--at); }
+@keyframes press { 50% { transform: scale(.94); filter: brightness(.9); } }
+.ripple { position: absolute; left: 50%; top: 50%; width: 20px; height: 20px; margin: -10px; border-radius: 50%; background: rgba(255,255,255,.55); opacity: 0; }
+.on .ripple { animation: ripple .6s ease-out calc(var(--at) + .05s); }
+@keyframes ripple { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(18); } }
+.mapbox { height: 150px; border-radius: 18px; border: 1px solid var(--a-line); overflow: hidden; background: var(--a-sunk); }
+.mapbox svg { display: block; width: 100%; height: 100%; }
+.treffer { opacity: 0; transform: translateY(8px); }
+.z2.on .treffer { animation: rise .4s ease 3.4s forwards; }
+
+/* Finger fährt zum Knopf; Ziel (--fx/--fy) setzt das Skript aus der Lage des Knopfs */
+.finger { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; background: rgba(21,32,30,.28);
+  border: 2px solid rgba(255,255,255,.9); z-index: 4; left: 290px; top: 600px; opacity: 0; }
+.on .finger { animation: finger 2.6s ease-in-out var(--from) forwards; }
+@keyframes finger {
+  0% { opacity: 0; transform: translate(0, 0); }
+  15% { opacity: 1; }
+  50% { transform: translate(var(--fx), var(--fy)); }
+  55% { transform: translate(var(--fx), var(--fy)) scale(.8); }
+  62% { transform: translate(var(--fx), var(--fy)) scale(1); }
+  85% { opacity: 1; transform: translate(var(--fx), var(--fy)); }
+  100% { opacity: 0; transform: translate(var(--fx), var(--fy)); } }
+
+/* 3 · So rechnet der Ziel-Check */
+.z3 { background: radial-gradient(120% 70% at 50% 25%, #1A2725, var(--stage)); }
+.steps { position: absolute; top: 30px; left: 14px; right: 14px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.steps span { font-family: var(--f-mono); font-size: 10.5px; white-space: nowrap; text-align: center; color: var(--stage-muted);
+  border: 1px solid #263331; border-radius: 99px; padding: 4px 0; transition: all .3s; }
+.steps span.act { color: #06211D; background: var(--stage-accent); border-color: var(--stage-accent); }
+.steps span.done { color: var(--stage-accent); border-color: rgba(60,195,174,.5); }
+.z3 .pane { position: absolute; top: 72px; left: 16px; width: 328px; height: 240px; border-radius: 14px; background: #111A19; border: 1px solid #263331; }
+.z3 .pane svg { display: block; width: 100%; height: 100%; }
+.z3 .readout { position: absolute; top: 324px; left: 12px; right: 12px; text-align: center; font-family: var(--f-mono); font-size: 12px; white-space: nowrap; color: var(--stage-muted); min-height: 20px; }
+.z3 .readout b { color: var(--stage-ink); font-weight: 500; }
+.akku { position: absolute; top: 360px; left: 16px; right: 16px; }
+.akku .bar { position: relative; height: 34px; border: 2px solid #3A4A47; border-radius: 9px; padding: 3px; }
+.akku .bar::after { content: ""; position: absolute; right: -7px; top: 9px; width: 4px; height: 12px; border-radius: 0 2px 2px 0; background: #3A4A47; }
+.akku .in { position: relative; height: 100%; }
+.akku .fill { height: 100%; border-radius: 5px; background: var(--stage-accent); transition: width .5s ease, background .4s; }
+.akku .cut { position: absolute; top: 0; bottom: 0; border-radius: 5px; background: repeating-linear-gradient(135deg, rgba(235,122,110,.85) 0 5px, rgba(235,122,110,.45) 5px 10px); transition: all .5s ease; }
+.akku .res { position: absolute; top: -4px; bottom: -4px; width: 0; border-left: 2px dashed var(--stage-muted); }
+.akku .lbl { display: flex; justify-content: space-between; font-family: var(--f-mono); font-size: 11px; color: var(--stage-muted); margin-top: 6px; }
+.akku .big { font-family: var(--f-display); font-weight: 700; font-size: 44px; line-height: 1; color: var(--stage-ink); text-align: center; margin-top: 6px; font-variant-numeric: tabular-nums; }
+.akku .big small { font-size: 18px; color: var(--stage-muted); font-weight: 500; }
+.akku .big.ok { color: #6CC08A; }
+
+/* 4 · Ergebnis */
+.hero { display: flex; gap: 14px; align-items: center; }
+.hero .bigw { font-family: var(--f-display); font-weight: 600; font-size: 46px; line-height: 1; transition: color .4s; }
+.ring .arc { transition: stroke-dasharray .9s ease, stroke .4s; }
+.check { display: inline-grid; place-items: center; width: 18px; height: 18px; border: 1.5px solid var(--a-muted); border-radius: 4px; margin-right: 6px; vertical-align: -4px; font-size: 13px; color: var(--a-accent-ink); transition: all .2s; }
+.check.on { background: var(--a-accent); border-color: var(--a-accent); }
+.mbtn { border: 1px solid var(--a-line); background: var(--a-surface); border-radius: 12px; padding: 7px 12px; font-size: 13px; }
+.rechnung div { padding: 3px 0; }
+.rechnung .sum { border-top: 1px solid var(--a-line); padding-top: 6px; margin-top: 2px; }
+
+/* 5 · Laden am Ziel; 6 · Ampelliste */
+.zeile { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 9px; align-items: center; border-top: 1px solid var(--a-line); padding: 8px 0 3px; }
+.zeile .punkt { font-size: 15px; line-height: 1; text-align: center; }
+.zeile .nm { display: flex; flex-direction: column; min-width: 0; }
+.zeile .nm b { font-weight: 600; font-size: 13.5px; }
+.zeile .mono { text-align: right; font-size: 11.5px; line-height: 1.3; }
+.ein { opacity: 0; transform: translateX(26px); }
+.on .ein { animation: slide .45s ease var(--d, 0s) forwards; }
+@keyframes slide { to { opacity: 1; transform: none; } }
+.zpop { opacity: 0; display: inline-block; }
+.on .zpop { animation: zpop .5s ease var(--d) forwards; }
+@keyframes zpop { 0% { opacity: 1; transform: scale(0); } 70% { transform: scale(1.4); } 100% { opacity: 1; transform: none; } }
+.bz { width: 1em; height: 1em; vertical-align: -.12em; }
+.offline { display: inline-flex; align-items: center; gap: 5px; font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .04em; color: var(--a-accent);
+  border: 1px solid var(--a-accent); border-radius: 99px; padding: 2px 8px; }
+
+/* 7 · Abschluss */
+.z7 { background: radial-gradient(110% 70% at 50% 40%, #1A2725, var(--stage)); }
+.outro { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; gap: 10px; opacity: 0; padding-bottom: 60px; }
+.z7.on .outro { animation: fade .8s ease .2s forwards; }
+.outro .icon { width: 72px; height: 72px; border-radius: 20px; background: #3CC3AE; color: #06211D; display: grid; place-items: center;
+  font-family: var(--f-display); font-weight: 700; font-size: 40px; }
+.outro .name { font-family: var(--f-display); font-weight: 700; font-size: 46px; letter-spacing: .01em; line-height: 1; }
+.outro .what { font-family: var(--f-mono); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--stage-accent); }
+.outro .claim { font-family: var(--f-display); font-size: 24px; font-weight: 500; color: var(--stage-ink); margin-top: 6px; }
+.fine { position: absolute; left: 24px; right: 24px; bottom: 30px; text-align: center; font-size: 11.5px; line-height: 1.45; color: var(--stage-muted); opacity: 0; }
+.z7.on .fine { animation: fade .6s ease 1.2s forwards; }
+
+
+/* Cartoon-Landschaft: Himmel, runde Hügel in drei Ebenen, Straße. Ebenen sind 720 px breit und laufen in Szene 5 endlos durch. */
+.sky { position: absolute; inset: 0; background: linear-gradient(#152B2A, #2A5650 62%); }
+.sun { position: absolute; left: 262px; top: 64px; width: 54px; height: 54px; border-radius: 50%; background: #F2C66D;
+  box-shadow: 0 0 0 10px rgba(242,198,109,.14), 0 0 0 22px rgba(242,198,109,.07); }
+.cloud { position: absolute; height: 22px; border-radius: 99px; background: #CFE3DE; opacity: .55; }
+.cloud::before, .cloud::after { content: ""; position: absolute; border-radius: 50%; background: inherit; }
+.cloud::before { width: 30px; height: 30px; left: 12px; top: -14px; }
+.cloud::after { width: 22px; height: 22px; left: 34px; top: -9px; }
+.layer { position: absolute; left: 0; width: 720px; top: 0; height: 640px; }
+.layer svg { display: block; }
+.move .l1 { animation: drift 14s linear infinite; }
+.move .l2 { animation: drift 6s linear infinite; }
+.move .l3 { animation: drift 2.4s linear infinite; }
+.move .cloud { animation: drift 30s linear infinite; }
+@keyframes drift { to { transform: translateX(-360px); } }
+.road { position: absolute; left: 0; width: 720px; top: 430px; height: 46px; background: #2A3433; border-top: 3px solid #0F1E1B; border-bottom: 3px solid #0F1E1B; }
+.road::before { content: ""; position: absolute; left: 0; right: 0; top: 18px; height: 4px;
+  background: repeating-linear-gradient(90deg, #C9D3D0 0 26px, transparent 26px 60px); }
+.move .road { animation: drift 2.4s linear infinite; }
+.move .road::before { animation: lane .4s linear infinite; }
+@keyframes lane { to { transform: translateX(-60px); } }
+.ground { position: absolute; left: 0; right: 0; top: 476px; bottom: 0; background: #4E9A78; }
+
+/* Microlino (Seitenansicht, Fronttür vorn) und Strichfigur */
+.car { position: absolute; width: 220px; }
+.car .rad { transform-box: fill-box; transform-origin: center; }
+.car .door { transform-box: fill-box; transform-origin: 100% 50%; }
+.wobble { animation: wob .34s ease-in-out infinite alternate; }
+@keyframes wob { from { transform: translateY(0) rotate(-.8deg); } to { transform: translateY(-3px) rotate(.9deg); } }
+.wobble .rad { animation: spin .45s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.fig { position: absolute; width: 50px; height: 100px; }
+.fig svg { display: block; overflow: visible; }
+.fig line, .fig circle { stroke: #F4E9D8; stroke-width: 4; stroke-linecap: round; fill: none; }
+.fig .kopf { fill: #F4E9D8; }
+.fig .b1, .fig .b2 { transform-origin: 25px 58px; }
+.fig .a1, .fig .a2 { transform-origin: 25px 30px; }
+
+/* Finger: fährt von (data-sx|sy) zum Element data-to; Ziel (--fx/--fy) setzt das Skript */
+.finger { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; background: rgba(21,32,30,.28);
+  border: 2px solid rgba(255,255,255,.9); z-index: 5; left: 290px; top: 600px; opacity: 0; }
+.on .finger { animation: finger var(--dur, 2.6s) ease-in-out var(--from) forwards; }
+@keyframes finger {
+  0% { opacity: 0; transform: translate(0, 0); }
+  15% { opacity: 1; }
+  50% { transform: translate(var(--fx), var(--fy)); }
+  55% { transform: translate(var(--fx), var(--fy)) scale(.8); }
+  62% { transform: translate(var(--fx), var(--fy)) scale(1); }
+  85% { opacity: 1; transform: translate(var(--fx), var(--fy)); }
+  100% { opacity: 0; transform: translate(var(--fx), var(--fy)); } }
+.on .finger.swipe { animation-name: swipe; animation-timing-function: linear; }
+@keyframes swipe {
+  0% { opacity: 0; transform: translate(var(--fx), calc(var(--fy) + 30px)); }
+  15% { opacity: 1; transform: translate(var(--fx), var(--fy)); }
+  22% { transform: translate(var(--fx), var(--fy)) scale(.82); }
+  78% { transform: translate(var(--fx), calc(var(--fy) + var(--dy))) scale(.82); }
+  86% { opacity: 1; transform: translate(var(--fx), calc(var(--fy) + var(--dy))) scale(1); }
+  100% { opacity: 0; transform: translate(var(--fx), calc(var(--fy) + var(--dy))); } }
+
+/* App-Bausteine */
+.app { position: absolute; background: var(--a-surface); color: var(--a-ink); font-family: var(--f-body); font-size: 13px; border: 1px solid var(--a-line); }
+.app .label { font-size: 10px; text-transform: uppercase; letter-spacing: .09em; color: var(--a-muted); font-weight: 500; }
+.app .small { font-size: 11px; line-height: 1.35; } .app .muted { color: var(--a-muted); }
+.app .mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.app h2 { font-family: var(--f-display); font-weight: 600; font-size: 19px; line-height: 1.05; margin: 0; }
+.btn { border: 1px solid var(--a-line); background: var(--a-surface); color: var(--a-ink); border-radius: 11px; height: 34px; padding: 0 10px; font-weight: 500;
+  display: grid; place-items: center; font-size: 12.5px; position: relative; overflow: hidden; white-space: nowrap; }
+.btn.primary { background: var(--a-accent); color: var(--a-accent-ink); border-color: var(--a-accent); }
+.on .tap { animation: press .35s ease var(--at); }
+@keyframes press { 50% { transform: scale(.94); filter: brightness(.9); } }
+.ripple { position: absolute; left: 50%; top: 50%; width: 20px; height: 20px; margin: -10px; border-radius: 50%; background: rgba(255,255,255,.55); opacity: 0; }
+.on .ripple { animation: ripple .6s ease-out calc(var(--at) + .05s); }
+@keyframes ripple { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(18); } }
+.sheet { display: flex; flex-direction: column; gap: 9px; padding: 8px 12px 12px; border-radius: 20px; }
+.grip { width: 34px; height: 4px; border-radius: 3px; background: var(--a-line); margin: 0 auto; flex: none; }
+
+/* Drehrad wie scrollrad.js: Trommel, Mitte markiert, höhere Werte oben */
+.drum { position: relative; height: 118px; overflow: hidden; border-radius: 12px; background: var(--a-sunk); flex: none; }
+.drum::before { content: ""; position: absolute; left: 8px; right: 8px; top: 50%; height: 28px; margin-top: -14px;
+  border-top: 1.5px solid var(--a-accent); border-bottom: 1.5px solid var(--a-accent); }
+.drum span { position: absolute; left: 0; right: 0; top: 50%; height: 24px; margin-top: -12px; text-align: center;
+  font: 600 22px/24px var(--f-display); font-variant-numeric: tabular-nums; }
+.drum .unit { position: absolute; top: 50%; margin-top: -9px; left: calc(50% + 20px); font-size: 14px; color: var(--a-muted); }
+
+/* 1 · Problem */
+.h1 { background: radial-gradient(120% 70% at 50% 30%, #1E2B29, var(--stage)); }
+.h1 .car { left: 6px; top: 236px; width: 180px; }
+.h1 .flor { position: absolute; left: 0; right: 0; top: 370px; height: 3px; background: #2A3836; }
+.bubble { position: absolute; left: 36px; top: 150px; background: #F4E9D8; color: #15201E; border-radius: 16px; padding: 4px 14px 6px;
+  font: 700 34px/1 var(--f-display); opacity: 0; }
+.bubble::after { content: ""; position: absolute; left: 40px; bottom: -10px; border: 10px solid transparent; border-top-color: #F4E9D8; border-bottom: 0; }
+.h1.on .bubble { animation: pop .5s ease .3s forwards; }
+@keyframes pop { 0% { opacity: 1; transform: scale(0); } 70% { transform: scale(1.15); } 100% { opacity: 1; transform: none; } }
+.phone { position: absolute; border: 5px solid #2E3B39; border-radius: 22px; overflow: hidden; background: var(--a-bg); }
+.h1 .phone { left: 244px; top: 176px; width: 98px; height: 186px; }
+.h1 .phone .scr { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: var(--a-ink); }
+.h1 .phone .scr b { font: 700 38px/1 var(--f-display); color: var(--a-muted); }
+.h1.on .phone .scr b { animation: nod 1.2s ease-in-out 1s infinite; }
+@keyframes nod { 50% { transform: rotate(-8deg); } }
+.h1 .kabel { position: absolute; left: 150px; top: 230px; }
+.h1 .kreuz { transform-box: fill-box; transform-origin: center; transform: scale(0); }
+.h1.on .kreuz { animation: kreuz .4s ease 1.2s forwards; }
+@keyframes kreuz { 70% { transform: scale(1.25); } to { transform: scale(1); } }
+
+/* 2 · Figur steigt ein */
+.h2 .car { left: 30px; top: 312px; }
+.h2 .fig { left: 252px; top: 334px; }
+.h2.on .fig { animation: walkin 1.6s linear forwards, einsteigen .8s ease-in 2.2s forwards; }
+@keyframes walkin { from { transform: translateX(110px); } to { transform: translateX(0); } }
+@keyframes einsteigen { from { transform: none; opacity: 1; } to { transform: translate(-52px, 6px) scale(.85); opacity: 0; } }
+.h2.on .fig .b1 { animation: bein .4s ease-in-out 0s 4 alternate, bein .4s ease-in-out 2.2s 2 alternate; }
+.h2.on .fig .b2 { animation: bein2 .4s ease-in-out 0s 4 alternate, bein2 .4s ease-in-out 2.2s 2 alternate; }
+.h2.on .fig .a1 { animation: bein2 .4s ease-in-out 0s 4 alternate; }
+.h2.on .fig .a2 { animation: bein .4s ease-in-out 0s 4 alternate; }
+@keyframes bein { from { transform: rotate(24deg); } to { transform: rotate(-24deg); } }
+@keyframes bein2 { from { transform: rotate(-24deg); } to { transform: rotate(24deg); } }
+.h2.on .door { animation: tuer 3.6s ease forwards; }
+@keyframes tuer { 0%, 44% { transform: none; } 58%, 82% { transform: scaleX(.12) skewY(-6deg); } 96%, 100% { transform: none; } }
+
+/* 3 · Cockpit */
+.h3 { background: #10191A; }
+.scheibe { position: absolute; left: -20px; right: -20px; top: 0; height: 300px; border-radius: 0 0 50% 50% / 0 0 30% 30%; overflow: hidden;
+  border-bottom: 10px solid #22302E; }
+.scheibe .sky { inset: 0; }
+.armaturen { position: absolute; left: 0; right: 0; top: 290px; bottom: 0; background: #1A2423; }
+.lenkrad { position: absolute; left: 22px; top: 252px; width: 216px; height: 216px; }
+.lcd { fill: #071210; stroke: #3A4A47; }
+.lcd-t { font-family: var(--f-display); font-weight: 700; fill: #7CF0DA; }
+.lcd-k { font-family: var(--f-mono); fill: #5FB7A6; }
+.h3.on .lcd-glow { animation: glow 1.4s ease-in-out infinite; }
+@keyframes glow { 50% { opacity: .55; } }
+.h3 .phone { left: 232px; top: 196px; width: 118px; height: 236px; }
+.h3 .phone .hd { font: 600 17px var(--f-display); padding: 14px 10px 6px; color: var(--a-ink); }
+.h3 .phone .kt { margin: 0 8px; background: var(--a-surface); border: 1px solid var(--a-line); border-radius: 12px; padding: 7px 8px; font-size: 10px; color: var(--a-muted); }
+.h3 .phone .kt b { display: block; color: var(--a-ink); font-size: 12px; }
+.h3 .phone .btns { display: grid; gap: 6px; margin: 8px; }
+.h3 .phone .btn { height: 30px; font-size: 11px; }
+.h3 .phone .mini { position: absolute; left: 0; right: 0; bottom: 0; height: 128px; border-radius: 16px 16px 0 0; border: 0; border-top: 1px solid var(--a-line);
+  padding: 7px 8px; display: flex; flex-direction: column; gap: 5px; transform: translateY(110%); }
+.h3.on .phone .mini { animation: hoch .45s ease 2.7s forwards; }
+@keyframes hoch { to { transform: none; } }
+.h3 .phone .mini h2 { font-size: 13px; }
+.h3 .phone .mini .drum { height: 72px; }
+.h3 .phone .mini .drum span { font-size: 17px; }
+
+/* 4 · Zwei Wege */
+.h4 { background: radial-gradient(120% 70% at 50% 25%, #1A2725, var(--stage)); }
+.weg { position: absolute; top: 18px; font: 500 10.5px var(--f-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--stage-accent); }
+.h4 .sheet { top: 44px; width: 166px; }
+.h4 .btn { font-size: 11px; padding: 0 4px; }
+.h4 .sheet h2 { font-size: 16px; }
+.trenner { position: absolute; left: 179px; top: 16px; height: 440px; border-left: 1px dashed #2F3E3C; }
+.info { height: 92px; border-radius: 12px; border: 1px dashed var(--a-line); position: relative; flex: none; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 6px; padding: 6px; text-align: center; }
+.shot { position: relative; width: 142px; height: 50px; border-radius: 8px; background: #071210; border: 2px solid #3A4A47; opacity: 0; transform: scale(.7); transition: all .35s; }
+.shot .t { position: absolute; left: 9px; top: 6px; font: 700 28px/1 var(--f-display); color: #7CF0DA; }
+.shot .k { position: absolute; right: 8px; bottom: 6px; font: 400 9px var(--f-mono); color: #5FB7A6; }
+.scan { position: absolute; left: 3px; top: 2px; width: 66px; height: 40px; border: 2.5px solid #F2C66D; border-radius: 6px; opacity: 0; transition: opacity .25s; }
+.scan::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: #F2C66D; opacity: 0; }
+.fund { font-size: 10.5px; line-height: 1.3; opacity: 0; transition: opacity .3s; }
+.flash { position: absolute; inset: 0; border-radius: 20px; background: #fff; opacity: 0; pointer-events: none; }
+.L[data-st="1"] .flash { animation: blitz .5s ease-out; }
+@keyframes blitz { from { opacity: .85; } to { opacity: 0; } }
+.L[data-st="1"] .shot, .L[data-st="2"] .shot, .L[data-st="3"] .shot, .L[data-st="4"] .shot { opacity: 1; transform: none; }
+.L[data-st="2"] .scan { opacity: 1; }
+.L[data-st="2"] .scan::after { opacity: .8; animation: scanlinie .7s linear infinite; }
+@keyframes scanlinie { to { transform: translateY(36px); } }
+.L[data-st="3"] .scan, .L[data-st="4"] .scan { opacity: 1; border-color: var(--stage-accent); }
+.L[data-st="3"] .fund, .L[data-st="4"] .fund { opacity: 1; }
+.okmsg { opacity: 0; font-size: 10.5px; text-align: center; color: var(--good); font-weight: 600; margin-top: -4px; }
+[data-st="4"] .okmsg { animation: fade .3s ease forwards; }
+.R .info .muted { transition: color .3s; }
+.R[data-st="1"] .info .muted { color: var(--a-accent); }
+
+/* 5 · Fahrt */
+.h5 .car { left: 50px; top: 312px; }
+.schild { position: absolute; top: 352px; width: 78px; }
+.schild b { display: block; background: #F2C200; color: #111; border: 3px solid #111; border-radius: 5px; font: 700 15px/1 var(--f-body);
+  text-align: center; padding: 6px 2px; box-shadow: 0 0 0 2px #F2C200; }
+.schild i { display: block; width: 5px; height: 48px; margin: 0 auto; background: #8A9693; }
+.tacho { position: absolute; left: 50%; top: 34px; width: 248px; margin-left: -124px; border-radius: 20px; padding: 12px 14px; box-shadow: 0 8px 24px rgba(0,0,0,.3); }
+.tacho .trow { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.tacho .kmz { font: 600 44px/1 var(--f-display); font-variant-numeric: tabular-nums; }
+.tacho .kmz small { font-size: 20px; color: var(--a-muted); font-weight: 500; }
+.gps { display: inline-flex; align-items: center; gap: 5px; font: 500 10.5px var(--f-mono); color: var(--a-accent); border: 1px solid var(--a-accent); border-radius: 99px; padding: 2px 8px 2px 4px; }
+.gps svg { width: 16px; height: 16px; }
+.on .gps .puls { animation: puls 1.2s ease-out infinite; transform-origin: 12px 12px; }
+@keyframes puls { from { transform: scale(.4); opacity: 1; } to { transform: scale(1.3); opacity: 0; } }
+.spur { display: block; width: 100%; height: 54px; margin-top: 8px; border-radius: 10px; background: var(--a-sunk); }
+
+/* 6 · Stillstand */
+.uhr { position: absolute; left: 50%; top: 92px; width: 150px; margin-left: -75px; text-align: center; }
+.uhr .zif { width: 112px; height: 112px; margin: 0 auto; border-radius: 50%; background: #F4E9D8; border: 5px solid #0F1E1B; position: relative; }
+.uhr .zif::before { content: ""; position: absolute; left: 50%; top: 4px; width: 6px; height: 12px; margin-left: -3px; background: #0F1E1B; border-radius: 3px; }
+.uhr .zeiger { position: absolute; left: 50%; top: 50%; width: 4px; height: 44px; margin: -44px 0 0 -2px; background: #C2453A; border-radius: 2px; transform-origin: 50% 100%; }
+.uhr .nabe { position: absolute; left: 50%; top: 50%; width: 12px; height: 12px; margin: -6px; border-radius: 50%; background: #0F1E1B; }
+.uhr .dig { margin-top: 8px; font: 700 30px/1 var(--f-display); color: #F4E9D8; font-variant-numeric: tabular-nums; text-shadow: 0 2px 6px rgba(0,0,0,.4); }
+.uhr .dig small { display: block; font: 500 10.5px var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: #CFE3DE; margin-top: 4px; }
+.radius { position: absolute; left: 48px; top: 404px; width: 180px; height: 56px; border-radius: 50%; border: 2px dashed rgba(244,233,216,.7); }
+.radius span { position: absolute; right: -26px; top: -14px; font: 500 11px var(--f-mono); color: #F4E9D8; }
+.banner { position: absolute; top: 14px; left: 12px; right: 12px; z-index: 4; border-radius: 18px; padding: 11px 13px; box-shadow: 0 10px 24px rgba(0,0,0,.3);
+  display: grid; grid-template-columns: 36px 1fr; gap: 10px; transform: translateY(-140%); }
+.h6.on .banner { animation: runter .5s ease 2.4s forwards; }
+@keyframes runter { to { transform: none; } }
+.appicon { width: 36px; height: 36px; border-radius: 10px; background: var(--a-accent); display: grid; place-items: center; color: var(--a-accent-ink); font: 700 20px var(--f-display); }
+
+/* 7 · Endwert */
+.h7 { background: #10191A; }
+.h7 .disp { position: absolute; left: 50%; top: 22px; width: 200px; margin-left: -100px; }
+.h7 .sheet { left: 0; right: 0; top: 186px; bottom: 0; border-radius: 22px 22px 0 0; border-width: 1px 0 0; padding: 8px 18px; }
+.h7 .sheet .zwei { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+/* 8 · Denklogik */
+.h8 { background: radial-gradient(120% 70% at 50% 25%, #1A2725, var(--stage)); }
+.logik { position: absolute; top: 30px; left: 18px; right: 18px; }
+.logik .kopf { font: 500 11px var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--stage-accent); margin-bottom: 10px; }
+.rz { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 0; border-bottom: 1px solid #263331; font: 400 13.5px var(--f-mono); color: var(--stage-muted); }
+.rz b { font: 600 22px var(--f-display); color: var(--stage-ink); font-variant-numeric: tabular-nums; }
+.rz.erg { border-bottom: 0; color: var(--stage-ink); }
+.rz.erg b { font-size: 30px; color: var(--stage-accent); }
+.h8 .pane { position: absolute; top: 222px; left: 16px; width: 328px; height: 180px; border-radius: 14px; background: #111A19; border: 1px solid #263331; }
+.h8 .pane svg { display: block; width: 100%; height: 100%; }
+.regel { position: absolute; left: 18px; right: 18px; top: 414px; font-size: 11.5px; line-height: 1.4; color: var(--stage-muted); }
+.regel b { color: var(--stage-ink); font-weight: 500; }
+
+/* 9 · Abschluss */
+.h9 { background: radial-gradient(110% 70% at 50% 40%, #1A2725, var(--stage)); }
+.outro { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; gap: 10px; opacity: 0; padding-bottom: 60px; }
+.h9.on .outro { animation: fade .5s ease .1s forwards; }
+.outro .icon { width: 72px; height: 72px; border-radius: 20px; background: #3CC3AE; color: #06211D; display: grid; place-items: center;
+  font-family: var(--f-display); font-weight: 700; font-size: 40px; }
+.outro .name { font-family: var(--f-display); font-weight: 700; font-size: 46px; letter-spacing: .01em; line-height: 1; }
+.outro .what { font-family: var(--f-mono); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--stage-accent); }
+.outro .claim { font-family: var(--f-display); font-size: 24px; font-weight: 500; color: var(--stage-ink); margin-top: 6px; }
+.idee { font: 500 11px var(--f-mono); color: var(--stage-muted); border: 1px dashed #3A4A47; border-radius: 99px; padding: 4px 12px; margin-top: 8px; }
+.idee b { color: #F2C66D; font-weight: 500; }
+.fine { position: absolute; left: 24px; right: 24px; bottom: 30px; text-align: center; font-size: 11.5px; line-height: 1.45; color: var(--stage-muted); opacity: 0; }
+.h9.on .fine { animation: fade .5s ease .5s forwards; }
+
+
+.wcar { left: 70px; top: 312px; }
+.fig .ding { stroke: none; }
+.on .huepf { animation: huepf .6s ease-in-out infinite alternate; transform-origin: 50% 100%; }
+@keyframes huepf { from { transform: scale(1, 1); } to { transform: scale(1.03, .96); } }
+/* Sprechblase */
+.blase { position: absolute; background: #F4E9D8; color: #15201E; border-radius: 18px; padding: 6px 16px 8px; font: 700 30px/1 var(--f-display); white-space: nowrap; }
+.blase::after { content: ""; position: absolute; left: 34px; bottom: -11px; border: 11px solid transparent; border-top-color: #F4E9D8; border-bottom: 0; }
+
+/* 1 · süß und praktisch */
+.herz { position: absolute; font-size: 26px; color: #EB7A6E; opacity: 0; }
+.w1.on .herz { animation: herz 2.2s ease-out var(--d) infinite; }
+@keyframes herz { 0% { opacity: 0; transform: translateY(0) scale(.5); } 20% { opacity: 1; transform: translateY(-14px) scale(1); }
+  100% { opacity: 0; transform: translateY(-90px) rotate(var(--r, 10deg)); } }
+.tag { position: absolute; font: 600 13px var(--f-mono); letter-spacing: .06em; color: #15201E; background: #F2C66D; border-radius: 99px; padding: 4px 12px; opacity: 0; }
+.w1.on .tag { animation: pop .45s ease var(--d) forwards; }
+
+/* 2 · schweigsam */
+.w2 .blase { left: 120px; top: 228px; opacity: 0; }
+.w2.on .blase { animation: pop .45s ease .3s forwards; }
+.w2 .blase i { display: inline-block; font-style: normal; font-size: 16px; vertical-align: 4px; opacity: .2; }
+.w2.on .blase i { animation: punkt 1.2s ease-in-out infinite; }
+.w2.on .blase i:nth-child(2) { animation-delay: .2s; } .w2.on .blase i:nth-child(3) { animation-delay: .4s; }
+@keyframes punkt { 30% { opacity: 1; } 60% { opacity: .2; } }
+.zirp { position: absolute; font: italic 500 13px var(--f-mono); color: #CFE3DE; opacity: 0; }
+.w2.on .zirp { animation: zirp 1.6s ease var(--d) infinite; }
+@keyframes zirp { 0%, 100% { opacity: 0; } 30%, 60% { opacity: .9; } }
+.phone { position: absolute; border: 5px solid #2E3B39; border-radius: 22px; overflow: hidden; background: var(--a-bg); }
+.w2 .phone { left: 286px; top: 300px; width: 64px; height: 124px; border-radius: 16px; border-width: 4px; }
+.scr { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: var(--a-ink); }
+.w2 .scr b { font: 700 26px/1 var(--f-display); color: var(--a-muted); }
+
+/* 3 · Community */
+.w3 .car { left: 82px; }
+.w3 .blase { left: 132px; top: 226px; min-width: 76px; text-align: center; }
+.fix { position: absolute; left: 18px; right: 18px; top: 40px; border-radius: 16px; padding: 10px 14px; background: rgba(13,19,18,.82); border: 1px solid #2F3E3C; }
+.fix .k { font: 500 10.5px var(--f-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--stage-accent); }
+.fix .t { font: 600 20px/1.1 var(--f-display); margin: 3px 0 8px; }
+.balken { height: 12px; border-radius: 6px; background: #1E2C2A; overflow: hidden; }
+.balken i { display: block; height: 100%; width: 8%; border-radius: 6px;
+  background: repeating-linear-gradient(135deg, #F2C66D 0 8px, #D9A94A 8px 16px); background-size: 22.6px 22.6px; }
+.w3.on .balken i { animation: arbeit 4.5s ease-out forwards, streifen .6s linear infinite; }
+@keyframes arbeit { to { width: 38%; } }
+@keyframes streifen { to { background-position: 22.6px 0; } }
+.w3 .fig.l { left: 14px; top: 334px; }
+.w3 .fig.r { left: 300px; top: 334px; }
+.w3.on .fig.l .a2 { animation: tipp .25s ease-in-out infinite alternate; }
+@keyframes tipp { from { transform: rotate(-58deg); } to { transform: rotate(-70deg); } }
+.w3.on .fig.r .a1 { animation: schraub .5s ease-in-out infinite alternate; }
+@keyframes schraub { from { transform: rotate(40deg); } to { transform: rotate(80deg); } }
+.funke { position: absolute; left: 292px; top: 372px; font-size: 16px; color: #F2C66D; opacity: 0; }
+.w3.on .funke { animation: zirp .5s ease infinite; }
+
+/* 4 · warten wir nicht */
+.uhr2 { position: absolute; left: 50%; top: 84px; width: 150px; margin-left: -75px; text-align: center; }
+.uhr2 .zif { width: 112px; height: 112px; margin: 0 auto; border-radius: 50%; background: #F4E9D8; border: 5px solid #0F1E1B; position: relative; }
+.uhr2 .zif::before { content: ""; position: absolute; left: 50%; top: 4px; width: 6px; height: 12px; margin-left: -3px; background: #0F1E1B; border-radius: 3px; }
+.uhr2 .z { position: absolute; left: 50%; top: 50%; background: #0F1E1B; border-radius: 2px; transform-origin: 50% 100%; }
+.uhr2 .z1 { width: 5px; height: 30px; margin: -30px 0 0 -2.5px; }
+.uhr2 .z2 { width: 3px; height: 44px; margin: -44px 0 0 -1.5px; background: #C2453A; }
+.w4.on .uhr2 .z1 { animation: dreh 3s linear infinite; }
+.w4.on .uhr2 .z2 { animation: dreh .25s linear infinite; }
+@keyframes dreh { to { transform: rotate(360deg); } }
+.uhr2 .nabe { position: absolute; left: 50%; top: 50%; width: 12px; height: 12px; margin: -6px; border-radius: 50%; background: #0F1E1B; }
+.uhr2 .dig { margin-top: 8px; font: 500 11px var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: #CFE3DE; }
+.w4 .fig { left: 296px; top: 334px; }
+.w4.on .fig .b2 { animation: wipp .22s ease-in-out infinite alternate; }
+@keyframes wipp { from { transform: rotate(0deg); } to { transform: rotate(-16deg); } }
+.w4.on .fig .a1 { transform: rotate(150deg); }
+.w4.on .fig .a2 { transform: rotate(-150deg); }
+.w4.on .fig .k { animation: kopf .5s ease-in-out infinite alternate; transform-origin: 25px 22px; }
+@keyframes kopf { from { transform: rotate(-10deg); } to { transform: rotate(10deg); } }
+.w4 .blase { left: 232px; top: 230px; font-size: 22px; opacity: 0; }
+.w4 .blase::after { left: auto; right: 22px; }
+.w4.on .blase { animation: pop .45s ease 1.1s forwards; }
+
+/* 5 · Mensch als OBD, Handy als Bordcomputer */
+.w5 { background: radial-gradient(120% 70% at 50% 30%, #1E2B29, var(--stage)); }
+.w5 .kopf5 { position: absolute; top: 34px; left: 0; right: 0; text-align: center; font: 500 11px var(--f-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--stage-accent); }
+.w5 .gl { position: absolute; top: 56px; left: 0; right: 0; text-align: center; font: 700 30px/1 var(--f-display); }
+.disp2 { position: absolute; left: 8px; top: 156px; width: 100px; }
+.lcd { fill: #071210; stroke: #3A4A47; }
+.lcd-t { font-family: var(--f-display); font-weight: 700; fill: #7CF0DA; }
+.lcd-k { font-family: var(--f-mono); fill: #5FB7A6; }
+.w5 .fig { left: 160px; top: 132px; transform: scale(1.2); transform-origin: 50% 100%; }
+.w5 .phone { left: 262px; top: 112px; width: 90px; height: 170px; }
+.w5 .scr .soc { font: 700 34px/1 var(--f-display); color: var(--a-ink); opacity: 0; }
+.w5.on .scr .soc { animation: pop .45s ease 2.3s forwards; }
+.w5 .scr .bl { font: 600 13px var(--f-display); color: var(--a-accent); }
+.pfeil { position: absolute; top: 186px; }
+.pfeil path { stroke: #F2C66D; stroke-width: 3; fill: none; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; }
+.w5.on .pfeil path { animation: zieh .6s ease var(--d) forwards; }
+@keyframes zieh { to { stroke-dashoffset: 0; } }
+.pfeil span { position: absolute; left: 0; right: 0; top: 22px; text-align: center; font: 500 11px var(--f-mono); color: #F2C66D; opacity: 0; }
+.w5.on .pfeil span { animation: fade .4s ease var(--d) forwards; }
+.kann { position: absolute; left: 18px; right: 18px; top: 312px; display: grid; gap: 7px; }
+.kann div { display: flex; gap: 10px; align-items: center; background: #172120; border: 1px solid #263331; border-radius: 12px; padding: 8px 12px; font-size: 13.5px; }
+.kann b { color: #6CC08A; font-size: 15px; }
+.kann span { color: var(--stage-muted); font-size: 11.5px; margin-left: auto; font-family: var(--f-mono); }
+
+/* 6 · Abschluss */
+.w6 { background: radial-gradient(110% 70% at 50% 40%, #1A2725, var(--stage)); }
+.outro { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; gap: 10px; opacity: 0; padding: 0 20px 60px; }
+.w6.on .outro { animation: fade .6s ease .15s forwards; }
+.outro .icon { width: 72px; height: 72px; border-radius: 20px; background: #3CC3AE; color: #06211D; display: grid; place-items: center;
+  font-family: var(--f-display); font-weight: 700; font-size: 40px; }
+.outro .name { font-family: var(--f-display); font-weight: 700; font-size: 46px; line-height: 1; }
+.outro .claim { font-family: var(--f-display); font-size: 27px; font-weight: 600; color: var(--stage-ink); margin-top: 6px; line-height: 1.1; }
+.outro .sub { font-family: var(--f-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--stage-accent); }
+.fine { position: absolute; left: 24px; right: 24px; bottom: 30px; text-align: center; font-size: 11.5px; line-height: 1.45; color: var(--stage-muted); opacity: 0; }
+.w6.on .fine { animation: fade .6s ease 1s forwards; }
+/* Link zum Code: auch im aufgezeichneten Video lesbar, im Player anklickbar (Szenen sind sonst pointer-events: none) */
+.repo { margin-top: 14px; pointer-events: auto; font: 500 12px var(--f-mono); color: var(--stage-ink); text-decoration: none;
+  border: 1px solid rgba(60,195,174,.55); border-radius: 99px; padding: 6px 14px; opacity: 0; }
+.repo:hover, .repo:focus-visible { border-color: var(--stage-accent); color: var(--stage-accent); }
+.w6.on .repo { animation: fade .5s ease .8s forwards; }
+
+
+/* ---- Neu: Kapitel 1 ---- */
+/* i2 · Reichweitenangst */
+.wegw { position: absolute; left: 248px; top: 296px; width: 104px; display: flex; flex-direction: column; gap: 4px; }
+.wegw b { display: block; background: #F2C200; color: #111; border: 2px solid #111; font: 700 11px/1 var(--f-body); padding: 5px 16px 5px 7px;
+  clip-path: polygon(0 0, 86% 0, 100% 50%, 86% 100%, 0 100%); white-space: nowrap; }
+.wegw i { display: block; width: 5px; height: 62px; margin-left: 14px; background: #8A9693; }
+.i2.on .car { animation: zitter .1s linear infinite alternate; }
+@keyframes zitter { from { transform: translateX(-1px); } to { transform: translateX(1px); } }
+.tropf { position: absolute; left: 186px; top: 330px; width: 14px; height: 14px; background: #9ED3F5; border: 2px solid #0F1E1B;
+  border-radius: 0 50% 50% 50%; transform: rotate(45deg); opacity: 0; }
+.i2.on .tropf { animation: tropf 1.1s ease-in .4s infinite; }
+@keyframes tropf { 0% { opacity: 0; transform: translateY(0) rotate(45deg); } 20% { opacity: 1; } 100% { opacity: 0; transform: translateY(34px) rotate(45deg); } }
+.angst { position: absolute; z-index: 1; left: 0; right: 0; top: 132px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.angst .k { font: 500 11px var(--f-mono); letter-spacing: .14em; text-transform: uppercase; color: #CFE3DE; }
+.angst .bat { width: 168px; height: 66px; border: 3px solid #F4E9D8; border-radius: 12px; padding: 5px; position: relative; background: #142120; }
+.angst .bat::after { content: ""; position: absolute; right: -10px; top: 20px; width: 6px; height: 20px; border-radius: 0 3px 3px 0; background: #F4E9D8; }
+.angst .bat i { display: block; height: 100%; width: 64%; border-radius: 6px; background: #3CC3AE; }
+.angst .bat b { position: absolute; inset: 0; display: grid; place-items: center; font: 700 36px var(--f-display); color: #fff; text-shadow: 0 1px 6px rgba(0,0,0,.6); }
+
+/* i6 · Experiment */
+.i6 { background: radial-gradient(120% 70% at 30% 35%, #22312F, var(--stage)); }
+.birne { position: absolute; left: 68px; top: 136px; width: 64px; overflow: visible; }
+.birne .glas { fill: #3A4A47; }
+.birne .strahl { opacity: 0; }
+.i6.on .birne .glas { animation: birne .25s ease .9s forwards; }
+.i6.on .birne .strahl { animation: fade .25s ease .9s forwards, blink2 .8s ease-in-out 1.2s infinite; }
+.i6.on .birne { animation: leucht .3s ease .9s forwards; }
+@keyframes birne { to { fill: #F2C66D; } }
+@keyframes leucht { to { filter: drop-shadow(0 0 14px rgba(242,198,109,.7)); } }
+@keyframes blink2 { 50% { opacity: .35; } }
+.i6 .fig { left: 76px; top: 290px; transform: scale(1.5); transform-origin: 50% 100%; }
+.i6 .phone { left: 206px; top: 196px; width: 120px; height: 226px; }
+.i6 .ki { font: 700 52px/1 var(--f-display); color: var(--a-muted); }
+.i6.on .ki { animation: nod2 1.2s ease-in-out infinite; }
+@keyframes nod2 { 50% { transform: rotate(-8deg); } }
+.i6 .bc { display: none; flex-direction: column; align-items: center; gap: 8px; font: 600 16px var(--f-display); color: var(--a-ink); }
+.i6 .bc .appicon { width: 54px; height: 54px; font-size: 30px; border-radius: 14px; }
+.i6.phase2 .ki { display: none; }
+.i6.phase2 .bc { display: flex; animation: pop .45s ease; }
+.i6.phase2 .phone { box-shadow: 0 0 0 6px rgba(60,195,174,.25), 0 0 30px rgba(60,195,174,.35); transition: box-shadow .4s; }
+
+/* ---- Neu: Kapitel 5 Springt nicht an? ---- */
+/* s1 · Parkplatz, Display meldet einen Fehler */
+.s1 .fig { left: 296px; top: 334px; }
+.warn1 { position: absolute; left: 50%; top: 150px; width: 132px; margin-left: -66px; }
+.s1.on .warn1 .dreieck { animation: blink2 .8s ease-in-out infinite; }
+.s1.on .zirp { animation: zirp 1.6s ease var(--d) infinite; }
+
+/* s2 · Trennschalter im Kofferraum, daneben der BM6 auf der 12-V-Batterie */
+.s2 { background: radial-gradient(120% 70% at 50% 30%, #1E2B29, var(--stage)); }
+.schalter { position: absolute; left: 28px; top: 60px; width: 170px; height: 170px; }
+.schalter .knauf { transform-box: fill-box; transform-origin: center; }
+.s2.on .schalter .knauf { animation: schalt 2s ease-in-out .3s forwards; }
+@keyframes schalt { 0% { transform: none; } 30%, 55% { transform: rotate(-90deg); } 80%, 100% { transform: none; } }
+.s2 .k2 { position: absolute; left: 28px; top: 236px; width: 170px; text-align: center; font: 500 10.5px var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--stage-muted); }
+.s2 .blase { left: 196px; top: 84px; font-size: 26px; }
+.bat12 { position: absolute; left: 24px; top: 316px; width: 176px; height: 104px; background: #1C2322; border: 3px solid #0F1E1B; border-radius: 10px;
+  display: grid; place-items: center; font: 700 30px var(--f-display); color: #94A3A0; box-shadow: inset 0 0 0 3px #2E3B39; }
+.bat12::before, .bat12::after { content: ""; position: absolute; top: -14px; width: 22px; height: 11px; border: 3px solid #0F1E1B; border-bottom: 0; border-radius: 4px 4px 0 0; }
+.bat12::before { left: 18px; background: #C2453A; } .bat12::after { right: 18px; background: #3A4A47; }
+.bm6 { position: absolute; left: 118px; top: 280px; width: 64px; height: 34px; border-radius: 8px; background: #F2C66D; border: 3px solid #0F1E1B;
+  display: grid; place-items: center; font: 700 15px var(--f-display); color: #15201E; z-index: 1; }
+.wellen { position: absolute; left: 190px; top: 262px; width: 70px; height: 70px; overflow: visible; }
+.wellen path { fill: none; stroke: #F2C66D; stroke-width: 3; stroke-linecap: round; opacity: 0; }
+.s2.on .wellen path { animation: welle 1.2s ease-out calc(2.8s + var(--w)) infinite; }
+@keyframes welle { 0% { opacity: 0; } 30% { opacity: 1; } 100% { opacity: 0; } }
+.s2 .phone { left: 266px; top: 222px; width: 80px; height: 150px; }
+.s2 .scr b { font: 700 22px/1 var(--f-display); color: var(--a-ink); }
+
+/* s3 · Knopf „Springt nicht an?“ unter Heute, Blatt mit dem Beleg */
+.s3 .sp { left: 10px; right: 10px; top: 118px; border-radius: 22px; padding: 8px 14px 14px; transform: translateY(560px); z-index: 3; box-shadow: 0 0 0 400px rgba(8,12,11,.45); }
+.s3.on .sp { animation: hoch .45s ease 1.9s forwards; }
+.s3 .sp .card { padding: 9px 12px; }
+
+/* s4 · Bordspannung beim Fahren */
+.s4 .car { left: 70px; top: 312px; }
+.volt .kmz { font-size: 40px; }
+.volt .pill { font-size: 10.5px; border-radius: 999px; padding: 1px 7px; border: 1px solid currentColor; font-weight: 500; }
+.volt .good, .beleg .good { color: var(--good); } .beleg .warn { color: var(--warn); }
+.vkurve { display: block; width: 100%; height: 70px; margin-top: 6px; border-radius: 10px; background: var(--a-sunk); }
+
+/* s5 · 12-V-Beleg über den Tresen */
+.s5 { background: radial-gradient(120% 70% at 50% 30%, #1E2B29, var(--stage)); }
+.tresen { position: absolute; left: 0; right: 0; top: 452px; bottom: 0; background: #2E2620; border-top: 14px solid #6B5136; }
+.beleg { left: 14px; right: 14px; top: 54px; border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 10px 28px rgba(0,0,0,.35); }
+.beleg h2 { font-size: 21px; }
+.brow { display: grid; grid-template-columns: 82px 50px minmax(0, 1fr); gap: 6px; font: 400 10.5px/1.3 var(--f-mono); border-top: 1px solid var(--a-line); padding: 6px 0 2px; }
+.brow b { font-weight: 500; }
+.datei { position: absolute; left: 50%; top: 392px; margin-left: -96px; width: 192px; text-align: center; white-space: nowrap; font: 500 11px var(--f-mono); color: #15201E; background: #F2C66D; border-radius: 99px; padding: 4px 0; }
+
+/* ---- Neu: Kapitel 6 Making-of ---- */
+.m1, .m2, .m3, .m4, .m5, .m6, .m7, .m8 { background: radial-gradient(120% 70% at 50% 30%, #1E2B29, var(--stage)); }
+
+/* m1 · Atari ST: GEM-Desktop, Tastatur, Diskette */
+.mon { position: absolute; left: 46px; top: 88px; width: 268px; height: 206px; background: #D8D3C6; border-radius: 14px; border: 3px solid #0F1E1B; padding: 14px; }
+.scr1 { position: relative; height: 150px; background: #F4F4F0; border: 3px solid #3A3A36; border-radius: 6px; overflow: hidden; }
+.gem { display: flex; gap: 12px; font: 600 11px var(--f-mono); color: #111; border-bottom: 2px solid #111; padding: 2px 6px; background: #fff; }
+.drv { position: absolute; left: 18px; top: 40px; width: 64px; text-align: center; font: 500 9px var(--f-mono); color: #111; }
+.drv i { display: block; width: 36px; height: 28px; margin: 0 auto 3px; border: 2px solid #111; border-radius: 3px;
+  background: linear-gradient(#111, #111) center 72% / 60% 3px no-repeat, #fff; }
+.zeiger1 { position: absolute; left: 150px; top: 96px; width: 13px; height: 19px; background: #111;
+  clip-path: polygon(0 0, 100% 68%, 58% 66%, 80% 100%, 60% 100%, 40% 72%, 0 92%); }
+.m1.on .zeiger1 { animation: maus 2.2s ease-in-out .3s infinite alternate; }
+@keyframes maus { to { transform: translate(-96px, -44px); } }
+.fuss1 { position: absolute; left: 92px; bottom: -27px; width: 78px; height: 24px; background: #C6C1B4; border: 3px solid #0F1E1B; border-top: 0; }
+.tast { position: absolute; left: 22px; top: 342px; width: 316px; height: 66px; border: 3px solid #0F1E1B; border-radius: 8px;
+  background: repeating-linear-gradient(#D8D3C6 0 3px, transparent 3px 13px) 10px 8px / 292px 52px no-repeat,
+    repeating-linear-gradient(90deg, #BDB7A8 0 15px, #D8D3C6 15px 19px) 10px 8px / 292px 52px no-repeat, #D8D3C6; }
+.disk { position: absolute; left: 290px; top: 296px; width: 46px; height: 48px; background: #2D4E7A; border: 3px solid #0F1E1B; border-radius: 4px; transform: rotate(12deg); }
+.disk i { position: absolute; left: 10px; top: 0; width: 22px; height: 16px; background: #AAB6B3; border: 2px solid #0F1E1B; border-top: 0; }
+.disk::after { content: ""; position: absolute; left: 7px; right: 7px; bottom: 4px; height: 16px; background: #F4E9D8; border-radius: 2px; }
+
+/* m2 · Lebenslauf als Treppe */
+.stufe { position: absolute; left: calc(14px + var(--i) * 34px); top: calc(406px - var(--i) * 62px); width: 196px; height: 50px;
+  border-radius: 12px; background: #172120; border: 1px solid #2F3E3C; padding: 6px 12px; opacity: 0; transform: translateY(10px); }
+.m2.on .stufe { animation: rise .35s ease calc(.2s + var(--i) * .8s) forwards; }
+.stufe b { display: block; font: 600 16px/1.1 var(--f-display); color: var(--stage-ink); }
+.stufe span { font: 400 10.5px var(--f-mono); color: var(--stage-muted); }
+.stufe[style*="--i:4"] { border-color: var(--stage-accent); }
+.m2 .fig { left: 0; top: 0; opacity: 0; transition: opacity .2s; }
+
+/* m3, m4 · Projekt-Organigramm */
+.ob { position: absolute; width: 104px; border-radius: 12px; background: #172120; border: 1px solid #2F3E3C; padding: 8px 6px; text-align: center; }
+.ob b { display: block; font: 600 15px/1.1 var(--f-display); color: var(--stage-ink); }
+.ob span { display: inline-block; font: 500 11px var(--f-mono); color: var(--stage-accent); margin-top: 3px; }
+.ob.top { left: 90px; top: 92px; width: 180px; }
+.olines { position: absolute; left: 0; top: 136px; width: 360px; height: 80px; }
+.olines path { stroke: #3A4A47; stroke-width: 2; fill: none; }
+.ob.o1 { left: 8px; top: 216px; } .ob.o2 { left: 128px; top: 216px; } .ob.o3 { left: 248px; top: 216px; }
+.ob.leer { border: 2px dashed #5B6865; background: transparent; }
+.ob .frag { font: 700 26px/1 var(--f-display); color: #F2C66D; }
+.m3.on .frag { animation: nod2 1s ease-in-out infinite; }
+.ob.ki { border-color: var(--stage-accent); background: rgba(60,195,174,.16); }
+.m3 .fig, .m4 .fig { left: 155px; top: 326px; transform: scale(1.1); transform-origin: 50% 100%; }
+.funk { position: absolute; font-size: 18px; color: #F2C66D; }
+
+/* m5 · Kreislauf */
+.kreis { position: absolute; left: 60px; top: 130px; width: 240px; height: 240px; }
+.kreis circle { fill: none; stroke: #3A4A47; stroke-width: 3; stroke-dasharray: 8 8; }
+.orbit { position: absolute; left: 180px; top: 250px; width: 0; height: 0; }
+.orbit i { position: absolute; left: -8px; top: -108px; width: 16px; height: 16px; border-radius: 50%; background: #F2C66D; box-shadow: 0 0 12px rgba(242,198,109,.8); }
+.m5.on .orbit { animation: dreh 4s linear infinite; }
+.knoten { position: absolute; transform: translate(-50%, -50%); min-width: 92px; text-align: center; border-radius: 12px; background: #172120;
+  border: 1px solid #2F3E3C; padding: 6px 10px; transition: all .25s; }
+.knoten b { display: block; font: 600 17px/1.1 var(--f-display); }
+.knoten span { font: 400 10.5px var(--f-mono); color: var(--stage-muted); }
+.knoten.act { border-color: #F2C66D; background: #2A2A1E; transform: translate(-50%, -50%) scale(1.08); }
+.mitte5 { position: absolute; left: 120px; top: 226px; width: 120px; text-align: center; font: 500 12px/1.4 var(--f-mono); color: var(--stage-muted); }
+
+/* m6 · Kalender */
+.kal { position: absolute; left: 16px; right: 16px; top: 44px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.tag6 { height: 118px; border-radius: 12px; background: #172120; border: 1px solid #2F3E3C; padding: 8px 10px; display: flex; flex-direction: column; }
+.tag6 span { font: 500 11px var(--f-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--stage-accent); }
+.tag6 b { font: 700 30px/1.1 var(--f-display); color: var(--stage-ink); }
+.tag6 i { font-style: normal; font-size: 12px; line-height: 1.3; color: var(--stage-muted); margin-top: auto; }
+.tag6.hl { border-color: var(--stage-accent); background: rgba(60,195,174,.14); }
+.tag6.hl i { color: var(--stage-ink); font-weight: 600; }
+.zahlen { position: absolute; left: 16px; right: 16px; top: 312px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; }
+.zahlen b { display: block; font: 700 34px/1 var(--f-display); color: #F2C66D; font-variant-numeric: tabular-nums; }
+.zahlen span { font: 400 11px var(--f-mono); color: var(--stage-muted); }
+
+/* m7 · Architektur: Quellen → Herkunft → Verbrauch, Reichweite */
+.arch { position: absolute; left: 0; top: 60px; width: 360px; height: 240px; }
+.arch path { fill: none; stroke: #F2C66D; stroke-width: 2.5; stroke-dasharray: 1; stroke-dashoffset: 1; }
+.arch path.gestr { stroke: #5B6865; }
+.m7.on .arch path { animation: zieh .5s ease var(--d) forwards; }
+.ab { position: absolute; border-radius: 12px; background: #172120; border: 1px solid #2F3E3C; padding: 6px 10px; display: flex; flex-direction: column; justify-content: center; opacity: 0; }
+.m7.on .ab { animation: fade .35s ease forwards; }
+.ab b { font: 600 16px/1.1 var(--f-display); color: var(--stage-ink); }
+.ab span { font: 400 10.5px var(--f-mono); color: var(--stage-muted); }
+.ab.q1 { left: 12px; top: 86px; width: 110px; height: 48px; }
+.ab.q2 { left: 12px; top: 166px; width: 110px; height: 48px; animation-delay: .15s !important; }
+.ab.q3 { left: 12px; top: 246px; width: 110px; height: 48px; border: 2px dashed #5B6865; background: transparent; animation-delay: .3s !important; }
+.ab.q3 span { color: #F2C66D; }
+.ab.mitte { left: 134px; top: 160px; width: 104px; padding: 6px 4px; height: 60px; border-color: var(--stage-accent); background: rgba(60,195,174,.16); align-items: center; text-align: center; animation-delay: 1s !important; }
+.ab.a1x { left: 250px; top: 126px; width: 98px; height: 48px; animation-delay: 1.7s !important; }
+.ab.a2x { left: 250px; top: 206px; width: 98px; height: 48px; animation-delay: 1.8s !important; }
+.m7.on .ab.q1 { animation: fade .35s ease forwards, wackel .5s ease-in-out 3s 3; }
+@keyframes wackel { 50% { transform: rotate(-5deg); } }
+.ersetz { position: absolute; left: 22px; top: 56px; font: 600 12px var(--f-mono); color: #15201E; background: #F2C66D; border-radius: 99px; padding: 3px 10px; }
+
+/* m8 · Fazit */
+.zitat { position: absolute; left: 22px; right: 22px; top: 64px; font: 600 31px/1.12 var(--f-display); text-align: center; text-wrap: balance; color: var(--stage-ink); }
+.zitat em { font-style: normal; color: var(--stage-accent); }
+.mini { position: absolute; left: 22px; top: 320px; width: 78px; height: 62px; background: #D8D3C6; border: 3px solid #0F1E1B; border-radius: 8px; padding: 6px; }
+.mini i { display: block; height: 100%; background: #F4F4F0; border: 2px solid #3A3A36; border-radius: 3px; }
+.pfeil8 { position: absolute; left: 112px; top: 334px; font: 700 28px var(--f-display); color: #F2C66D; }
+.m8 .fig { left: 155px; top: 290px; transform: scale(1.3); transform-origin: 50% 100%; }
+.m8 .phone { left: 262px; top: 286px; width: 78px; height: 132px; }
+.m8 .scr b { font: 600 13px var(--f-display); color: var(--a-ink); }
+.ausruf { position: absolute; left: 192px; top: 200px; font: 700 40px var(--f-display); color: #F2C66D; opacity: 0; }
+.m8.on .ausruf { animation: pop .4s ease 1.2s forwards, nod2 .6s ease-in-out 1.6s infinite; }
+
+
+/* Bedienung */
+.ctrl { display: flex; align-items: center; gap: 12px; width: min(100%, 460px); }
+.ctrl button { font: inherit; font-size: 14px; border: 1px solid var(--line); background: transparent; color: var(--ink);
+  border-radius: 8px; height: 36px; min-width: 40px; padding: 0 10px; cursor: pointer; }
+.track { flex: 1; display: grid; gap: 4px; }
+.track button { height: 8px; min-width: 0; padding: 0; border: 0; border-radius: 4px; background: var(--line); position: relative; overflow: hidden; }
+.track button i { position: absolute; inset: 0; width: 0; background: #0E8F7E; }
+.time { font-family: var(--f-mono); font-size: 12px; color: var(--muted); min-width: 78px; text-align: right; font-variant-numeric: tabular-nums; }
+.kapitel { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: 460px; }
+.kapitel button { font: 500 12px var(--f-body); border: 1px solid var(--line); background: transparent; color: var(--muted);
+  border-radius: 99px; padding: 4px 10px; cursor: pointer; }
+.kapitel button.act { color: var(--ink); border-color: #0E8F7E; background: color-mix(in srgb, #0E8F7E 14%, transparent); }
+.hint { font-size: 12px; color: var(--muted); text-align: center; max-width: 460px; }
+</style>
+</head>
+<body>
+
+<div class="frame" id="frame">
+<div class="stage" id="stage">
+
+  <section class="scene w1" data-len="4" data-kap="1">
+    <div data-land></div>
+    <div class="car wcar huepf" data-car></div>
+    <span class="herz" style="left:120px;top:300px;--d:.2s;--r:-14deg">♥</span>
+    <span class="herz" style="left:200px;top:290px;--d:.9s">♥</span>
+    <span class="herz" style="left:160px;top:296px;--d:1.5s;--r:18deg">♥</span>
+    <span class="tag" style="left:40px;top:180px;--d:.6s">süß</span>
+    <span class="tag" style="left:210px;top:204px;--d:1.3s">praktisch</span>
+    <div class="cap">Mein erstes Elektroauto: ein Microlino. Süß und praktisch.</div>
+  </section>
+  <section class="scene i2" data-len="4" data-kap="1" data-tick="i2">
+    <div data-land></div>
+    <div class="wegw"><b>Homburg 9</b><b>Saarbrücken 30</b><b>Trier 102</b><i></i></div>
+    <div class="car wcar" data-car style="left:16px"></div>
+    <span class="tropf"></span>
+    <div class="angst"><span class="k">Akku</span><div class="bat"><i id="angstFill"></i><b id="angstSoc">64 %</b></div></div>
+    <div class="cap">Und mit ihm kam die Reichweitenangst.</div>
+  </section>
+
+  <section class="scene w2" data-len="4" data-kap="1">
+    <div data-land></div>
+    <div class="car wcar" data-car></div>
+    <div class="blase"><i>●</i> <i>●</i> <i>●</i></div>
+    <span class="zirp" style="left:24px;top:500px;--d:.6s">zirp</span>
+    <span class="zirp" style="left:250px;top:520px;--d:1.4s">zirp</span>
+    <div class="phone av"><div class="scr"><span style="font-size:8px;letter-spacing:.08em;text-transform:uppercase;color:var(--a-muted)">Akku</span><b>?</b></div></div>
+    <div class="cap">Einen Bordcomputer hat er nicht. Er ist schweigsam.</div>
+  </section>
+  <section class="scene w3" data-len="5" data-kap="1" data-tick="w3">
+    <div data-land></div>
+    <div class="fix"><div class="k">Community · in Arbeit</div><div class="t">Dem Micro das Reden beibringen</div><div class="balken"><i></i></div></div>
+    <div class="car wcar" data-car></div>
+    <div class="blase" id="lernt">B…</div>
+    <div class="fig l" data-fig="laptop"></div>
+    <div class="fig r" data-fig="schluessel"></div>
+    <span class="funke">✦</span>
+    <div class="cap">Die Community arbeitet daran, ihm das Reden beizubringen.</div>
+  </section>
+  <section class="scene w4" data-len="3" data-kap="1">
+    <div data-land></div>
+    <div class="car wcar" data-car style="left:50px"></div>
+    <div class="uhr2"><div class="zif"><div class="z z1"></div><div class="z z2"></div><div class="nabe"></div></div><div class="dig">bis er redet …</div></div>
+    <div class="blase">Nö.</div>
+    <div class="fig" data-fig="kopf"></div>
+    <div class="cap">So lange warte ich nicht.</div>
+  </section>
+  <section class="scene i6" id="i6" data-len="6" data-kap="1" data-tick="i6">
+    <svg class="birne" viewBox="0 0 60 84" aria-hidden="true">
+      <path class="glas" d="M30 4 C 14 4, 4 16, 4 30 C 4 42, 12 48, 18 56 L 42 56 C 48 48, 56 42, 56 30 C 56 16, 46 4, 30 4 Z" stroke="#0F1E1B" stroke-width="3"/>
+      <rect x="19" y="58" width="22" height="8" rx="2" fill="#AAB6B3" stroke="#0F1E1B" stroke-width="2"/>
+      <rect x="21" y="66" width="18" height="8" rx="2" fill="#94A3A0" stroke="#0F1E1B" stroke-width="2"/>
+      <path class="strahl" d="M30 -10 V -2 M-6 30 H 0 M60 30 H 66 M4 4 L 9 9 M56 4 L 51 9" stroke="#F2C66D" stroke-width="3" stroke-linecap="round"/>
+    </svg>
+    <div class="fig" data-fig="handy"></div>
+    <div class="phone av"><div class="scr"><b class="ki">KI?</b><div class="bc"><span class="appicon">B</span><span>Bordcomputer</span></div></div></div>
+    <div class="cap" id="i6cap">Als alter ITler dachte ich: perfektes Experiment für KI.</div>
+  </section>
+
+  <section class="scene w5" data-len="6" data-kap="2">
+    <div class="gl">Display → Mensch → Handy</div>
+    <svg class="disp2" viewBox="0 0 104 80" aria-hidden="true">
+      <rect class="lcd" x="2" y="2" width="100" height="70" rx="10" stroke-width="3"/>
+      <text class="lcd-t" x="52" y="48" text-anchor="middle" font-size="38">64 %</text>
+      <text class="lcd-k" x="52" y="64" text-anchor="middle" font-size="10">3 412 km</text>
+    </svg>
+    <div class="fig" data-fig="auge"></div>
+    <div class="phone av"><div class="scr"><span class="bl">Bubble Log</span><span style="font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--a-muted)">Akku</span><b class="soc">64 %</b></div></div>
+    <div class="pfeil" style="left:110px;width:54px;--d:.6s"><svg width="54" height="20" viewBox="0 0 54 20"><path pathLength="1" d="M4 10 H 46 M 38 3 L 48 10 L 38 17"/></svg><span>ablesen</span></div>
+    <div class="pfeil" style="left:212px;width:50px;--d:1.5s"><svg width="50" height="20" viewBox="0 0 50 20"><path pathLength="1" d="M4 10 H 42 M 34 3 L 44 10 L 34 17"/></svg><span>eingeben</span></div>
+    <div class="kann">
+      <div class="pops" style="--d:2.8s"><b>✓</b>Fahrtenbuch<span>GPS</span></div>
+      <div class="pops" style="--d:3.2s"><b>✓</b>Verbrauch<span>gelernt</span></div>
+      <div class="pops" style="--d:3.6s"><b>✓</b>Reichweite &amp; Ziel-Check<span>%/km</span></div>
+    </div>
+    <div class="cap">Der Micro sagt nichts? Dann liest du ab. <em>Humanes OBD.</em></div>
+  </section>
+  <section class="scene h2" data-len="4" data-kap="2">
+    <div data-land></div>
+    <div class="car" data-car="tuer"></div>
+    <div class="fig" data-fig></div>
+  </section>
+  <section class="scene h3" data-len="4" data-kap="2" data-tick="h3">
+    <div class="scheibe"><div data-land="ohne-strasse"></div></div>
+    <div class="armaturen"></div>
+    <svg class="lenkrad" viewBox="0 0 216 216" aria-hidden="true">
+      <circle cx="108" cy="108" r="96" fill="none" stroke="#2E3B39" stroke-width="18"/>
+      <path d="M22 120 L 58 112 M194 120 L 158 112 M108 170 L 108 146" stroke="#2E3B39" stroke-width="16" stroke-linecap="round"/>
+      <rect class="lcd" x="50" y="70" width="116" height="74" rx="10" stroke-width="3"/>
+      <text class="lcd-t lcd-glow" x="108" y="118" text-anchor="middle" font-size="44">64 %</text>
+      <text class="lcd-k" x="108" y="136" text-anchor="middle" font-size="11">3 412 km</text>
+    </svg>
+    <div class="phone av">
+      <div class="hd">Heute</div>
+      <div class="kt">Letzter Stand<b>72 % · gestern</b></div>
+      <div class="btns">
+        <div class="btn primary tap" id="startBtn" style="--at:1.95s">Fahrt starten<i class="ripple"></i></div>
+        <div class="btn">Laden eintragen</div>
+      </div>
+      <div class="app sheet mini"><div class="grip"></div><h2>Akkustand beim Start</h2><div class="drum" id="drum3"></div></div>
+    </div>
+    <div class="finger" data-to="startBtn" style="--from:.65s"></div>
+    <div class="cap">Vor der Fahrt: Akkustand ins Handy.</div>
+  </section>
+  <section class="scene h4" data-len="7" data-kap="2" data-tick="h4">
+    <div class="weg" style="left:12px">Weg 1 · Foto</div>
+    <div class="weg" style="left:190px">Weg 2 · Drehrad</div>
+    <div class="trenner"></div>
+    <div class="app av sheet L" id="pL" style="left:6px">
+      <div class="grip"></div>
+      <h2>Akkustand beim Start</h2>
+      <div class="drum" id="drumL"></div>
+      <div class="btn tap" id="fotoL" style="--at:1.15s">📷 Display fotografieren<i class="ripple"></i></div>
+      <div class="info">
+        <div class="shot"><span class="t">64 %</span><span class="k">3 412 km</span><span class="scan"></span></div>
+        <div class="fund"><b>Erkannt: 64 %.</b> Bitte prüfen und bestätigen.</div>
+      </div>
+      <div class="btn primary tap" id="okL" style="--at:5.45s">Übernehmen<i class="ripple"></i></div>
+      <div class="okmsg">✓ 64 % übernommen</div>
+      <div class="flash"></div>
+    </div>
+    <div class="app av sheet R" id="pR" style="left:188px">
+      <div class="grip"></div>
+      <h2>Akkustand beim Start</h2>
+      <div class="drum" id="drumR"></div>
+      <div class="btn" style="opacity:.55">📷 Display fotografieren</div>
+      <div class="info"><span class="small muted">Wischen, bis die Zahl vom Display in der Mitte einrastet.</span></div>
+      <div class="btn primary tap" id="okR" style="--at:5.75s">Übernehmen<i class="ripple"></i></div>
+      <div class="okmsg">✓ 64 % übernommen</div>
+    </div>
+    <div class="finger" data-to="fotoL" data-sx="90" data-sy="560" style="--from:-.15s"></div>
+    <div class="finger swipe" data-to="drumR" data-dy="-44" data-sy="-10" style="--from:.9s;--dur:3.4s"></div>
+    <div class="finger" data-to="okL" data-sx="90" data-sy="560" style="--from:4.15s"></div>
+    <div class="finger" data-to="okR" data-sx="290" data-sy="560" style="--from:4.45s"></div>
+    <div class="cap">Foto oder Drehrad – du bestätigst.</div>
+  </section>
+  <section class="scene h5" data-len="8" data-kap="2" data-tick="h5">
+    <div data-land="move"></div>
+    <div class="schild" id="schildA"><b>Bexbach</b><i></i></div>
+    <div class="schild" id="schildB"><b>Homburg</b><i></i></div>
+    <div class="car wobble" data-car></div>
+    <div class="app av tacho">
+      <div class="trow"><span class="label">Fahrt läuft</span><span class="gps"><svg viewBox="0 0 24 24" aria-hidden="true"><circle class="puls" cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>GPS</span></div>
+      <div class="trow" style="margin-top:4px"><span class="kmz"><span id="kmz">0,0</span> <small>km</small></span><span class="small muted">seit 10:12</span></div>
+      <svg class="spur" viewBox="0 0 220 54" preserveAspectRatio="none"><path id="spur" d="M10 40 C 40 44, 60 18, 92 24 S 140 44, 170 26 S 200 14, 210 12" fill="none" stroke="var(--a-accent)" stroke-width="3" stroke-linecap="round" pathLength="1" stroke-dasharray="0 1"/></svg>
+    </div>
+    <div class="cap">Bubble Log zeichnet die Strecke per GPS auf.</div>
+  </section>
+  <section class="scene h6" data-len="4" data-kap="2" data-tick="h6">
+    <div data-land></div>
+    <div class="schild" style="left:268px"><b>Homburg</b><i></i></div>
+    <div class="radius"><span>40 m</span></div>
+    <div class="car" data-car style="left:36px;top:312px"></div>
+    <div class="uhr"><div class="zif"><div class="zeiger" id="zeiger"></div><div class="nabe"></div></div><div class="dig"><span id="dig">0:00</span><small>Stillstand</small></div></div>
+    <div class="app av banner" id="banner"><div class="appicon">B</div><div><b>Fahrt beendet</b><div class="small muted">9,0 km – tippen, um den Akkustand einzutragen.</div></div></div>
+    <div class="finger" data-to="banner" style="--from:2.4s;--dur:1.6s"></div>
+    <div class="cap">3 Minuten Stillstand: Fahrt zu Ende.</div>
+  </section>
+  <section class="scene h7" data-len="4" data-kap="2" data-tick="h7">
+    <svg class="disp" viewBox="0 0 200 150" aria-hidden="true">
+      <circle cx="100" cy="100" r="92" fill="none" stroke="#2E3B39" stroke-width="16"/>
+      <rect class="lcd" x="42" y="52" width="116" height="74" rx="10" stroke-width="3"/>
+      <text class="lcd-t" x="100" y="100" text-anchor="middle" font-size="44">57 %</text>
+      <text class="lcd-k" x="100" y="118" text-anchor="middle" font-size="11">3 421 km</text>
+    </svg>
+    <div class="app av sheet">
+      <div class="grip"></div>
+      <h2>Fahrt beendet · 9,0 km</h2>
+      <div class="small muted">Akkustand <b>jetzt</b> vom Microlino-Display übernehmen. Vorgeschlagen ist die Schätzung aus deinem Verbrauch.</div>
+      <div class="drum" id="drum7"></div>
+      <div class="btn">📷 Display fotografieren</div>
+      <div class="btn primary tap" id="save7" style="--at:3.05s">Fahrt speichern<i class="ripple"></i></div>
+    </div>
+    <div class="finger swipe" data-to="drum7" data-dy="22" data-sy="-10" style="--from:.3s;--dur:2s"></div>
+    <div class="finger" data-to="save7" style="--from:1.75s;--dur:2.6s"></div>
+    <div class="cap">Echten Wert ablesen, eingeben, fertig.</div>
+  </section>
+  <section class="scene h8" data-len="6" data-kap="3" data-tick="h8">
+    <div class="logik">
+      <div class="kopf">So lernt Bubble Log</div>
+      <div class="rz later" style="--d:.2s"><span>Start − Ende · 64 − 57</span><b>7,0 %</b></div>
+      <div class="rz later" style="--d:.8s"><span>− Steigungsanteil</span><b>≈ 0,5 %</b></div>
+      <div class="rz erg later" style="--d:1.4s"><span>6,5 % ÷ 9,0 km</span><b>0,72 %/km</b></div>
+    </div>
+    <div class="pane"><svg id="pane8" viewBox="0 0 328 180"></svg></div>
+    <div class="regel later" style="--d:2.6s">Zählt nur mit <b>echtem Endwert</b>: eine unverändert bestätigte Schätzung nicht. Dazu ab 1 km und bis 5 %/km.</div>
+    <div class="cap">Aus jeder Fahrt lernt die App deinen Verbrauch.</div>
+  </section>
+  <section class="scene z1" data-len="4" data-kap="4">
+    <div class="soc"><span class="k">Akku jetzt</span><div class="bat"><i></i><b>64 %</b></div></div>
+    <div class="q">?</div>
+    <svg class="zcar" viewBox="0 0 220 130" aria-hidden="true">
+      <!-- Microlino von der Seite: Ei-Form, Fronttür, kurzer Radstand -->
+      <ellipse cx="110" cy="122" rx="92" ry="6" fill="#000" opacity=".35"/>
+      <path d="M22 98 C 14 70, 30 30, 84 18 C 128 9, 178 24, 196 58 C 204 74, 204 92, 198 100 L 26 104 Z" fill="#9ED6CB"/>
+      <path d="M28 98 C 22 74, 36 40, 84 28 C 102 24, 112 24, 118 26 L 112 70 L 30 76 Z" fill="#17302D" opacity=".85"/>
+      <path d="M128 28 C 158 32, 182 46, 190 66 L 130 70 Z" fill="#17302D" opacity=".85"/>
+      <path d="M118 26 L 112 70 M 124 27 L 120 98" stroke="#7BB8AC" stroke-width="2.5" fill="none"/>
+      <rect x="22" y="80" width="182" height="5" rx="2.5" fill="#E6EEEC" opacity=".9"/>
+      <rect x="194" y="74" width="9" height="6" rx="2" fill="#FFF3C4"/>
+      <rect x="20" y="74" width="7" height="6" rx="2" fill="#EB7A6E"/>
+      <g class="rad"><circle cx="62" cy="104" r="17" fill="#1C2322"/><circle cx="62" cy="104" r="8" fill="#AAB6B3"/><rect x="60.5" y="96" width="3" height="16" fill="#1C2322"/></g>
+      <g class="rad"><circle cx="160" cy="104" r="17" fill="#1C2322"/><circle cx="160" cy="104" r="8" fill="#AAB6B3"/><rect x="158.5" y="96" width="3" height="16" fill="#1C2322"/></g>
+    </svg>
+    <div class="zroad"></div>
+    <div class="cap"><small>Microlino · 64 % Akku</small>Komm ich hin – und wieder zurück?</div>
+  </section>
+  <section class="scene z2" data-len="5" data-kap="4" data-tick="z2">
+    <div class="screen av">
+      <div class="appbar"><h1>Reichweite</h1><span class="gear">⚙</span></div>
+      <div class="view">
+        <div class="search">
+          <div class="in"><span id="typed"></span><span class="caret"></span><span class="ph" id="ph">Ziel suchen …</span></div>
+          <div class="btnp tap" style="--at:2.75s" id="suchBtn">Suchen<i class="ripple"></i></div>
+        </div>
+        <div class="chips"><span class="chip">Homburg</span><span class="chip">St. Ingbert</span><span class="chip">Zweibrücken</span></div>
+        <div class="card treffer" style="padding:10px 14px"><b>Saarbrücken</b><div class="muted small">Regionalverband Saarbrücken, Saarland, Deutschland</div></div>
+        <div class="mapbox">
+          <svg viewBox="0 0 336 150" preserveAspectRatio="xMidYMid slice">
+            <path d="M0 120 C 60 110, 90 130, 140 118 S 240 96, 336 104" stroke="var(--a-line)" stroke-width="10" fill="none"/>
+            <path d="M40 0 C 60 40, 120 60, 150 150" stroke="var(--a-line)" stroke-width="6" fill="none"/>
+            <path d="M210 0 C 230 50, 260 70, 336 70" stroke="var(--a-line)" stroke-width="6" fill="none"/>
+            <circle cx="250" cy="62" r="70" fill="none" stroke="var(--a-accent)" stroke-dasharray="4 5" opacity=".6"/>
+            <circle cx="250" cy="62" r="6" fill="var(--a-accent)"/>
+            <text x="262" y="58" font-size="11" fill="var(--a-muted)" font-family="IBM Plex Sans">Bexbach</text>
+            <circle cx="122" cy="138" r="4" fill="var(--lade)"/><circle cx="198" cy="104" r="4" fill="var(--lade)"/><circle cx="62" cy="76" r="4" fill="var(--good)"/>
+          </svg>
+        </div>
+      </div>
+      <div class="tabbar">
+        <span class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Heute</span>
+        <span class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Fahrten</span>
+        <span class="tab on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg>Reichweite</span>
+        <span class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>Laden</span>
+      </div>
+    </div>
+    <div class="finger" data-to="suchBtn" style="--from:.9s"></div>
+    <div class="cap">Ziel eingeben. Den Rest rechnet Bubble Log.</div>
+  </section>
+  <section class="scene z3" data-len="10" data-kap="4" data-tick="z3">
+    <div class="steps" id="steps"><span>1 Route</span><span>2 Höhen</span><span>3 Verbrauch</span><span>4 Kälte</span></div>
+    <div class="pane"><svg id="pane" viewBox="0 0 328 240"></svg></div>
+    <div class="readout" id="readout"></div>
+    <div class="akku">
+      <div class="bar"><div class="in"><div class="fill" id="fill"></div><div class="cut" id="cut"></div><div class="res" id="res"></div></div></div>
+      <div class="lbl"><span>0 %</span><span id="reslbl">15 % Reserve</span><span>Start 64 %</span></div>
+      <div class="big" id="ank">64 <small>%</small></div>
+    </div>
+    <div class="cap"><small>So rechnet der Ziel-Check</small><span id="cap3"></span></div>
+  </section>
+  <section class="scene z4" data-len="5" data-kap="4" data-tick="z4">
+    <div class="screen av">
+      <div class="appbar"><h1>Reichweite</h1><span class="gear">⚙</span></div>
+      <div class="view">
+        <div class="between">
+          <span class="small"><span class="check" id="chk">✓</span>Hin und zurück</span>
+          <span class="mbtn">☆ Merken</span>
+        </div>
+        <div class="card hero">
+          <svg class="ring" width="112" height="112" viewBox="0 0 132 132">
+            <circle cx="66" cy="66" r="60" fill="none" stroke="var(--a-sunk)" stroke-width="12"/>
+            <circle class="arc" id="arc" cx="66" cy="66" r="60" fill="none" stroke="var(--good)" stroke-width="12" stroke-linecap="round" stroke-dasharray="0 400" transform="rotate(-90 66 66)"/>
+            <text x="50%" y="50%" text-anchor="middle" dominant-baseline="central" fill="var(--a-ink)" style="font:600 40px var(--f-display)"><tspan id="ringz">37</tspan><tspan style="font-size:18px" fill="var(--a-muted)"> %</tspan></text>
+          </svg>
+          <div style="min-width:0">
+            <div class="label" id="h-lbl">Ankunft mit</div>
+            <div class="bigw good" id="h-urt">Reicht</div>
+            <div class="muted small" id="h-txt">in Saarbrücken mit ca. 37 %</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="label">So gerechnet</div>
+          <div class="rechnung small" style="margin-top:6px">
+            <div class="between"><span>Start: Zuhause, Akku jetzt</span><b class="mono">64 %</b></div>
+            <div class="between"><span id="r-km">30 km Straße × Ø 0,80 %/km</span><b class="mono" id="r-kmv">−24 %</b></div>
+            <div class="between"><span>Kälte (3 °C, +8 %)</span><b class="mono" id="r-kalt">−2 %</b></div>
+            <div class="between"><span id="r-hm">Höhenmeter ↑ 140 / ↓ 190</span><b class="mono" id="r-hmv">−1 %</b></div>
+            <div class="between sum"><span id="r-sum">Ankunft · etwa 38 min Fahrt</span><b class="mono good" id="r-sumv">37 %</b></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="cap" id="cap4">Hin: reicht.</div>
+  </section>
+  <section class="scene z5" data-len="6" data-kap="4">
+    <div class="screen av">
+      <div class="appbar"><h1>Reichweite</h1><span class="gear">⚙</span></div>
+      <div class="view">
+        <div class="card hero" style="padding:10px 14px">
+          <svg width="64" height="64" viewBox="0 0 132 132">
+            <circle cx="66" cy="66" r="60" fill="none" stroke="var(--a-sunk)" stroke-width="14"/>
+            <circle cx="66" cy="66" r="60" fill="none" stroke="var(--warn)" stroke-width="14" stroke-linecap="round" stroke-dasharray="34 400" transform="rotate(-90 66 66)"/>
+            <text x="50%" y="50%" text-anchor="middle" dominant-baseline="central" fill="var(--a-ink)" style="font:600 46px var(--f-display)">9</text>
+          </svg>
+          <div><div class="label">Zurück mit</div><div class="bigw warn" style="font-size:34px">Knapp</div></div>
+        </div>
+        <div class="card">
+          <div class="label">Laden am Ziel</div>
+          <p style="margin:6px 0 4px"><b>25 min</b> laden am Ziel, dann reicht es zurück mit 15 % Reserve <span class="small muted">(6 % bei 8 A)</span>.</p>
+          <div class="zeile ein" style="--d:1.2s"><span class="punkt good"><svg class="bz" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="currentColor"/></svg></span><span class="nm"><b>Parkhaus Innenstadt <span class="pill good zpop" style="--d:2.8s">✓ klappt</span></b><span class="small muted">Typ 2 · 11 kW</span></span><span class="mono">240 m</span></div>
+          <div class="zeile ein" style="--d:1.5s"><span class="punkt lade"><svg class="bz" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="currentColor"/></svg></span><span class="nm"><b>Parkplatz am Rathaus</b><span class="small muted">Typ 2 · 22 kW</span></span><span class="mono">520 m</span></div>
+          <div class="zeile ein" style="--d:1.8s;opacity:.5"><span class="punkt" style="color:var(--a-muted)"><svg class="bz" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="currentColor"/></svg></span><span class="nm"><b>Ladesäule Marktplatz <span class="pill bad">✗ ging nicht</span></b><span class="small muted">Schuko</span></span><span class="mono">780 m</span></div>
+        </div>
+        <div class="card ein" style="--d:3.4s;padding:10px 14px">
+          <div class="zeile" style="border:0;padding:0"><span class="punkt lade">●</span><span class="nm"><b>Saarbrücken</b><span class="small muted">zurück nach Laden am Ziel</span></span><span class="mono lade"><svg class="bz" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="currentColor"/></svg> 25 min<br>am Ziel</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="cap">Laden am Ziel? Bubble Log merkt sich, welche Säulen klappen.</div>
+  </section>
+  <section class="scene z6" data-len="5" data-kap="4">
+    <div class="screen av">
+      <div class="appbar"><h1>Reichweite</h1><span class="offline">● ab Zuhause · ohne Netz</span></div>
+      <div class="view">
+        <div class="chips"><span class="chip on">Ziele (18)</span><span class="chip"><svg class="bz" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="currentColor"/></svg> Ladepunkte</span></div>
+        <div class="card">
+          <div class="label">Ab Zuhause mit 64 % Akku</div>
+          <div class="small muted" style="margin:3px 0 2px"><span class="good">●</span> hin und zurück · <span class="lade">●</span> nach Laden am Ziel · <span class="warn">●</span> nur hin · <span class="bad">●</span> laden</div>
+          <div class="zeile ein" style="--d:.5s"><span class="punkt good">●</span><span class="nm"><b>Homburg</b><span class="small muted">9 km · ↑ 60 Hm</span></span><span class="mono good">hin und zurück<br>56 % / 48 %</span></div>
+          <div class="zeile ein" style="--d:.75s"><span class="punkt good">●</span><span class="nm"><b>Neunkirchen</b><span class="small muted">12 km · ↑ 90 Hm</span></span><span class="mono good">hin und zurück<br>53 % / 42 %</span></div>
+          <div class="zeile ein" style="--d:1s"><span class="punkt good">●</span><span class="nm"><b>St. Ingbert</b><span class="small muted">17 km · ↑ 110 Hm</span></span><span class="mono good">hin und zurück<br>48 % / 33 %</span></div>
+          <div class="zeile ein" style="--d:1.25s"><span class="punkt good">●</span><span class="nm"><b>Zweibrücken</b><span class="small muted">19 km · ↑ 120 Hm</span></span><span class="mono good">hin und zurück<br>47 % / 30 %</span></div>
+          <div class="zeile ein" style="--d:1.5s"><span class="punkt lade">●</span><span class="nm"><b>Saarbrücken</b><span class="small muted">30 km · ↑ 140 Hm</span></span><span class="mono lade"><svg class="bz" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="currentColor"/></svg> 25 min am Ziel<br>37 % / 9 %</span></div>
+          <div class="zeile ein" style="--d:1.75s"><span class="punkt warn">●</span><span class="nm"><b>Kaiserslautern</b><span class="small muted">48 km · ↑ 260 Hm</span></span><span class="mono warn">nur hin<br>21 % / –</span></div>
+          <div class="zeile ein" style="--d:2s"><span class="punkt bad">●</span><span class="nm"><b>Trier</b><span class="small muted">102 km · ↑ 520 Hm</span></span><span class="mono bad">laden<br>0 % / –</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="cap">Deine Stammziele: ein Blick, und du weißt Bescheid.</div>
+  </section>
+  <section class="scene s1" data-len="4" data-kap="5">
+    <div data-land></div>
+    <div class="car wcar" data-car></div>
+    <svg class="warn1" viewBox="0 0 132 84" aria-hidden="true">
+      <rect class="lcd" x="2" y="2" width="128" height="80" rx="10" stroke-width="3"/>
+      <path class="dreieck" d="M66 14 L 92 60 L 40 60 Z" fill="none" stroke="#F2C66D" stroke-width="5" stroke-linejoin="round"/>
+      <path class="dreieck" d="M66 30 V 45 M66 52 V 53" stroke="#F2C66D" stroke-width="5" stroke-linecap="round"/>
+      <text class="lcd-k" x="66" y="76" text-anchor="middle" font-size="10">Fehler</text>
+    </svg>
+    <div class="fig" data-fig="schulter"></div>
+    <span class="zirp" style="left:24px;top:500px;--d:.6s">zirp</span>
+    <span class="zirp" style="left:250px;top:520px;--d:1.4s">zirp</span>
+    <div class="cap">Mein Micro hat noch eine Eigenart: Manchmal springt er einfach nicht an.</div>
+  </section>
+  <section class="scene s2" data-len="5" data-kap="5" data-tick="s2">
+    <svg class="schalter" viewBox="-30 -24 200 200" aria-hidden="true">
+      <circle cx="70" cy="70" r="58" fill="#2E3B39" stroke="#0F1E1B" stroke-width="4"/>
+      <circle cx="70" cy="70" r="44" fill="#1C2322"/>
+      <text x="70" y="-6" text-anchor="middle" font-size="15" fill="#6CC08A" font-family="IBM Plex Mono" font-weight="500">AN</text>
+      <text x="-4" y="75" text-anchor="end" font-size="15" fill="#EB7A6E" font-family="IBM Plex Mono" font-weight="500">AUS</text>
+      <g class="knauf"><rect x="58" y="20" width="24" height="100" rx="11" fill="#C2453A" stroke="#0F1E1B" stroke-width="3"/><circle cx="70" cy="34" r="4" fill="#F4E9D8"/></g>
+    </svg>
+    <div class="k2">12-V-Trennschalter</div>
+    <div class="blase pops" style="--d:2.3s">Biep!</div>
+    <div class="bat12">12 V</div>
+    <div class="bm6 pops" style="--d:2.6s">BM6</div>
+    <svg class="wellen" viewBox="0 0 70 70" aria-hidden="true">
+      <path style="--w:0s" d="M11 24 A 16 16 0 0 1 11 46"/>
+      <path style="--w:.2s" d="M21 14 A 30 30 0 0 1 21 56"/>
+      <path style="--w:.4s" d="M31 4 A 44 44 0 0 1 31 66"/>
+    </svg>
+    <div class="phone av"><div class="scr"><span class="appicon" style="width:28px;height:28px;font-size:16px;border-radius:8px">B</span><span style="font-size:8px;letter-spacing:.08em;text-transform:uppercase;color:var(--a-muted)">12 V</span><b class="pops" style="--d:3.2s">12,7 V</b></div></div>
+    <div class="cap" id="s2cap">Meist hilft: 12 V trennen und wieder verbinden. Aus und wieder an, kenne ich aus der IT.</div>
+  </section>
+  <section class="scene s3" data-len="4" data-kap="5" data-tick="s3">
+    <div class="screen av">
+      <div class="appbar"><h1>Heute</h1><span class="gear">⚙</span></div>
+      <div class="view">
+        <div class="card between"><span><span class="label">Letzter Stand</span><br><b>57 % · gestern</b></span><span class="small muted">3 421 km</span></div>
+        <div class="card between tap" id="spBtn" style="--at:1.5s;position:relative;overflow:hidden">
+          <span><span class="label">Springt nicht an?</span><br><span class="small muted">Ein Tipp hält Zeit, Ort, Temperatur und 12-V-Spannung als Beleg fest.</span></span>
+          <span class="pill good">12 V</span><i class="ripple"></i></div>
+        <div class="btn primary">Fahrt starten</div>
+        <div class="btn">Laden eintragen</div>
+      </div>
+      <div class="tabbar">
+        <span class="tab on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Heute</span>
+        <span class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Fahrten</span>
+        <span class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg>Reichweite</span>
+        <span class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>Laden</span>
+      </div>
+      <div class="app sheet sp">
+        <div class="grip"></div>
+        <h2>Springt nicht an</h2>
+        <div class="small">Festgehalten: 30.10., 10:42, Ort, 8 °C.</div>
+        <div class="card between"><span>12-V-Batterie jetzt</span><b id="spV" class="muted">wird gemessen …</b></div>
+        <div class="btn">Nach Trennen und Verbinden messen</div>
+        <div class="btn">Foto vom Display</div>
+        <div class="btn primary">Fertig</div>
+      </div>
+    </div>
+    <div class="finger" data-to="spBtn" style="--from:.2s"></div>
+    <div class="cap">Statt zu fluchen, tippe ich auf „Springt nicht an?“. Bubble Log hält Zeit, Ort und 12-V-Spannung fest.</div>
+  </section>
+  <section class="scene s4" data-len="4" data-kap="5" data-tick="s4">
+    <div data-land="move"></div>
+    <div class="car wobble" data-car></div>
+    <div class="app av tacho volt">
+      <div class="trow"><span class="label">12-V-Bordnetz · Fahrt läuft</span><span class="pill good pops" style="--d:3s">ok</span></div>
+      <div class="trow" style="margin-top:4px"><span class="kmz"><span id="voltz">13,7</span> <small>V</small></span><span class="small muted">vom BM6</span></div>
+      <svg class="vkurve" viewBox="0 0 220 70" aria-hidden="true">
+        <rect x="0" y="7.8" width="220" height="38.9" fill="var(--good)" opacity=".14"/>
+        <line x1="0" y1="46.7" x2="220" y2="46.7" stroke="var(--good)" stroke-dasharray="4 3"/>
+        <line x1="0" y1="54.4" x2="220" y2="54.4" stroke="var(--bad)" stroke-dasharray="4 3"/>
+        <text x="216" y="17" text-anchor="end" font-size="9" fill="var(--a-muted)" font-family="IBM Plex Mono">13,4–14,4 V ok</text>
+        <text x="216" y="65" text-anchor="end" font-size="9" fill="var(--bad)" font-family="IBM Plex Mono">13,2 V</text>
+        <polyline id="vpfad" fill="none" stroke="var(--a-accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="cap">Beim Fahren schreibt Bubble Log die Bordspannung mit. Normal sind etwa 13,7 Volt, schön gleichmäßig.</div>
+  </section>
+  <section class="scene s5" data-len="3" data-kap="5">
+    <div class="tresen"></div>
+    <div class="app av beleg ein" style="--d:.15s">
+      <h2>12-V-Beleg für die Werkstatt</h2>
+      <div class="small muted">2 Fahrten mit Messung, 1 × „springt nicht an“</div>
+      <div class="brow"><span>30.10. 10:42</span><b>12,45 V</b><span class="warn">Springt nicht an · beobachten</span></div>
+      <div class="brow"><span>30.10. 10:45</span><b>12,71 V</b><span class="good">Nach Trennen/Verbinden · ok</span></div>
+      <div class="brow"><span>30.10. 10:58</span><b>13,71 V</b><span class="good">Fahrt Ø · ok</span></div>
+      <div class="brow"><span>30.10. 11:21</span><b>12,68 V</b><span class="good">Ruhe nach Fahrt · ok</span></div>
+      <div class="brow"><span>29.10. 17:05</span><b>13,69 V</b><span class="good">Fahrt Ø · ok</span></div>
+    </div>
+    <span class="datei pops" style="--d:1.2s">bordspannung-2026-10-30.csv</span>
+    <div class="cap">Am Ende steht der 12-V-Beleg für die Werkstatt. Zahlen statt „manchmal“.</div>
+  </section>
+  <section class="scene m1" data-len="4" data-kap="6">
+    <div class="mon">
+      <div class="scr1">
+        <div class="gem"><span>Desk</span><span>File</span><span>View</span><span>Options</span></div>
+        <div class="drv"><i></i>FLOPPY A</div><div class="drv" style="left:92px"><i></i>FLOPPY B</div>
+        <span class="zeiger1"></span>
+      </div>
+      <div class="fuss1"></div>
+    </div>
+    <div class="tast"></div>
+    <div class="disk"><i></i></div>
+    <div class="cap">Mein erster Computer: ein Atari ST.</div>
+  </section>
+
+  <section class="scene m2" data-len="5" data-kap="6" data-tick="m2">
+    <div class="stufe" style="--i:0"><b>Wirtschaftsinformatik</b><span>COBOL, Pascal</span></div>
+    <div class="stufe" style="--i:1"><b>IT-Projektleiter</b><span>Projekte leiten</span></div>
+    <div class="stufe" style="--i:2"><b>Requirements Engineer</b><span>Anforderungen schreiben</span></div>
+    <div class="stufe" style="--i:3"><b>Unternehmensberater</b><span>Business &amp; IT</span></div>
+    <div class="stufe" style="--i:4"><b>Enterprise Architect</b><span>Architekturen planen</span></div>
+    <div class="fig" id="m2fig" data-fig="krawatte"></div>
+    <div class="cap">Danach: Projekte leiten, Anforderungen schreiben, Architekturen planen.</div>
+  </section>
+
+  <section class="scene m3" data-len="3" data-kap="6">
+    <div class="ob top">Projekt Bubble Log</div>
+    <svg class="olines" viewBox="0 0 360 80" aria-hidden="true"><path d="M180 0 V 40 M60 40 H 300 M60 40 V 80 M180 40 V 80 M300 40 V 80"/></svg>
+    <div class="ob o1"><b>Anforderungen</b><span>ich ✓</span></div>
+    <div class="ob o2"><b>Architektur</b><span>ich ✓</span></div>
+    <div class="ob o3 leer"><b>Entwicklung</b><span class="frag">?</span></div>
+    <div class="fig" data-fig="schulter"></div>
+    <div class="cap">Programmiert haben immer die anderen.</div>
+  </section>
+
+  <section class="scene m4" data-len="3" data-kap="6">
+    <div class="ob top">Projekt Bubble Log</div>
+    <svg class="olines" viewBox="0 0 360 80" aria-hidden="true"><path d="M180 0 V 40 M60 40 H 300 M60 40 V 80 M180 40 V 80 M300 40 V 80"/></svg>
+    <div class="ob o1"><b>Anforderungen</b><span>ich ✓</span></div>
+    <div class="ob o2"><b>Architektur</b><span>ich ✓</span></div>
+    <div class="ob o3 ki"><b>Entwicklung</b><span class="pops" style="--d:.4s">KI · Claude</span></div>
+    <span class="funk pops" style="left:262px;top:204px;--d:.6s">✦</span>
+    <span class="funk pops" style="left:336px;top:250px;--d:.8s">✦</span>
+    <span class="funk pops" style="left:254px;top:286px;--d:1s">✦</span>
+    <div class="fig" data-fig=""></div>
+    <div class="cap">Diesmal ist das Team eine KI.</div>
+  </section>
+
+  <section class="scene m5" data-len="5" data-kap="6" data-tick="m5">
+    <svg class="kreis" viewBox="0 0 240 240" aria-hidden="true"><circle cx="120" cy="120" r="100"/></svg>
+    <div class="orbit"><i></i></div>
+    <div class="knoten" style="left:180px;top:150px"><b>Diktat</b><span>ich</span></div>
+    <div class="knoten" style="left:280px;top:250px"><b>Spec</b><span>Anforderung</span></div>
+    <div class="knoten" style="left:180px;top:350px"><b>Code</b><span>KI</span></div>
+    <div class="knoten" style="left:80px;top:250px"><b>Test</b><span>ich, am Handy</span></div>
+    <div class="mitte5">Runde<br>für Runde</div>
+    <div class="cap">Ich sage, was ich brauche. Claude baut. Ich nehme am Handy ab.</div>
+  </section>
+
+  <section class="scene m6" data-len="6" data-kap="6" data-tick="m6">
+    <div class="kal">
+      <div class="tag6 pops" style="--d:.2s"><span>So</span><b>25.</b><i>Start</i></div>
+      <div class="tag6 pops" style="--d:.6s"><span>Mo</span><b>26.</b><i>…</i></div>
+      <div class="tag6 pops hl" style="--d:1s"><span>Di</span><b>27.</b><i>erste App aufs Handy</i></div>
+      <div class="tag6 pops" style="--d:1.4s"><span>Mi</span><b>28.</b><i>Foto vom Display</i></div>
+      <div class="tag6 pops" style="--d:1.8s"><span>Do</span><b>29.</b><i>Version mit Nummer</i></div>
+      <div class="tag6 pops" style="--d:2.2s"><span>Fr</span><b>30.</b><i>Erklärvideos</i></div>
+    </div>
+    <div class="zahlen">
+      <div class="later" style="--d:2.6s"><b id="zZeilen">0</b><span>Zeilen App-Code</span></div>
+      <div class="later" style="--d:3s"><b>6</b><span>Testdateien</span></div>
+      <div class="later" style="--d:3.4s"><b>4</b><span>Specs</span></div>
+    </div>
+    <div class="cap">Sonntag angefangen. Dienstag die erste App auf dem Handy.</div>
+  </section>
+
+  <section class="scene m7" data-len="6" data-kap="6">
+    <svg class="arch" viewBox="0 0 360 240" aria-hidden="true">
+      <path style="--d:.5s" d="M122 50 C 134 50, 128 130, 140 130"/>
+      <path style="--d:.7s" d="M122 130 H 140"/>
+      <path class="gestr" style="--d:.9s" d="M122 210 C 134 210, 128 130, 140 130"/>
+      <path style="--d:1.4s" d="M230 130 C 240 130, 240 90, 250 90"/>
+      <path style="--d:1.5s" d="M230 130 C 240 130, 240 170, 250 170"/>
+    </svg>
+    <div class="ab q1"><b>Mensch</b><span>Drehrad</span></div>
+    <div class="ab q2"><b>Foto</b><span>offline erkannt</span></div>
+    <div class="ab q3"><b>Fahrzeug</b><span>Idee</span></div>
+    <div class="ab mitte"><b>Herkunft</b><span>eine Schnittstelle</span></div>
+    <div class="ab a1x"><b>Verbrauch</b></div>
+    <div class="ab a2x"><b>Reichweite</b></div>
+    <span class="ersetz pops" style="--d:3s">ersetzbar ;-)</span>
+    <div class="cap">Und als Architekt plane ich so, dass ich mich selbst wegrationalisieren kann.</div>
+  </section>
+
+  <section class="scene m8" data-len="5" data-kap="6">
+    <div class="zitat later" style="--d:.3s"><em>„</em>Meine Erwartungen wurden in allen Bereichen übertroffen.<em>“</em></div>
+    <div class="mini"><i></i></div>
+    <span class="pfeil8">→</span>
+    <div class="fig" data-fig="baff"></div>
+    <span class="pfeil8" style="left:226px">→</span>
+    <div class="phone av"><div class="scr"><span class="appicon">B</span><b>Bubble Log</b></div></div>
+    <span class="ausruf">!</span>
+    <div class="cap">Mein Fazit: Ich bin baff.</div>
+  </section>
+
+  <section class="scene w6" data-len="7" data-kap="7">
+    <div class="outro">
+      <div class="icon">B</div>
+      <div class="name">Bubble Log</div>
+      <div class="claim">Der zweitbeste Bordcomputer der Welt.</div>
+      <div class="sub">mit einem Menschen als OBD</div>
+      <a class="repo" href="https://github.com/markussstaub-dot/bubble-log" target="_blank" rel="noopener">github.com/markussstaub-dot/bubble-log</a>
+    </div>
+    <div class="fine">Fahrten bleiben auf dem Handy. Ortssuche, Route und Höhen kommen online von OpenStreetMap, OSRM und Open-Meteo. Werte direkt vom Fahrzeug sind eine Idee, noch nicht gebaut. Die 12-V-Messung braucht einen BM6-Batteriewächter. Alle Zahlen im Video sind Beispielwerte.</div>
+  </section>
+
+</div>
+</div>
+
+<div class="ctrl">
+  <button id="play" aria-label="Abspielen/Pause">❚❚</button>
+  <div class="track" id="track"></div>
+  <span class="time" id="time">0:00</span>
+</div>
+<div class="kapitel" id="kapitel"></div>
+<div class="hint">Leertaste: Pause · Pfeiltasten: Szene vor/zurück · Kapitel anklicken: dorthin springen</div>
+
+<script>
+const de = (v, d = 0) => v.toFixed(d).replace('.', ',');
+const clamp = v => Math.min(1, Math.max(0, v));
+const $ = id => document.getElementById(id);
+const ease = p => p < .5 ? 4 * p ** 3 : 1 - (-2 * p + 2) ** 3 / 2;
+
+// Microlino von der Seite: Ei-Form, Fronttür vorn (rechts), kurzer Radstand
+const rad = x => `<g class="rad"><circle cx="${x}" cy="104" r="17" fill="#1C2322" stroke="#0F1E1B" stroke-width="2"/><circle cx="${x}" cy="104" r="8" fill="#AAB6B3"/><rect x="${x - 1.5}" y="96" width="3" height="16" fill="#1C2322"/></g>`;
+const CAR = `<svg viewBox="0 0 220 130" aria-hidden="true" style="display:block;overflow:visible">
+  <ellipse cx="110" cy="122" rx="92" ry="6" fill="#000" opacity=".3"/>
+  <path d="M22 98 C 14 70, 30 30, 84 18 C 128 9, 178 24, 196 58 C 204 74, 204 92, 198 100 L 26 104 Z" fill="#9ED6CB" stroke="#0F1E1B" stroke-width="3"/>
+  <path d="M28 98 C 22 74, 36 40, 84 28 C 102 24, 112 24, 118 26 L 112 70 L 30 76 Z" fill="#17302D" opacity=".85"/>
+  <path d="M123 24 C 158 28, 182 44, 196 58 C 204 74, 204 92, 198 100 L 121 103 Z" fill="#0B1514"/>
+  <rect x="22" y="80" width="100" height="5" rx="2.5" fill="#E6EEEC" opacity=".9"/>
+  <rect x="20" y="74" width="7" height="6" rx="2" fill="#EB7A6E"/>
+  <g class="door">
+    <path d="M122 24 C 158 28, 182 44, 196 58 C 204 74, 204 92, 198 100 L 120 103 Z" fill="#9ED6CB" stroke="#0F1E1B" stroke-width="3"/>
+    <path d="M128 30 C 158 34, 180 47, 188 66 L 128 70 Z" fill="#17302D" opacity=".85"/>
+    <rect x="121" y="80" width="82" height="5" rx="2.5" fill="#E6EEEC" opacity=".9"/>
+    <rect x="193" y="72" width="9" height="7" rx="2" fill="#FFF3C4"/>
+  </g>
+  ${rad(62)}${rad(160)}</svg>`;
+document.querySelectorAll('[data-car]').forEach(e => e.innerHTML = CAR);
+
+
+// Cartoon-Landschaft: runde Hügel als Kreise, Muster alle 360 px, doppelt für die Endlosfahrt
+const KREISE = [
+  ['#2F6A5E', 'l1', [[40, 420, 120], [190, 440, 110], [300, 410, 100]]],
+  ['#3F8A74', 'l2', [[80, 470, 90], [230, 480, 100], [340, 470, 70]]],
+];
+const BAEUME = [[150, 384], [280, 396], [20, 400]];
+function landschaft(art) {
+  let s = '<div class="sky"></div><div class="sun"></div>'
+    + '<div class="cloud" style="left:40px;top:120px;width:70px"></div><div class="cloud" style="left:200px;top:170px;width:58px"></div><div class="cloud" style="left:420px;top:110px;width:66px"></div>';
+  KREISE.forEach(([farbe, cls, kr]) => {
+    let c = '';
+    for (const off of [-360, 0, 360, 720]) kr.forEach(([x, y, r]) => c += `<circle cx="${x + off}" cy="${y}" r="${r}" fill="${farbe}" stroke="#0F1E1B" stroke-width="3"/>`);
+    if (cls === 'l2') for (const off of [-360, 0, 360, 720]) BAEUME.forEach(([x, y]) => c += `<rect x="${x + off - 3}" y="${y}" width="6" height="22" fill="#4A3A2A"/><circle cx="${x + off}" cy="${y - 6}" r="15" fill="#5FAF84" stroke="#0F1E1B" stroke-width="3"/>`);
+    s += `<div class="layer ${cls}"${art === 'ohne-strasse' ? ' style="top:-190px"' : ''}><svg width="720" height="640">${c}</svg></div>`;
+  });
+  if (art !== 'ohne-strasse') s += '<div class="ground"></div><div class="road"></div>';
+  return s;
+}
+document.querySelectorAll('[data-land]').forEach(e => {
+  e.className = 'abs' + (e.dataset.land === 'move' ? ' move' : '');
+  e.style.inset = '0';
+  e.innerHTML = landschaft(e.dataset.land);
+});
+
+// Drehrad: 9 Zahlen um die Mitte, pos darf krumm sein (zwischen zwei Rastungen)
+const ROW = 26;
+function drum(el) { el.innerHTML = Array.from({ length: 9 }, () => '<span></span>').join('') + '<span class="unit">%</span>'; return [...el.querySelectorAll('span:not(.unit)')]; }
+const D = { d3: drum($('drum3')), L: drum($('drumL')), R: drum($('drumR')), d7: drum($('drum7')) };
+function setDrum(spans, pos) {
+  const r = Math.round(pos);
+  spans.forEach((sp, k) => {
+    const n = r + k - 4, d = pos - n;
+    sp.textContent = n >= 0 && n <= 100 ? n : '';
+    sp.style.transform = `translateY(${d * ROW}px) scale(${1 - Math.min(1, Math.abs(d)) * .2})`;
+    sp.style.opacity = Math.max(0, 1 - Math.abs(d) * .3);
+  });
+}
+// Rastung: zwischen zwei Zahlen schnell weiter, an jeder Zahl kurz stehen
+const raste = x => Math.floor(x) + ease(x - Math.floor(x));
+const dreh = (von, nach, p) => raste(von + (nach - von) * clamp(p));
+
+// Szene 3: Startdialog mit Vorschlag 72 %
+function tickH3() { setDrum(D.d3, 72); }
+
+// Szene 4: links Foto → Erkennung → Rad springt selbst auf 64; rechts Wischen am Rad 72 → 64
+function tickH4(lt) {
+  const st = lt < 1.3 ? 0 : lt < 1.9 ? 1 : lt < 3 ? 2 : lt < 5.6 ? 3 : 4;
+  if ($('pL').dataset.st != st) $('pL').dataset.st = st;
+  setDrum(D.L, dreh(72, 64, (lt - 3.1) / 1));
+  const sr = lt < 1.5 ? 0 : lt < 5.9 ? 1 : 4;
+  if ($('pR').dataset.st != sr) $('pR').dataset.st = sr;
+  setDrum(D.R, dreh(72, 64, (lt - 1.65) / 1.75));
+}
+
+// Szene 5: km zählen bis 9,0, Ortsschilder ziehen vorbei
+function tickH5(lt) {
+  const p = clamp((lt - .4) / 6.8);
+  $('kmz').textContent = de(9 * p, 1);
+  $('spur').setAttribute('stroke-dasharray', `${p} 1`);
+  $('schildA').style.left = (230 - lt * 150) + 'px';
+  $('schildB').style.left = Math.max(280, 520 - (lt - 5) * 150) + 'px';
+}
+
+// Szene 6: Zeitraffer 3 min Stillstand
+function tickH6(lt) {
+  const p = clamp((lt - .3) / 2);
+  $('zeiger').style.transform = `rotate(${p * 3 * 360}deg)`;
+  const s = Math.round(p * 180);
+  $('dig').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+// Szene 7: Schätzung 64 − 9 × 0,85 ≈ 56 %, Display zeigt 57 → eine Rastung nach oben
+function tickH7(lt) { setDrum(D.d7, dreh(56, 57, (lt - .9) / .9)); }
+
+// Szene 8: die ersten Fahrten (zusammen 14 km, Ø 0,85) als Punkte, die neue (9 km, 0,72) fliegt dazu.
+// km-gewichtet: (14 × 0,85 + 6,5) ÷ 23 = 0,80, also genau der Schnitt, mit dem Kapitel 4 (Ziel-Check) rechnet.
+const F = [0.88, 0.83, 0.84];
+const yv = v => 168 - (v - .6) * 400;
+function tickH8(lt) {
+  const p = clamp((lt - 2) / .8), q = clamp((lt - 2.8) / .6), avg = .85 - .05 * ease(q);
+  let s = `<text x="14" y="20" font-size="11" fill="#94A3A0" font-family="IBM Plex Mono">Deine Fahrten, %/km</text>`;
+  F.forEach((v, i) => s += `<circle cx="${60 + i * 70}" cy="${yv(v)}" r="6" fill="#94A3A0" opacity="${clamp(lt / .6)}"/>`);
+  s += `<line x1="14" y1="${yv(avg)}" x2="314" y2="${yv(avg)}" stroke="#3CC3AE" stroke-width="2.5" stroke-dasharray="6 4"/>
+    <text x="314" y="24" text-anchor="end" font-size="20" fill="#3CC3AE" font-family="Saira Condensed" font-weight="700">Ø ${de(avg, 2)} %/km</text>`;
+  if (lt >= 2) {
+    const x = 296, y0 = -60, y = y0 + (yv(.72) - y0) * ease(p);
+    s += `<circle cx="${x}" cy="${y}" r="${8 + 3 * (1 - p)}" fill="#F2C66D"/>`;
+    if (p >= 1) s += `<text x="${x - 12}" y="${yv(.72) + 4}" text-anchor="end" font-size="11" fill="#F2C66D" font-family="IBM Plex Mono">neu 0,72</text>`;
+  }
+  $('pane8').innerHTML = s;
+}
+
+
+// Szene 2: „Saarbrücken“ wird getippt
+const WORT = 'Saarbrücken';
+function tickZ2(lt) {
+  const n = Math.max(0, Math.min(WORT.length, Math.floor((lt - .4) * 6)));
+  $('typed').textContent = WORT.slice(0, n);
+  $('ph').style.display = n ? 'none' : '';
+}
+
+// Szene 3: vier Schritte, der Akkubalken wird Stück für Stück kleiner.
+// Beispiel wie zielRechnung(): 64 % − 30 km × 0,80 − Kälte 8 % − Höhen (↑140 − 0,5 × ↓190 = 45 Hm ≈ 1 %) = 37 %
+const STEPS = [
+  [0,   'Erst die Straßenroute zum Ziel.',          'Route', '<b>30 km</b> Straße · etwa 38 min', 0],
+  [2.4, 'Dann die Steigungen auf dem Weg.',         'Höhen', '↑ <b>140</b> / ↓ <b>190</b> Hm · bergab halb zurück → <b>−1 %</b>', 1],
+  [4.8, 'Dazu dein Verbrauch, gelernt aus deinen Fahrten.', 'Verbrauch', '30 km × Ø <b>0,80 %/km</b> → <b>−24 %</b>', 24],
+  [7.2, 'Und bei Kälte ein Zuschlag.',              'Kälte', '3 °C · aus deinen Fahrten <b>+8 %</b> → <b>−2 %</b>', 2],
+];
+const SOC = 64, pane = $('pane'), stepEls = [...document.querySelectorAll('#steps span')];
+let lastStep = -1;
+// Route Bexbach → Saarbrücken (stilisiert) und Höhenprofil
+const ROUTE = 'M290 48 C 262 60, 248 92, 214 104 S 150 112, 122 140 S 66 168, 40 172';
+const HOEHE = [62, 58, 66, 74, 70, 60, 52, 56, 64, 58, 48, 42, 46, 40, 34, 30];
+function zeichne(st, lt) {
+  const t = lt - STEPS[st][0];
+  let s = '';
+  if (st === 0) {
+    const p = clamp(t / 1.6);
+    s += `<path d="M0 150 C 80 140, 120 170, 328 120" stroke="#1E2C2A" stroke-width="10" fill="none"/>
+      <path d="M120 0 C 140 60, 180 80, 200 214" stroke="#1E2C2A" stroke-width="6" fill="none"/>
+      <path d="${ROUTE}" stroke="#3CC3AE" stroke-width="5" fill="none" stroke-linecap="round" pathLength="1" stroke-dasharray="${p} 1"/>
+      <circle cx="290" cy="48" r="7" fill="#3CC3AE"/><text x="276" y="30" font-size="12" fill="#94A3A0" font-family="IBM Plex Sans">Bexbach</text>
+      ${p >= 1 ? '<circle cx="40" cy="172" r="7" fill="#E6EEEC"/><text x="22" y="198" font-size="12" fill="#E6EEEC" font-family="IBM Plex Sans">Saarbrücken</text>' : ''}`;
+  } else if (st === 1) {
+    const p = clamp(t / 1.6), w = 296 / (HOEHE.length - 1), n = Math.ceil(p * (HOEHE.length - 1));
+    s += `<text x="16" y="24" font-size="11" fill="#94A3A0" font-family="IBM Plex Mono">Höhe alle 300 m</text>
+      <line x1="16" y1="190" x2="312" y2="190" stroke="#263331"/>`;
+    for (let i = 0; i < n; i++) {
+      const x1 = 16 + i * w, x2 = x1 + w, y1 = 190 - HOEHE[i] * 1.9, y2 = 190 - HOEHE[i + 1] * 1.9;
+      const auf = y2 < y1;
+      s += `<path d="M${x1} 190 L${x1} ${y1} L${x2} ${y2} L${x2} 190Z" fill="${auf ? 'rgba(224,168,74,.22)' : 'rgba(108,192,138,.18)'}"/>
+        <line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${auf ? '#E0A84A' : '#6CC08A'}" stroke-width="3" stroke-linecap="round"/>`;
+    }
+    if (p >= 1) s += `<text x="312" y="24" text-anchor="end" font-size="11" fill="#E0A84A" font-family="IBM Plex Mono">▲ kostet</text>
+      <text x="312" y="40" text-anchor="end" font-size="11" fill="#6CC08A" font-family="IBM Plex Mono">▼ halb zurück</text>`;
+  } else if (st === 2) {
+    // eigene Fahrten als Punkte, daraus der Schnitt
+    const F = [0.86, 0.74, 0.92, 0.78, 0.81, 0.69, 0.84, 0.77, 0.88, 0.71];
+    const p = clamp(t / 1.4), y = v => 190 - (v - .5) * 300;
+    s += `<text x="16" y="24" font-size="11" fill="#94A3A0" font-family="IBM Plex Mono">Deine Fahrten, %/km</text>`;
+    F.forEach((v, i) => { if (i / F.length < p) s += `<circle cx="${34 + i * 29}" cy="${y(v)}" r="6" fill="#94A3A0"/>`; });
+    if (p >= 1) s += `<line x1="16" y1="${y(.8)}" x2="312" y2="${y(.8)}" stroke="#3CC3AE" stroke-width="2.5" stroke-dasharray="6 4"/>
+      <text x="312" y="${y(.8) - 10}" text-anchor="end" font-size="20" fill="#3CC3AE" font-family="Saira Condensed" font-weight="700">Ø 0,80 %/km</text>`;
+  } else {
+    const p = clamp(t / 1);
+    const top = 40, bot = 180, lvl = bot - (bot - top) * (0.25 + (1 - p) * 0.25);
+    s += `<rect x="146" y="${top}" width="36" height="${bot - top}" rx="18" fill="#172120" stroke="#3A4A47" stroke-width="2"/>
+      <rect x="156" y="${lvl}" width="16" height="${bot - lvl}" rx="8" fill="#6FA8F5"/>
+      <circle cx="164" cy="${bot + 4}" r="20" fill="#6FA8F5"/>
+      <text x="206" y="${lvl + 6}" font-size="30" fill="#E6EEEC" font-family="Saira Condensed" font-weight="700">3 °C</text>
+      <text x="206" y="${lvl + 26}" font-size="11" fill="#94A3A0" font-family="IBM Plex Mono">unter 5 °C</text>
+      <text x="16" y="24" font-size="11" fill="#94A3A0" font-family="IBM Plex Mono">Zuschlag aus Fahrten bei Kälte</text>`;
+  }
+  pane.innerHTML = s;
+}
+function tickZ3(lt) {
+  const st = STEPS.findLastIndex(([t]) => lt >= t);
+  if (st !== lastStep) {
+    stepEls.forEach((e, i) => { e.classList.toggle('act', i === st); e.classList.toggle('done', i < st); });
+    $('cap3').textContent = STEPS[st][1];
+    $('readout').innerHTML = STEPS[st][3];
+    lastStep = st;
+  }
+  zeichne(st, lt);
+  // Abzug je Schritt erscheint, sobald dessen Bild fertig ist
+  let weg = 0, neu = 0;
+  STEPS.forEach(([t, , , , d], i) => { if (lt >= t + 1.6) weg += d; else if (i === st) neu = d * clamp((lt - t - 1.2) / .4); });
+  const rest = SOC - weg;
+  $('fill').style.width = rest - neu + '%';
+  const cut = $('cut');
+  cut.style.left = (rest - neu) + '%';
+  cut.style.width = (SOC - rest + neu) + '%';
+  const fertig = lt >= STEPS[3][0] + 1.6;
+  $('ank').innerHTML = `${Math.round(rest)} <small>%</small>`;
+  $('ank').classList.toggle('ok', fertig);
+  if (fertig) { $('readout').innerHTML = 'Ankunft in Saarbrücken mit <b>37 %</b>'; $('cap3').textContent = 'Ergebnis: Ankunft mit 37 %.'; }
+}
+$('res').style.left = '15%';
+
+// Szene 4: erst „Ankunft 37 %“, dann Häkchen „Hin und zurück“ → „Zurück mit 9 %“
+const U = 2 * Math.PI * 60;
+let s4Phase = -1;
+function tickZ4(lt) {
+  const phase = lt < 2.4 ? 0 : 1;
+  const p = phase ? 9 : 37;
+  $('arc').style.strokeDasharray = `${lt < .3 ? 0 : U * p / 100} ${U}`;
+  if (phase === s4Phase) return;
+  s4Phase = phase;
+  $('chk').classList.toggle('on', !!phase);
+  $('arc').style.stroke = phase ? 'var(--warn)' : 'var(--good)';
+  $('ringz').textContent = p;
+  $('h-lbl').textContent = phase ? 'Zurück mit' : 'Ankunft mit';
+  $('h-urt').textContent = phase ? 'Knapp' : 'Reicht';
+  $('h-urt').className = 'bigw ' + (phase ? 'warn' : 'good');
+  $('h-txt').textContent = phase ? 'zurück am Start mit ca. 9 %' : 'in Saarbrücken mit ca. 37 %';
+  $('r-km').textContent = (phase ? '60' : '30') + ' km Straße × Ø 0,80 %/km';
+  $('r-kmv').textContent = phase ? '−48 %' : '−24 %';
+  $('r-kalt').textContent = phase ? '−4 %' : '−2 %';
+  $('r-hm').textContent = 'Höhenmeter ↑ 140 / ↓ 190' + (phase ? ', zurück umgekehrt' : '');
+  $('r-hmv').textContent = phase ? '−3 %' : '−1 %';
+  $('r-sum').textContent = phase ? 'Zurück · etwa 76 min Fahrt' : 'Ankunft · etwa 38 min Fahrt';
+  $('r-sumv').textContent = p + ' %';
+  $('r-sumv').className = 'mono ' + (phase ? 'warn' : 'good');
+  $('cap4').textContent = phase ? 'Zurück: knapp, unter 15 % Reserve.' : 'Hin: reicht.';
+}
+
+
+// Szene 3: der Micro versucht zu reden
+const VERSUCHE = ['B…', 'Bi…', 'Bie…', 'Biep?', '64 …?'];
+function tickW3(lt) { $('lernt').textContent = VERSUCHE[Math.min(VERSUCHE.length - 1, Math.floor(lt / .9))]; }
+
+
+// Strichfiguren, Füße bei y = 100; data-fig gibt ein Ding in die Hand oder eine Haltung
+const DINGE = {
+  laptop: '<rect class="ding" x="30" y="48" width="30" height="18" rx="2" fill="#94A3A0"/><rect class="ding" x="33" y="51" width="24" height="12" fill="#3CC3AE"/><rect class="ding" x="26" y="66" width="38" height="4" rx="2" fill="#AAB6B3"/>',
+  krawatte: '<path class="ding" d="M25 23 L 21 27 L 24 44 L 25 46 L 26 44 L 29 27 Z" fill="#3CC3AE"/>',
+};
+const GESICHT = {
+  auge: '<circle class="ding" cx="29" cy="11" r="2.4" fill="#15201E"/>',
+  baff: '<circle class="ding" cx="21" cy="9" r="1.8" fill="#15201E"/><circle class="ding" cx="29" cy="9" r="1.8" fill="#15201E"/><ellipse class="ding" cx="25" cy="16" rx="2.8" ry="3.6" fill="#15201E"/>',
+};
+const ARM = { laptop: ['', 'transform:rotate(-64deg)'], schluessel: ['transform:rotate(60deg)', ''], handy: ['', 'transform:rotate(-80deg)'],
+  schulter: ['transform:rotate(125deg)', 'transform:rotate(-125deg)'], baff: ['transform:rotate(150deg)', 'transform:rotate(-150deg)'] };
+document.querySelectorAll('[data-fig]').forEach(e => {
+  const art = e.dataset.fig, [a1, a2] = ARM[art] || ['', ''];
+  const zange = art === 'schluessel' ? '<g class="ding"><rect x="22" y="48" width="5" height="22" rx="2" fill="#AAB6B3" transform="rotate(-30 25 52)"/></g>' : '';
+  e.innerHTML = `<svg width="50" height="100" viewBox="0 0 50 100" aria-hidden="true">
+    <g class="k"><circle class="kopf" cx="25" cy="12" r="9"/>${GESICHT[art] || ''}</g><line x1="25" y1="22" x2="25" y2="58"/>
+    <g class="a1" style="${a1}"><line x1="25" y1="30" x2="25" y2="52"/>${zange}</g><line class="a2" style="${a2}" x1="25" y1="30" x2="25" y2="52"/>
+    <line class="b1" x1="25" y1="58" x2="18" y2="98"/><line class="b2" x1="25" y1="58" x2="32" y2="98"/>${DINGE[art] || ''}</svg>`;
+});
+// Laufende Figur (Kapitel 2, Einsteigen): Beine senkrecht, damit das Schwingen sauber aussieht
+document.querySelectorAll('.h2 .fig .b1, .h2 .fig .b2').forEach(l => { l.setAttribute('x2', 25); });
+
+// i2: Akku schrumpft in der Angst von 64 auf 18 %
+function tickI2(lt) {
+  const soc = 64 - 46 * ease(clamp((lt - .3) / 3));
+  $('angstFill').style.width = soc + '%';
+  $('angstFill').style.background = soc < 30 ? '#EB7A6E' : soc < 45 ? '#E0A84A' : '#3CC3AE';
+  $('angstSoc').textContent = Math.round(soc) + ' %';
+}
+
+// i6: Glühbirne, dann wird das Handy zum Bordcomputer; Untertitel in zwei Teilen
+function tickI6(lt) {
+  const zwei = lt >= 3;
+  if ($('i6').classList.contains('phase2') !== zwei) {
+    $('i6').classList.toggle('phase2', zwei);
+    $('i6cap').textContent = zwei ? 'Also bauen wir ihm einen Bordcomputer. Aufs Handy.' : 'Als alter ITler dachte ich: perfektes Experiment für KI.';
+  }
+}
+
+// Kapitel 5 · s2: Untertitel in zwei Teilen, wie i6
+function tickS2(lt) {
+  const txt = lt >= 2.6 ? 'Neu daneben: ein Batteriewächter, der ans Handy funkt.' : 'Meist hilft: 12 V trennen und wieder verbinden. Aus und wieder an, kenne ich aus der IT.';
+  if ($('s2cap').textContent !== txt) $('s2cap').textContent = txt;
+}
+// s3: erst „wird gemessen …“, dann kommt der Wert vom BM6
+function tickS3(lt) {
+  const da = lt >= 2.8, el = $('spV');
+  if (el.dataset.da === String(da)) return;
+  el.dataset.da = da;
+  el.textContent = da ? '12,45 V · beobachten' : 'wird gemessen …';
+  el.className = da ? 'warn' : 'muted';
+}
+// s4: Minutenwerte gleichmäßig um 13,7 V, die Kurve wächst mit der Fahrt
+const VOLT = Array.from({ length: 24 }, (_, i) => 13.7 + .03 * Math.sin(i * 1.7) + .015 * Math.cos(i * 4.1));
+const vy = v => 70 - (v - 12.8) / 1.8 * 70;
+function tickS4(lt) {
+  const n = Math.max(1, Math.round(clamp((lt - .3) / 2.6) * (VOLT.length - 1)));
+  $('vpfad').setAttribute('points', VOLT.slice(0, n + 1).map((v, i) => `${(i * 220 / (VOLT.length - 1)).toFixed(1)},${vy(v).toFixed(1)}`).join(' '));
+  $('voltz').textContent = de(VOLT[n], 1);
+}
+
+// m2: Figur hüpft die Treppe hoch, eine Stufe je 0,8 s
+const stufe = k => [14 + k * 34 - 6, 406 - k * 62 - 100];
+function tickM2(lt) {
+  const s = (lt - .2) / .8, k = Math.max(0, Math.min(4, Math.floor(s))), f = s - k;
+  let [x, y] = stufe(k);
+  if (k > 0 && f < .35 && s < 5) {
+    const [x0, y0] = stufe(k - 1), p = f / .35;
+    x = x0 + (x - x0) * p; y = y0 + (y - y0) * p - 34 * Math.sin(Math.PI * p);
+  }
+  const fig = $('m2fig');
+  fig.style.opacity = lt > .3 ? 1 : 0;
+  fig.style.transform = `translate(${x}px, ${y}px)`;
+}
+
+// m5: der Punkt läuft im Kreis, der Knoten unter ihm leuchtet
+const knoten = [...document.querySelectorAll('.m5 .knoten')];
+function tickM5(lt) {
+  const w = (lt % 4) / 4 * 360, k = Math.floor(((w + 45) % 360) / 90);
+  knoten.forEach((n, i) => n.classList.toggle('act', i === k));
+}
+
+// m6: Zeilen zählen hoch
+function tickM6(lt) {
+  const n = Math.round(2800 * ease(clamp((lt - 2.6) / 1.4)) / 100) * 100;
+  $('zZeilen').textContent = (n >= 2800 ? '≈ ' : '') + n.toLocaleString('de-DE').replace('.', ' ');
+}
+
+
+// Abspielen: Länge, Kapitel und Uhr-Funktion stehen an jeder Szene
+const KAPITEL = ['Die Idee', 'Humanes OBD', 'So lernt die App', 'Komm ich hin?', 'Springt nicht an?', 'Making-of', 'Schluss'];
+const TICK = { w3: tickW3, i2: tickI2, i6: tickI6, h3: tickH3, h4: tickH4, h5: tickH5, h6: tickH6, h7: tickH7, h8: tickH8,
+  z2: tickZ2, z3: tickZ3, z4: tickZ4, s2: tickS2, s3: tickS3, s4: tickS4, m2: tickM2, m5: tickM5, m6: tickM6 };
+const scenes = [...document.querySelectorAll('.scene')];
+const LEN = scenes.map(s => +s.dataset.len), KAP = scenes.map(s => +s.dataset.kap);
+const START = LEN.map((_, i) => LEN.slice(0, i).reduce((a, b) => a + b, 0));
+const TOTAL = LEN.reduce((a, b) => a + b, 0);
+// Kapitel-Schild in die erste Szene jedes Kapitels (außer Schluss)
+scenes.forEach((s, i) => { if (KAP[i] < 7 && KAP[i] !== KAP[i - 1]) s.insertAdjacentHTML('afterbegin', `<div class="kap">Kapitel ${KAP[i]} · ${KAPITEL[KAP[i] - 1]}</div>`); });
+const kStart = KAPITEL.map((_, k) => START[KAP.indexOf(k + 1)]);
+const kLen = KAPITEL.map((_, k) => LEN.filter((_, i) => KAP[i] === k + 1).reduce((a, b) => a + b, 0));
+const track = $('track');
+track.style.gridTemplateColumns = kLen.map(l => l + 'fr').join(' ');
+track.innerHTML = KAPITEL.map(n => `<button aria-label="${n}"><i></i></button>`).join('');
+$('kapitel').innerHTML = KAPITEL.map((n, k) => `<button>${k < 6 ? k + 1 + ' · ' : ''}${n}</button>`).join('');
+const bars = [...track.querySelectorAll('i')], kBtns = [...$('kapitel').children];
+const playBtn = $('play'), timeEl = $('time');
+let t = 0, cur = -1, playing = true, last = performance.now(), scale = 1;
+
+function show(i) {
+  scenes.forEach(s => s.classList.remove('on'));
+  void document.body.offsetWidth;
+  scenes[i].classList.add('on');
+  cur = i;
+  lastStep = -1;
+  s4Phase = -1;
+  kBtns.forEach((b, k) => b.classList.toggle('act', k === KAP[i] - 1));
+}
+function seek(i) { t = START[i]; show(i); }
+function seekKap(k) { seek(KAP.indexOf(k + 1)); }
+const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
+function frame(now) {
+  // der erste Zeitstempel von requestAnimationFrame kann vor dem Skriptstart liegen
+  if (playing) t = Math.max(0, t + (now - last) / 1000);
+  last = now;
+  if (t >= TOTAL) t = 0;
+  const i = START.findLastIndex(s => t >= s);
+  if (i !== cur) show(i);
+  TICK[scenes[i].dataset.tick]?.(t - START[i]);
+  bars.forEach((b, k) => b.style.width = clamp((t - kStart[k]) / kLen[k]) * 100 + '%');
+  timeEl.textContent = `${fmt(t)} / ${fmt(TOTAL)}`;
+  requestAnimationFrame(frame);
+}
+
+function setPlaying(p) {
+  playing = p;
+  document.body.classList.toggle('paused', !p);
+  playBtn.textContent = p ? '❚❚' : '▶';
+}
+playBtn.onclick = () => setPlaying(!playing);
+track.querySelectorAll('button').forEach((b, k) => b.onclick = () => seekKap(k));
+kBtns.forEach((b, k) => b.onclick = () => seekKap(k));
+addEventListener('keydown', e => {
+  if (e.code === 'Space') { e.preventDefault(); setPlaying(!playing); }
+  if (e.key === 'ArrowRight') seek(Math.min(cur + 1, scenes.length - 1));
+  if (e.key === 'ArrowLeft') seek(Math.max(cur - 1, 0));
+});
+
+// Finger-Ziel: Mitte des Elements data-to in Bühnen-Koordinaten, über offsetLeft/Top gerechnet, damit
+// Transforms (Banner, der erst hereinfährt) nicht stören. Wischfinger starten am Ziel (data-sy = Versatz),
+// Tippfinger unten (data-sx/sy).
+function mitte(el) {
+  let x = el.offsetWidth / 2, y = el.offsetHeight / 2;
+  for (let e = el; e && e.id !== 'stage'; e = e.offsetParent) { x += e.offsetLeft; y += e.offsetTop; }
+  return [x, y];
+}
+function aim() {
+  document.querySelectorAll('.finger').forEach(f => {
+    const [cx, cy] = mitte($(f.dataset.to));
+    if (f.classList.contains('swipe')) {
+      f.style.left = cx + 'px'; f.style.top = cy + 'px';
+      f.style.setProperty('--fx', '0px'); f.style.setProperty('--fy', (+f.dataset.sy || 0) + 'px');
+      f.style.setProperty('--dy', (+f.dataset.dy || 0) + 'px');
+    } else {
+      const sx = +(f.dataset.sx ?? 290), sy = +(f.dataset.sy ?? 600);
+      f.style.left = sx + 'px'; f.style.top = sy + 'px';
+      f.style.setProperty('--fx', (cx - sx) + 'px'); f.style.setProperty('--fy', (cy - sy) + 'px');
+    }
+  });
+}
+function fit() {
+  scale = Math.min((innerHeight - 140) / 640, (innerWidth - 32) / 360, 1.5);
+  $('frame').style.setProperty('--s', scale);
+  $('stage').style.setProperty('--s', scale);
+}
+addEventListener('resize', fit);
+fit();
+aim();
+document.fonts?.ready.then(aim);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
