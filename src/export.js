@@ -8,17 +8,18 @@ const ORDNER = 'Bubble Log';
 
 // fotos: Spalten „Foto Start“/„Foto Ende“ mit den Dateinamen (Einstellung „Fotos beim Export mitgeben“)
 export function csvText(fahrten, { fotos = false } = {}) {
-  const zeilen = ['Datum;Start;Ende;km;Akku Start %;Akku Ende %;Temperatur °C;Zweck;Höhenmeter auf;Höhenmeter ab;starke Bremsungen;starke Beschleunigungen;raue Strecke %' + (fotos ? ';Foto Start;Foto Ende' : ''),
+  const zeilen = ['Datum;Start;Ende;km;Akku Start %;Akku Ende %;Temperatur °C;Zweck;Höhenmeter auf;Höhenmeter ab;starke Bremsungen;starke Beschleunigungen;raue Strecke %;12 V Start;12 V Fahrt Ø;12 V Ruhe' + (fotos ? ';Foto Start;Foto Ende' : ''),
     ...fahrten.map(f => [f.tag, f.von, f.nach, String(f.km).replace('.', ','), f.start, f.ende, f.temp ?? '', f.zweck,
-      f.hm ?? '', f.hmAb ?? '', f.brems ?? '', f.beschl ?? '', f.rau ?? '', ...(fotos ? [f.fotoStart ?? '', f.fotoEnde ?? ''] : [])].join(';'))];
+      f.hm ?? '', f.hmAb ?? '', f.brems ?? '', f.beschl ?? '', f.rau ?? '',
+      ...[f.v12?.start, f.v12?.bewertung?.mittel, f.v12?.ruhe].map(v => v == null ? '' : String(v).replace('.', ',')), ...(fotos ? [f.fotoStart ?? '', f.fotoEnde ?? ''] : [])].join(';'))];
   return zeilen.join('\r\n');
 }
 // Dateinamen aller Fotos der Fahrten (für Teilen/Speichern)
 export const fotosVon = fahrten => fahrten.flatMap(f => [f.fotoStart, f.fotoEnde]).filter(Boolean);
 
-export function dateiname(d = new Date()) {
+export function dateiname(d = new Date(), praefix = 'fahrtenbuch') {
   const p = n => String(n).padStart(2, '0');
-  return `fahrtenbuch-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}.csv`;
+  return `${praefix}-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}.csv`;
 }
 
 // Das BOM vorne sorgt dafür, dass Excel Umlaute und °C richtig liest
@@ -33,13 +34,13 @@ function browserDownload(text, name) {
 
 // Ergebnis: 'geteilt', 'abgebrochen' oder 'heruntergeladen' (Browser)
 // fotos: Dateinamen aus Directory.Data/fotos, werden mitgeteilt bzw. nach Dokumente/Bubble Log/fotos kopiert (nur Handy)
-export async function teilen(text, fotos = []) {
-  const name = dateiname();
+// name/titel: anderer Export, z. B. der 12-V-Beleg (bordspannung-….csv)
+export async function teilen(text, fotos = [], { name = dateiname(), titel = 'Fahrtenbuch' } = {}) {
   if (!Capacitor.isNativePlatform()) { browserDownload(text, name); return 'heruntergeladen'; }
   const { uri } = await Filesystem.writeFile({ path: name, data: mitBom(text), directory: Directory.Cache, encoding: Encoding.UTF8 });
   const bilder = await Promise.all(fotos.map(f => Filesystem.getUri({ path: `${FOTOS}/${f}`, directory: Directory.Data }).then(r => r.uri, () => null)));
   try {
-    await Share.share({ title: 'Fahrtenbuch', files: [uri, ...bilder.filter(Boolean)], dialogTitle: 'Fahrtenbuch teilen' });
+    await Share.share({ title: titel, files: [uri, ...bilder.filter(Boolean)], dialogTitle: `${titel} teilen` });
     return 'geteilt';
   } catch (e) {
     if (/cancel/i.test(String(e?.message))) return 'abgebrochen';
@@ -48,8 +49,7 @@ export async function teilen(text, fotos = []) {
 }
 
 // Ergebnis: der Ort für die Anzeige, z. B. "Dokumente/Bubble Log/fahrtenbuch-2026-10-27.csv"
-export async function speichern(text, fotos = []) {
-  const name = dateiname();
+export async function speichern(text, fotos = [], { name = dateiname() } = {}) {
   if (!Capacitor.isNativePlatform()) { browserDownload(text, name); return `Downloads/${name}`; }
   await Filesystem.writeFile({ path: `${ORDNER}/${name}`, data: mitBom(text), directory: Directory.Documents, encoding: Encoding.UTF8, recursive: true });
   if (fotos.length) await Filesystem.mkdir({ path: `${ORDNER}/fotos`, directory: Directory.Documents, recursive: true }).catch(() => {});

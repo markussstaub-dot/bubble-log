@@ -3,6 +3,13 @@
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
 ## Unveröffentlicht
+- **12-V-Bordspannung mit dem BM6** (SPEC-12v.md, Meilenstein 1 fertig, Meilenstein 2 gebaut, aber ohne Gerät ungetestet):
+  Einstellungen → „12-V-Wächter (BM6)“ (suchen, koppeln). Beim Fahren werden Minutenwerte mitgeschrieben, rund 2 min nach
+  dem Abstellen ein Ruhewert; Bewertung ok/beobachten/verdächtig, Warnung bei Ruhe unter 12,4 V. Im Fahrtenbuch ein
+  12-V-Punkt je Fahrt mit Kurve, Knopf „Springt nicht an?“ unter „Heute“ (Zeit, Ort, Temperatur, Spannung, Nachmessung,
+  Foto, Notiz), Export „12-V-Beleg“ (`bordspannung-….csv`), Fahrtenbuch-CSV mit drei 12-V-Spalten. Sim-Tab: simulierter
+  BM6 (normal, schwacher DC/DC, Batterie sackt ab). Neu: `src/bordspannung.js` (Tests), `src/bm6.js`, `src/bordnetz.js`,
+  `Batteriewaechter.java`, Rechte BLUETOOTH_SCAN/CONNECT. Log `bordnetz`.
 - **Fix Fahrt „von 17:00 bis 16:22“** (Fahrtenbuch 29.10., 0 km, 74 → 74 %): Das Fahrtende liegt nie mehr vor dem
   Beginn. Ursache laut Log: Start per Hand um 17:00:03, mit dem ersten GPS-Punkt endete die Fahrt in APK 1418 sofort als
   „stopp nach Lücke“ am Punkt aus dem Warten von 16:22 (behoben seit 1121, „alter Punkt verworfen“). Weil der Beginn

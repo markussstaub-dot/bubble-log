@@ -9,6 +9,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(Fahrsensoren.class);   // eigene Plugins in diesem Ordner, kommen nicht über npm
         registerPlugin(Texterkennung.class);
+        registerPlugin(Batteriewaechter.class);
         super.onCreate(savedInstanceState);
     }
 }

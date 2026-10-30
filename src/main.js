@@ -5,7 +5,7 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 import { laden, speichern, speichernSpaeter, LEER } from './store.js';
 import { createTracker, distanz, fahrtEnde, gpsStand } from './tracker.js';
 import { temperatur } from './wetter.js';
-import { csvText, fotosVon, teilen, speichern as csvSpeichern } from './export.js';
+import { csvText, fotosVon, teilen, dateiname, speichern as csvSpeichern } from './export.js';
 import * as foto from './foto.js';
 import { socPlausibel } from './fototext.js';
 import { scrollrad } from './scrollrad.js';
@@ -16,6 +16,9 @@ import { suchen, route as routeBerechnen } from './route.js';
 import * as lade from './laden.js';
 import * as nt from './nachtragen.js';
 import * as dialoge from './dialoge.js';
+import * as bm6 from './bm6.js';
+import * as bordnetz from './bordnetz.js';
+import { belegCsv, kurveSvg, STUFE_TEXT, STUFE_KLASSE } from './bordspannung.js';
 import { simTabVerbinden, simTabZeichnen, simTabStoppen, simHud, simAktion } from './simtab.js';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -177,6 +180,7 @@ function viewHeute() {
       <span><span class="label warn">Akku-Optimierung an</span><br><span class="small">Android kann die Fahrterkennung im Hintergrund beenden. In den Einstellungen ändern.</span></span>
       <span class="pill warn">Ändern</span></button>` : ''}
     <div class="grid2"><button class="btn primary" data-act="start" ${o ? 'disabled' : ''}>Fahrt starten</button><button class="btn" data-act="charge">Laden eintragen</button></div>
+    ${startproblemKarte()}
     <button class="card switch" data-act="settings" style="text-align:left">
       <span><span class="label">Fahrterkennung</span><br><span class="small">${eigen.erfassung ? 'An: Fahrten starten von selbst' : 'Aus: Fahrten von Hand starten'}</span></span>
       <span class="pill ${eigen.erfassung ? 'good' : 'muted'}">${eigen.erfassung ? 'an' : 'aus'}</span></button>
@@ -222,7 +226,7 @@ function viewFahrten() {
         <div style="min-width:0"><b>${titel(f)}</b>${f.nachgetragen ? '<span class="pill siegel">nachgetragen</span>' : ''}
           <div class="muted small">${esc(f.tag)} · ${f.nachgetragen ? '≈ ' : ''}${km(f.km)} · ${f.start} → ${f.ende} % · ${esc(f.zweck)}${f.temp != null ? ` · ${f.temp} °C` : ''}${f.hm != null ? ` · ↑ ${f.hm} Hm` : ''}${f.brems ? ` · ${f.brems}× stark gebremst` : ''}${f.nachgetragen ? ` · ${f.strecke?.quelle === 'ziel' ? `${esc(f.strecke.ziel)}${f.strecke.retour ? ', hin und zurück' : ''}` : 'km von Hand'}` : ''}</div>
           ${f.fotoStart || f.fotoEnde ? `<div class="fotos">${[f.fotoStart, f.fotoEnde].filter(Boolean).map(n => `<img class="foto-mini" data-foto="${esc(n)}" data-act="fotoGross" alt="Foto vom Display">`).join('')}</div>` : ''}</div>
-        ${badge(f)}</section>`).join('') || '<p class="muted">Keine Fahrten mit diesem Zweck.</p>'}</div>
+        <div class="list" style="gap:4px;justify-items:end">${badge(f)}${v12Pill(f)}</div></section>`).join('') || '<p class="muted">Keine Fahrten mit diesem Zweck.</p>'}</div>
     <button class="btn block gestrichelt" data-act="ntNeu">+ Fahrt nachtragen</button>
     ${fahrten().length ? `<section class="card list">
       <div class="label">Fahrtenbuch als CSV</div>
@@ -230,6 +234,7 @@ function viewFahrten() {
       <p class="small muted" style="margin:0">Teilen öffnet das Android-Menü (Mail, OneDrive, Drive …). Speichern legt die Datei unter Dokumente/Bubble Log ab. Excel öffnet sie direkt als Tabelle.</p>
       <button class="btn block" data-act="csv">Als Text in die Zwischenablage</button>
     </section>` : ''}
+    ${belegKarte()}
     <p class="small muted" style="margin:0">Das Fahrtenbuch ist eine Erfassungshilfe. Als Nachweis für das Finanzamt muss ein Fahrtenbuch zeitnah, lückenlos und nachträglich unveränderbar geführt werden; eine bearbeitbare CSV-Datei erfüllt das allein nicht.</p>`;
 }
 // ---------- Reichweite: Zuhause und gespeicherte Ziele ----------
@@ -568,16 +573,18 @@ function simStarten() {
   V.echt = eigen; eigen = structuredClone(eigen); V.sandbox = true;
   eigen.erfassung = true;   // im Simulator erkennt die App Fahrten immer selbst
   eigen.offen = null;       // eine echte offene Fahrt bleibt in den echten Daten, die Simulation beginnt frei
+  eigen.bm6 = { an: true, adresse: 'SIM', name: 'BM6 (simuliert)' }; bm6.setSim(true);   // 12 V immer simuliert
   tracker.setSim(true).then(() => tracker.setModus(zielModus()));
   devlog.log('sim', { an: true });
 }
 function simBeenden() {
-  simTabStoppen();
+  simTabStoppen(); bordnetz.abbrechen().then(() => bm6.setSim(false));
   eigen = V.echt; V.echt = null; V.sandbox = false;
   tracker.setSim(false).then(() => tracker.setModus(zielModus()));
   devlog.log('sim', { an: false });
   toast('Simulation beendet, deine echten Daten sind unverändert');
 }
+bordnetz.verbinden({ eigen: () => eigen, sichern: () => sichern(), melde: (...a) => melde(...a) });
 simTabVerbinden({
   eigen: () => eigen, tracker: () => tracker, schaetzung, socJetzt, km, toast: t => toast(t),
   start: () => eigen.parkplatz?.p || V.hier || eigen.zuhause?.p || BEXBACH.p,
@@ -668,6 +675,92 @@ function fotosZeigen(wurzel = document) {
   wurzel.querySelectorAll('img[data-foto]:not([src])').forEach(img => foto.url(img.dataset.foto).then(u => { img.src = u; }, () => img.remove()));
 }
 
+// ---------- 12-V-Bordnetz (SPEC-12v.md, src/bordnetz.js) ----------
+const ruheNach = () => V.sandbox ? 10000 : bordnetz.RUHE_NACH;   // im Simulator nicht 2 Minuten warten
+const messungen = () => eigen.bordnetz || [];
+const spannung = m => m.v != null ? `${de(m.v, 2)} V` : bordnetz.misst(m) ? 'wird gemessen …' : bordnetz.an() ? 'kein Wert (BM6 nicht erreichbar)' : 'kein BM6 gekoppelt';
+function startproblemKarte() {
+  const m = messungen().findLast(x => x.v != null);
+  return `<button class="card between" data-act="startproblem" style="text-align:left">
+    <span><span class="label">Springt nicht an?</span><br><span class="small muted">Ein Tipp hält Zeit, Ort, Temperatur${bordnetz.an() ? ' und 12-V-Spannung' : ''} als Beleg fest.${m ? ` Zuletzt ${de(m.v, 2)} V (${zeitpunkt(m.t)}).` : ''}</span></span>
+    <span class="pill ${m?.stufe ? STUFE_KLASSE[m.stufe] : 'muted'}">12 V</span></button>`;
+}
+function v12Pill(f) {
+  const b = f.v12?.bewertung; if (!b) return '';
+  return `<button class="pill ${STUFE_KLASSE[b.stufe]} mono" data-act="v12" data-id="${esc(f.id)}" aria-label="12-V-Bordnetz: ${STUFE_TEXT[b.stufe]}">${de(b.mittel, 1)} V</button>`;
+}
+function belegKarte() {
+  if (!messungen().length && !fahrten().some(f => f.v12)) return '';
+  const vorfaelle = messungen().filter(m => m.anlass === 'startproblem').length;
+  return `<section class="card list">
+    <div class="label">12-V-Beleg für die Werkstatt</div>
+    <p class="small muted" style="margin:0">${fahrten().filter(f => f.v12).length} Fahrten mit Messung, ${vorfaelle} × „springt nicht an“. Eine Zeile je Messung, oben eine Zusammenfassung mit den Schwellen; Fotos vom Display kommen mit.</p>
+    <div class="grid2"><button class="btn primary" data-act="belegTeilen">Teilen</button><button class="btn" data-act="belegSpeichern">Speichern</button></div>
+  </section>`;
+}
+function v12Sheet(id) {
+  const f = fahrten().find(x => x.id === id); if (!f?.v12) return;
+  const b = f.v12.bewertung;
+  sheet(`<h2>12-V-Bordnetz · ${esc(f.tag)} ${esc(f.von)}–${esc(f.nach)}</h2>
+    ${b ? `<div class="between"><span class="pill ${STUFE_KLASSE[b.stufe]}">${STUFE_TEXT[b.stufe]}</span><span class="small muted">normal: gleichmäßig um 13,7 V</span></div>` : ''}
+    ${kurveSvg(f.v12.minuten)}
+    <section class="card small list">
+      ${f.v12.start != null ? `<div class="between"><span>Beim Losfahren</span><b>${de(f.v12.start, 2)} V</b></div>` : ''}
+      ${b ? `<div class="between"><span>Beim Fahren Ø</span><b>${de(b.mittel, 2)} V</b></div>
+      <div class="between"><span>kleinster / größter</span><b>${de(b.min, 2)} / ${de(b.max, 2)} V</b></div>
+      <div class="between"><span>Schwankung</span><b>${de(b.schwankung, 2)} V</b></div>` : ''}
+      <div class="between"><span>Ruhe nach dem Abstellen</span><b>${f.v12.ruhe != null ? `${de(f.v12.ruhe, 2)} V` : 'nicht gemessen'}</b></div>
+    </section>
+    <p class="small muted" style="margin:0">Verdächtig: beim Fahren unter 13,2 V oder mehr als 0,5 V Schwankung, nach dem Abstellen unter 12,4 V. Gestrichelt: 13,4 V (grün) und 13,2 V (rot).</p>
+    <button class="btn primary block" data-act="close">Schließen</button>`);
+}
+// Knopf „Springt nicht an“: sofort festhalten, die Spannung kommt nach
+function vorfallBeginnen() {
+  const neuZeichnen = () => { if (sheetArt() === 'vorfall') vorfallSheet(); };
+  V.vorfall = bordnetz.vorfall('startproblem', { p: V.hier || eigen.parkplatz?.p || null, temp: eigen.temp }, neuZeichnen);
+  V.nachher = null;
+  startpunkt().then(s => { if (s?.name === 'aktueller Standort' && V.vorfall) { V.vorfall.p = s.p; sichern(); } });
+  vorfallSheet();
+}
+function vorfallSheet() {
+  const m = V.vorfall, n = V.nachher; if (!m) return;
+  const zeile = (text, x) => `<div class="card between"><span>${text}</span><b class="${x.stufe ? STUFE_KLASSE[x.stufe] : ''}">${spannung(x)}${x.stufe ? ` · ${STUFE_TEXT[x.stufe]}` : ''}</b></div>`;
+  sheet(`<h2>Springt nicht an</h2>
+    <p class="small" style="margin:0">Festgehalten: ${zeitpunkt(m.t)}${m.p ? ', Ort' : ''}${m.temp != null ? `, ${m.temp} °C` : ''}.</p>
+    ${zeile('12-V-Batterie jetzt', m)}
+    ${n ? zeile('Nach Trennen und Verbinden', n) : `<button class="btn block" data-act="spNachher">Nach Trennen und Verbinden messen</button>`}
+    <button class="btn block" data-act="spFoto">${m.foto ? 'Foto ersetzen' : 'Foto vom Display'}</button>
+    ${m.foto ? `<img class="foto-mini" data-foto="${esc(m.foto)}" alt="Foto vom Display">` : ''}
+    <div class="field"><label for="spNotiz">Notiz (Ort, Fehlermeldung …)</label><input id="spNotiz" value="${esc(m.notiz || '')}" maxlength="120"></div>
+    <button class="btn primary block" data-act="close">Fertig</button>`, 'vorfall');
+  fotosZeigen($('overlay'));
+}
+async function vorfallFoto() {
+  const m = V.vorfall, datei = await foto.aufnehmen(); if (!datei || !m) return;
+  try {
+    const r = await foto.verarbeiten(datei, 'vorfall', { speichern: !V.sandbox });
+    if (r.name) { foto.loeschen(m.foto); m.foto = r.name; sichern(); }
+  } catch (e) { console.warn(e); toast('Foto konnte nicht gespeichert werden'); }
+  if (sheetArt() === 'vorfall') vorfallSheet();
+}
+function bm6Karte() {
+  const g = eigen.bm6, m = messungen().findLast(x => x.v != null);
+  return `<section class="card list">
+    <label class="switch" for="bm6an"><span><b>12-V-Wächter (BM6)</b><br><span class="small muted">Misst per Bluetooth die Spannung der 12-V-Batterie: beim Fahren, kurz nach dem Abstellen und beim Knopf „Springt nicht an“. Die Hersteller-App des BM6 dabei schließen, es geht nur eine Verbindung gleichzeitig.</span></span>
+      <input type="checkbox" id="bm6an" ${g?.an ? 'checked' : ''}></label>
+    <p class="small" style="margin:0">${g?.adresse ? `Gekoppelt: <b>${esc(g.name)}</b>.` : 'Noch kein Gerät gekoppelt.'}${m ? ` Letzter Wert ${de(m.v, 2)} V (${zeitpunkt(m.t)}).` : ''}</p>
+    ${V.bm6Liste ? (V.bm6Liste.length ? V.bm6Liste.map((x, i) => `<button class="btn block" data-act="bm6Waehlen" data-i="${i}">${esc(x.name)} · Signal ${x.rssi} dBm</button>`).join('') : '<p class="small warn" style="margin:0">Kein BM6 gefunden. Näher ans Auto gehen und die Hersteller-App schließen.</p>') : ''}
+    <button class="btn block" data-act="bm6Suchen" ${V.bm6Sucht ? 'disabled' : ''}>${V.bm6Sucht ? 'Suche läuft …' : 'Suchen und koppeln'}</button>
+  </section>`;
+}
+async function bm6Suchen() {
+  V.bm6Sucht = true; V.bm6Liste = null; settingsSheet();
+  try { V.bm6Liste = await bm6.suchen(); }
+  catch (e) { console.warn(e); toast(/erlaub|permission/i.test(e.message) ? 'Bluetooth nicht erlaubt. In den Android-Einstellungen freigeben.' : 'Suche nicht möglich. Ist Bluetooth an?'); devlog.log('bordnetz', { fehler: 'suchen', text: e.message }); }
+  V.bm6Sucht = false;
+  if ($('overlay').querySelector('.sheet h2')?.textContent === 'Einstellungen') settingsSheet();
+}
+
 // ---------- Fahrt ----------
 async function melde(id, titel, text) {
   devlog.log('meldung', { id, titel, text, sim: !!V.sandbox });
@@ -690,6 +783,7 @@ function fahrtBeginnen({ startSoc, startQuelle, punkte = [], km: strecke = 0, ma
   verlauf = []; wartend = [];
   devlog.log('fahrt', { schritt: 'beginn', manuell, startSoc, startQuelle, km: strecke });
   sichern(); tracker.setModus('fahrt');
+  bordnetz.fahrtBeginn(eigen.offen).then(() => { if (V.fahrtAnsicht && !sheetOffen()) fahrtAnsicht(); });
   if (punkte[0]) temperaturHolen(punkte[0]);
   return true;
 }
@@ -703,6 +797,7 @@ function fahrtAnsicht() {
       <div class="stat3"><div><div class="num" id="dZeit">0:00</div><div class="muted small">Fahrzeit</div></div><div><div class="num" id="dSoc">${g}</div><div class="muted small">% geschätzt</div></div><div><div class="num" id="dRw">${reichweite(g)}</div><div class="muted small">km Reichweite</div></div></div>
       <div class="stat3"><div><div class="num" id="dHm">–</div><div class="muted small">Höhenmeter ↑/↓</div></div><div><div class="num" id="dStr" style="font-size:18px;line-height:30px">–</div><div class="muted small">Straße</div></div><div><div class="num" id="dBrems">–</div><div class="muted small">stark gebremst</div></div></div>
       ${o.startSoc == null ? `<button class="btn block" data-act="startsoc">Akkustand beim Start eintragen</button>` : ''}
+      ${o.v12 ? `<div class="small muted" id="dV12">12-V-Batterie: wird gemessen …</div>` : ''}
       ${devlog.aktiv() ? `<div class="small mono muted" id="dDev">DEV · warte auf GPS</div>` : ''}
       <button class="btn primary block" data-act="stop">Fahrt beenden</button>
     </div></div>`);
@@ -720,6 +815,10 @@ function fahrtAnzeigeAktualisieren() {
   $('dBrems').textContent = letzterRau != null ? o.brems ?? 0 : '–';
   $('dKm').textContent = km(o.km); $('dZeit').textContent = `${Math.floor(min / 60)}:${String(Math.floor(min % 60)).padStart(2, '0')}`;
   $('dSoc').textContent = g; $('dRw').textContent = reichweite(g);
+  if ($('dV12')) bm6.aktuell().then(w => {
+    const m = o.v12?.minuten || [];
+    if (w && $('dV12')) $('dV12').textContent = `12-V-Batterie: ${de(w.v, 2)} V${m.length ? ` · Ø ${de(m.reduce((s, x) => s + x[2], 0) / m.length, 2)} V` : ''}`;
+  });
 }
 function startSocSheet() {
   socSheet('Akkustand beim Start', socJetzt(), ['startok', 'Übernehmen'], 'Wert vom Microlino-Display übernehmen. Vorgeschlagen ist der letzte bekannte Stand.');
@@ -853,6 +952,7 @@ function fahrtBeenden(zeit = Date.now()) {
   const o = eigen.offen; if (!o || o.status !== 'faehrt') return;
   if (kurzVerwerfen(o, zeit)) return;
   o.status = 'beendet'; o.t1 = fahrtEnde(o.t0, zeit); parkplatzSetzen(o); sichern();
+  bordnetz.fahrtEnde(o, { ruheNach: ruheNach() });
   devlog.log('fahrt', { schritt: 'ende', ausgeloest: 'hand oder sichtbar', km: o.km, t1: o.t1, gemeldet: zeit });
   tracker.setModus(zielModus());
   endeSheet();
@@ -887,6 +987,7 @@ function kurzVerwerfen(o, zeit) {
   return true;
 }
 function fahrtVerwerfen() {
+  if (eigen.offen?.v12?.summen) bordnetz.abbrechen();   // lief noch; nach dem Fahrtende läuft nur noch der Ruhewert, der bleibt
   if (eigen.offen && 'parkVorher' in eigen.offen) eigen.parkplatz = eigen.offen.parkVorher;
   if (eigen.offen && !V.sandbox) foto.loeschen(eigen.offen.fotoStart, eigen.offen.fotoEnde);
   eigen.offen = null; sichern(); tracker.setModus(zielModus()); overlay(''); render();
@@ -899,6 +1000,7 @@ function fahrtSpeichern() {
   f.startQuelle = o.startQuelle || 'drehrad'; f.endeQuelle = wheelHerkunft();
   if (o.fotoStart) f.fotoStart = o.fotoStart;
   if (o.fotoEnde) f.fotoEnde = o.fotoEnde;
+  if (o.v12?.minuten?.length) { const { summen, ...v12 } = o.v12; f.v12 = v12; }
   fotoBestaetigt(wheelWert);
   const hm = sensoren.hoehenmeter(o.punkte), rau = sensoren.rauAnteil(o.punkte);
   if (hm) { f.hm = hm.auf; f.hmAb = hm.ab; }
@@ -921,6 +1023,7 @@ function fahrtSpeichern() {
            ${f.hm != null ? `<div class="between"><span>Höhenmeter ↑ ${f.hm} / ↓ ${f.hmAb}</span><b>${steig >= .5 ? `≈ ${de(steig, 0)} % Akku` : 'kaum Einfluss'}</b></div>` : ''}
            ${f.rau != null ? `<div class="between"><span>Fahrstil</span><b>${f.brems}× stark gebremst, ${f.beschl}× stark beschleunigt</b></div>
            <div class="between"><span>Straße</span><b>${f.rau ? `${f.rau} % rau` : 'glatt'}</b></div>` : ''}</div></section>`}
+    ${f.v12?.bewertung ? `<button class="card between" data-act="v12" data-id="${esc(f.id)}" style="text-align:left"><span>12-V-Bordnetz beim Fahren<br><span class="small muted">Ø ${de(f.v12.bewertung.mittel, 2)} V, Schwankung ${de(f.v12.bewertung.schwankung, 2)} V</span></span><span class="pill ${STUFE_KLASSE[f.v12.bewertung.stufe]}">${STUFE_TEXT[f.v12.bewertung.stufe]}</span></button>` : ''}
     <div class="card hero">${ring(ende)}<div><div class="label">Jetzt</div><div class="big">ca. ${reichweite(ende)} km</div><div class="muted small">Reichweite bei ${ende} %</div></div></div>
     <button class="btn primary block" data-act="close">Fertig</button>`, 'ergebnis');
   render();
@@ -980,6 +1083,7 @@ const tracker = createTracker({
     o.gps = gpsStand(o.gps, punkt);   // für den Wächter, auch nach einem Neustart der App
     verlauf.push([punkt.t, punkt.tempo]); while (verlauf[0][0] < punkt.t - 60000) verlauf.shift();
     ausschlaegeEinordnen(o, punkt.t);
+    bordnetz.beiPunkt(o);
     if (o.temp == null && o.punkte.length === 1) temperaturHolen(punkt.p);
     if (!V.sandbox) speichernSpaeter(eigen);
     fahrtAnzeigeAktualisieren();
@@ -989,7 +1093,7 @@ const tracker = createTracker({
     if (kurzVerwerfen(o, ruhe.t)) return;
     melde(2, 'Fahrt beendet', `${km(o.km)} – tippen, um den Akkustand einzutragen.`);
     if (document.visibilityState === 'visible') fahrtBeenden(ruhe.t);
-    else { o.status = 'beendet'; o.t1 = fahrtEnde(o.t0, ruhe.t); parkplatzSetzen(o); sichern(); tracker.setModus(zielModus()); render(); devlog.log('fahrt', { schritt: 'ende', ausgeloest: 'hintergrund', km: o.km, t1: o.t1, gemeldet: ruhe.t }); }
+    else { o.status = 'beendet'; o.t1 = fahrtEnde(o.t0, ruhe.t); parkplatzSetzen(o); sichern(); bordnetz.fahrtEnde(o, { ruheNach: ruheNach(), sichtbar: false }); tracker.setModus(zielModus()); render(); devlog.log('fahrt', { schritt: 'ende', ausgeloest: 'hintergrund', km: o.km, t1: o.t1, gemeldet: ruhe.t }); }
   },
   onFehler(code) {
     if (code === 'standort') { V.standortFehler = true; toast('Standort nicht erlaubt. In den Einstellungen freigeben.'); }
@@ -1061,6 +1165,7 @@ function settingsSheet() {
     <label class="switch card" for="erfassung"><span><b>Fahrterkennung</b><br><span class="small muted">Erkennt Fahrten ab etwa 11 km/h und beendet sie nach 3 Minuten Stillstand. Solange sie an ist, zeigt Android eine Dauer-Benachrichtigung und das GPS bleibt aktiv; das kostet etwas Akku am Handy. Nach einem Neustart des Handys die App einmal öffnen.</span></span>
       <input type="checkbox" id="erfassung" ${eigen.erfassung ? 'checked' : ''}></label>
     ${systemKarte()}
+    ${bm6Karte()}
     <div class="field"><label for="ladekarte">Deine Ladekarte</label><input id="ladekarte" type="search" value="${esc(ladekarte())}" maxlength="30">
       <span class="small muted">${Object.keys(erfahrung().punkte).length} Säulen und ${Object.keys(erfahrung().betreiber).length} Betreiber markiert. Markieren: in einer Ladepunkt-Liste auf die Säule tippen.</span></div>
     <div class="field"><label for="ladestrom">Ladestrom unterwegs (Ampere)</label><input id="ladestrom" type="number" inputmode="numeric" min="6" max="32" step="1" value="${ladestrom()}">
@@ -1111,7 +1216,7 @@ document.addEventListener('click', e => {
   }
   if (d.filter) { V.filter = d.filter; render(); return; }
   if (d.zweck) { t.parentElement.querySelectorAll('[data-zweck]').forEach(b => b.setAttribute('aria-pressed', String(b === t))); return; }
-  if (simAktion(d.act)) return;
+  if (simAktion(d.act, d)) return;
   if (dialoge.veraltet(d.act, eigen.offen)) {   // Knopf aus einem Dialog von vor der Fahrt: nichts überschreiben
     devlog.log('fahrt', { schritt: 'knopf veraltet', aktion: d.act, offen: eigen.offen.status, km: eigen.offen.km });
     toast('Inzwischen wurde eine Fahrt erkannt'); pruefeOffen(); return;
@@ -1135,13 +1240,33 @@ document.addEventListener('click', e => {
       break;
     }
     case 'stop': fahrtBeenden(); break;
+    case 'startproblem': vorfallBeginnen(); break;
+    case 'spNachher': V.nachher = bordnetz.vorfall('nachher', { p: V.vorfall?.p, temp: eigen.temp }, () => { if (sheetArt() === 'vorfall') vorfallSheet(); }); vorfallSheet(); break;
+    case 'spFoto': vorfallFoto(); break;
+    case 'v12': v12Sheet(d.id); break;
+    case 'bm6Suchen': bm6Suchen(); break;
+    case 'bm6Waehlen': {
+      const g = V.bm6Liste?.[Number(d.i)]; if (!g) break;
+      eigen.bm6 = { an: true, adresse: g.adresse, name: g.name }; V.bm6Liste = null; sichern();
+      devlog.log('bordnetz', { gekoppelt: g.name }); settingsSheet(); render(); toast(`${g.name} gekoppelt`); break;
+    }
+    case 'belegTeilen':
+      teilen(belegCsv(messungen(), fahrten()), messungen().map(m => m.foto).filter(Boolean), { name: dateiname(new Date(), 'bordspannung'), titel: '12-V-Beleg' })
+        .then(r => { if (r === 'heruntergeladen') toast('CSV heruntergeladen'); })
+        .catch(e => { console.warn(e); toast('Teilen nicht möglich'); });
+      break;
+    case 'belegSpeichern':
+      csvSpeichern(belegCsv(messungen(), fahrten()), messungen().map(m => m.foto).filter(Boolean), { name: dateiname(new Date(), 'bordspannung') })
+        .then(ort => toast(`Gespeichert: ${ort}`))
+        .catch(e => { console.warn(e); toast('Speichern nicht möglich. Über „Teilen“ geht es auch.'); });
+      break;
     case 'ende': endeSheet(); break;
     case 'save': if (plausibel()) fahrtSpeichern(); break;
     case 'discard': devlog.log('fahrt', { schritt: 'verworfen', km: eigen.offen?.km }); fahrtVerwerfen(); toast('Fahrt verworfen'); break;
     case 'close':
       V.loeschen = false; V.devLoeschen = false; foto.loeschen(V.fotoNeu); V.fotoNeu = null;
       if (V.nt && !V.nt.id) foto.loeschen(V.nt.fotoEnde);   // abgebrochener Nachtrag: Foto gehört zu keiner Fahrt
-      V.nt = null; overlay(''); render(); break;
+      V.nt = null; V.vorfall = null; V.nachher = null; V.bm6Liste = null; overlay(''); render(); break;
     case 'socMerken':
       eigen.soc = wheelWert; eigen.socT = Date.now(); sichern();
       devlog.log('eingabe', { soc: wheelWert, quelle: wheelHerkunft(), nurMerken: true }); fotoBestaetigt(wheelWert);
@@ -1209,8 +1334,8 @@ document.addEventListener('click', e => {
     case 'loeschen': V.loeschen = true; settingsSheet(); break;
     case 'loeschenNein': V.loeschen = false; settingsSheet(); break;
     case 'loeschenJa': {
-      const { erfassung, parkplatzMerken, entwickler, zuhause, favoriten: fav, startlisteGesetzt, ladestrom: a, ladekarte: lk, ladeErfahrung, fotoExport } = eigen;   // Einstellungen, Ziele und Lade-Erfahrung bleiben
-      eigen = { ...LEER, akku: eigen.akku, erfassung, parkplatzMerken, entwickler, zuhause, favoriten: fav, startlisteGesetzt, ladestrom: a, ladekarte: lk, ladeErfahrung, fotoExport }; foto.alleLoeschen(); V.loeschen = false; sichern(); tracker.setModus(zielModus());
+      const { erfassung, parkplatzMerken, entwickler, zuhause, favoriten: fav, startlisteGesetzt, ladestrom: a, ladekarte: lk, ladeErfahrung, fotoExport, bm6: g6 } = eigen;   // Einstellungen, Ziele und Lade-Erfahrung bleiben
+      eigen = { ...LEER, akku: eigen.akku, erfassung, parkplatzMerken, entwickler, zuhause, favoriten: fav, startlisteGesetzt, ladestrom: a, ladekarte: lk, ladeErfahrung, fotoExport, bm6: g6 }; foto.alleLoeschen(); V.loeschen = false; sichern(); tracker.setModus(zielModus());
       overlay(''); render(); toast('Alle Daten gelöscht'); break;
     }
     case 'csv':
@@ -1232,6 +1357,7 @@ document.addEventListener('click', e => {
 document.addEventListener('input', e => {
   if (e.target.id === 'zSuche') V.zsuche = e.target.value;
   if (V.nt && e.target.id?.startsWith('nt')) { ntLesen(); ntAnzeige(); }
+  if (e.target.id === 'spNotiz' && V.vorfall) { V.vorfall.notiz = e.target.value; sichern(); }
 });
 document.addEventListener('change', e => {
   if (e.target.id === 'retour') { V.retour = e.target.checked; render(); }
@@ -1254,6 +1380,11 @@ document.addEventListener('change', e => {
       settingsSheet(); toast(eigen.entwickler ? 'Entwicklermodus an: Logs werden geschrieben' : 'Entwicklermodus aus'); });
   }
   if (e.target.id === 'fotoExport') { eigen.fotoExport = e.target.checked; sichern(); }
+  if (e.target.id === 'bm6an') {
+    eigen.bm6 = { ...eigen.bm6, an: e.target.checked }; sichern(); render();
+    if (!e.target.checked) bordnetz.abbrechen();
+    if (e.target.checked && !eigen.bm6.adresse) bm6Suchen(); else settingsSheet();
+  }
   if (e.target.id === 'parkplatzMerken') {
     eigen.parkplatzMerken = e.target.checked; if (!eigen.parkplatzMerken) eigen.parkplatz = null;
     sichern(); render(); toast(eigen.parkplatzMerken ? 'Abstellort wird ab der nächsten Fahrt gemerkt' : 'Abstellort gelöscht und aus');
@@ -1306,6 +1437,7 @@ setInterval(fahrtAnzeigeAktualisieren, 1000);
   render();
   if (NATIV) LocalNotifications.addListener('localNotificationActionPerformed', a => { devlog.log('meldung', { getippt: a?.notification?.id }); setTimeout(pruefeOffen, 300); }).catch(() => {});
   const gps = tracker.setModus(zielModus());
+  bordnetz.fortsetzen(eigen.offen);   // App neu gestartet, während eine Fahrt lief
   waechter({ neuStarten: false });   // GPS startet gerade ohnehin; vor dem ersten neuen Punkt prüfen
   await gps;
   systemPruefen().then(neu => { if (neu && V.tab === 'heute' && !sheetOffen() && !V.fahrtAnsicht) render(); });

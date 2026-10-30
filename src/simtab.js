@@ -2,6 +2,7 @@
 // (Kopie der Daten, Fahrterkennung im Sim-Modus) bleibt in main.js; die Physik steckt in fahrsim.js, die 3D-Ansicht
 // in sim3d/. main.js verbindet sich einmal über simTabVerbinden und reicht dabei die nötigen Helfer herein.
 import * as fahrsim from './fahrsim.js';
+import * as bm6 from './bm6.js';
 
 const $ = id => document.getElementById(id);
 const LICHT_TEXT = { echt: '🕒 Echtzeit', tag: '☀️ Tag', nacht: '🌙 Nacht' };
@@ -14,6 +15,7 @@ function ansicht() {
   return `<div class="sim-banner">SIMULATION · nichts wird gespeichert</div>
     <div class="sim-karte" id="simKarte"></div>
     <div class="sim-hud" id="simHud"></div>
+    <div class="chips" id="simBm6"></div>
     <div class="sim-steuer" id="simSteuer">${steuerung()}</div>
     <div class="grid2"><button class="btn" data-act="simWarten">⏩ 3 min stehen</button><button class="btn" data-sim-zurueck data-sim="zurueck">Rückwärts</button></div>
     <div class="grid2"><button class="btn" data-act="sim3d" id="sim3d">${drei ? '🗺️ Karte' : '🧊 3D-Ansicht'}</button><button class="btn" data-act="simDrehen" id="simDrehen" ${drei ? 'hidden' : ''}>${fahrsim.dreht() ? '🧭 Dreht mit' : '🧭 Eingenordet'}</button><button class="btn" data-act="simLicht" id="simLicht" ${drei ? '' : 'hidden'}>${LICHT_TEXT[sim3d?.licht() ?? 'echt']}</button></div>
@@ -35,6 +37,15 @@ export function simHud() {
     <div><div class="num">${o ? app.km(o.km) : '–'}</div><div class="muted small">${o ? (o.status === 'faehrt' ? 'Fahrt läuft' : 'Fahrt beendet') : t.modus === 'warten' ? 'wartet auf Fahrt' : t.modus}</div></div>
     <div><div class="num">${o?.startSoc != null ? app.schaetzung(o) : app.socJetzt()} %</div><div class="muted small">Akku geschätzt</div></div>`;
   $('simTurbo')?.classList.toggle('an', z.turbo);
+  bm6Chips();
+}
+// 12-V-Batterie (simulierter BM6, SPEC-12v.md): Verhalten wählen, aktueller Wert
+function bm6Chips() {
+  const el = $('simBm6'); if (!el) return;
+  bm6.aktuell().then(w => {
+    el.innerHTML = `<span class="chip">12 V: ${w && bm6.aktiv() ? `${w.v.toFixed(2).replace('.', ',')} V` : 'aus'}</span>` + Object.entries(bm6.SIM_PROFILE)
+      .map(([k, t]) => `<button class="chip" data-act="simBm6" data-wert="${k}" aria-pressed="${bm6.profil() === k}">${t}</button>`).join('');
+  });
 }
 // Tab zeichnen; Karte und Fahrzustand bleiben beim Neuzeichnen erhalten
 export function simTabZeichnen(view) {
@@ -66,7 +77,7 @@ async function dreiSchalten(an) {
 }
 
 // Klick auf data-act; true, wenn es eine Sim-Aktion war
-export function simAktion(act) {
+export function simAktion(act, d = {}) {
   switch (act) {
     case 'simTurbo': fahrsim.turbo(); simHud(); return true;
     case 'simDrehen': $('simDrehen').textContent = fahrsim.kartenDrehung() ? '🧭 Dreht mit' : '🧭 Eingenordet'; return true;
@@ -77,6 +88,7 @@ export function simAktion(act) {
       $('simSteuer').innerHTML = steuerung(); simHud();
       $('simJoystickKnopf').textContent = tasten ? '🕹️ Joystick statt Tasten' : '◀ ▶ Tasten statt Joystick';
       return true;
+    case 'simBm6': bm6.setProfil(d.wert); bm6Chips(); return true;
     case 'simWarten': fahrsim.warten(185); simHud(); app.toast('3 Minuten gestanden'); return true;
   }
   return false;

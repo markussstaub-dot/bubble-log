@@ -251,7 +251,9 @@ Hintergrund-GPS, Benachrichtigungen, Sensor-Plugin und Teilen/Speichern gehen nu
   „Vibration bei Berührung“ spielt. Aufwand etwa eine halbe Stunde.
 - **Idee (29.10.2026): Fahrzeugdaten über Microlino Open Telemetry (MOT).** Akkustand, Kilometerstand und Laden
   direkt vom CAN-Bus per MQTT statt Drehrad/Foto/GPS. Spec: `SPEC-mot.md` (noch offen: Adapter, Weg zum Handy).
-- 12-V-Batteriewächter (BM6/BM2) anbinden, sobald er da ist.
+- 12-V-Batteriewächter (BM6): eingebaut (SPEC-12v.md). Offen, sobald das Gerät da ist: koppeln, eine Testfahrt mit
+  Entwicklermodus, Werte mit der Hersteller-App vergleichen (Meilenstein 2). Ungeprüft: ob der BM6 nach dem Befehl
+  von selbst weiterschickt (das Plugin wiederholt ihn alle 5 s) und ob der Ruhewert im Hintergrund pünktlich kommt.
 - Später: Frankreich-Ladepunkte, Display-Firmware
   für den Knopf.
 

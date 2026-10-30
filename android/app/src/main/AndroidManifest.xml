@@ -49,4 +49,10 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Akku-Drehrad: kurzer Tick je Rastung (navigator.vibrate im WebView) -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Batteriewaechter.java: BM6 an der 12-V-Batterie per Bluetooth LE (SPEC-12v.md); bis Android 11 reicht der Standort -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
 </manifest>
