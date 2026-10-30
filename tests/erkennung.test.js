@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { fahrplan, BEXBACH, T0 } from './hilfe.js';
-import { createErkennung, gpsStand, gpsAusfall, SCHWELLEN } from '../src/erkennung.js';
+import { createErkennung, gpsStand, gpsAusfall, fahrtEnde, SCHWELLEN } from '../src/erkennung.js';
 import { spieleAb, pruefe } from '../src/replay.js';
 
 const fahrten = plan => spieleAb(fahrplan(plan)).fahrten;
@@ -151,6 +151,19 @@ test('Lücke mitten in der Fahrt beendet sie weiterhin (alter Punkt stammt aus d
   e.verarbeite(loc(T0 + 1000, [BEXBACH[0], BEXBACH[1] + 0.0001], 5));
   e.verarbeite(loc(T0 + 1000 + 20 * 60000, [BEXBACH[0], BEXBACH[1] + 0.0002]));
   assert.equal(stopps.length, 1);
+});
+
+// Fahrtenbuch 29.10.2026 (Log handy-2026-10-29-testfahrt.jsonl): Start per Hand um 17:00:03.932 (t0, Uhr des Handys),
+// APK 1418 beendete die Fahrt 59 ms später am Punkt aus dem Warten von 16:22:12.909 → gespeichert „von 17:00 bis 16:22“.
+// Der erste Fix der Fahrt war 16 ms vor t0 gemessen: bricht das GPS danach ab, endet der Wächter ebenfalls vor t0.
+const T_WARTEN = 1793287332909, T_START = 1793289603932, T_FIX = 1793289603916;
+test('Fahrtende liegt nie vor dem Beginn (von 17:00 bis 16:22)', () => {
+  assert.equal(fahrtEnde(T_START, T_WARTEN), T_START);
+  const stand = gpsStand(null, { p: BEXBACH, t: T_FIX, tempo: 0 });
+  const ende = gpsAusfall(stand, T_START + SCHWELLEN.STOPP_DAUER);
+  assert.ok(ende.t < T_START);   // Ursache: die GPS-Zeit des Punkts liegt vor t0
+  assert.equal(fahrtEnde(T_START, ende.t), T_START);
+  assert.equal(fahrtEnde(T_START, T_START + 60000), T_START + 60000);   // normales Ende bleibt unverändert
 });
 
 test('gpsStand merkt den letzten bewegten Punkt, Stillstand danach ändert ihn nicht', () => {

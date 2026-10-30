@@ -3,6 +3,13 @@
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
 ## Unveröffentlicht
+- **Fix Fahrt „von 17:00 bis 16:22“** (Fahrtenbuch 29.10., 0 km, 74 → 74 %): Das Fahrtende liegt nie mehr vor dem
+  Beginn. Ursache laut Log: Start per Hand um 17:00:03, mit dem ersten GPS-Punkt endete die Fahrt in APK 1418 sofort als
+  „stopp nach Lücke“ am Punkt aus dem Warten von 16:22 (behoben seit 1121, „alter Punkt verworfen“). Weil der Beginn
+  die Uhr des Handys ist, das Ende aber die GPS-Zeit eines Punkts, konnte es trotzdem knapp davor liegen (erster Fix
+  16 ms vor dem Start, danach GPS-Ausfall → Wächter). Jetzt gilt Ende = frühestens Beginn beim Beenden und beim
+  Speichern (`fahrtEnde` in `src/erkennung.js`, Test). Log `fahrt`/`ende` zeigt zusätzlich `gemeldet`. Der alte Eintrag
+  bleibt, bis Markus ihn löscht.
 
 ## Bubble-Log-1121 (30.10.2026, Version 2026.10.30-1121)
 - **Fix Datenverlust (Testfahrt 30.10.):** Eine beendete, noch nicht gespeicherte Fahrt wird nie mehr überschrieben.

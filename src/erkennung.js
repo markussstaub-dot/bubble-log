@@ -124,3 +124,7 @@ export function gpsAusfall({ letzter, bewegt }, jetztT, S = SCHWELLEN) {
   const ende = bewegt && bewegt.t <= letzter.t ? bewegt : letzter;
   return { p: ende.p, t: ende.t, luecke: jetztT - letzter.t };
 }
+// Fahrtende nie vor dem Fahrtbeginn (Fahrtenbuch 29.10.2026: von 17:00 bis 16:22). Der Beginn t0 ist die Uhr des Handys,
+// das Ende kommt aus der GPS-Zeit eines Punktes: ein zwischengespeicherter Fix nach dem Start oder ein Punkt, der vor
+// t0 gemessen und erst danach geliefert wurde, liegt sonst davor.
+export const fahrtEnde = (t0, t) => Math.max(t0, t);

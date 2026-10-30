@@ -4,9 +4,9 @@
 // Auf Android läuft das als Vordergrund-Dienst mit Dauer-Benachrichtigung weiter, auch wenn die App im Hintergrund ist.
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import * as sensoren from './sensoren.js';
-import { createErkennung, distanz, gpsStand, SCHWELLEN } from './erkennung.js';
+import { createErkennung, distanz, fahrtEnde, gpsStand, SCHWELLEN } from './erkennung.js';
 
-export { distanz, gpsStand, SCHWELLEN };
+export { distanz, fahrtEnde, gpsStand, SCHWELLEN };
 const BackgroundGeolocation = registerPlugin('BackgroundGeolocation');
 
 // onLog(typ, daten) bekommt jede rohe Position und jeden Zustandswechsel (für den Entwicklermodus)

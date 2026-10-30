@@ -3,7 +3,7 @@
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { laden, speichern, speichernSpaeter, LEER } from './store.js';
-import { createTracker, distanz, gpsStand } from './tracker.js';
+import { createTracker, distanz, fahrtEnde, gpsStand } from './tracker.js';
 import { temperatur } from './wetter.js';
 import { csvText, fotosVon, teilen, speichern as csvSpeichern } from './export.js';
 import * as foto from './foto.js';
@@ -852,8 +852,8 @@ function parkplatzSetzen(o) {
 function fahrtBeenden(zeit = Date.now()) {
   const o = eigen.offen; if (!o || o.status !== 'faehrt') return;
   if (kurzVerwerfen(o, zeit)) return;
-  o.status = 'beendet'; o.t1 = zeit; parkplatzSetzen(o); sichern();
-  devlog.log('fahrt', { schritt: 'ende', ausgeloest: 'hand oder sichtbar', km: o.km, t1: zeit });
+  o.status = 'beendet'; o.t1 = fahrtEnde(o.t0, zeit); parkplatzSetzen(o); sichern();
+  devlog.log('fahrt', { schritt: 'ende', ausgeloest: 'hand oder sichtbar', km: o.km, t1: o.t1, gemeldet: zeit });
   tracker.setModus(zielModus());
   endeSheet();
 }
@@ -894,7 +894,7 @@ function fahrtVerwerfen() {
 function fahrtSpeichern() {
   const o = eigen.offen; if (!o) return;
   const zweck = $('overlay').querySelector('[data-zweck][aria-pressed="true"]')?.dataset.zweck || 'Privat';
-  const ende = Math.min(o.startSoc, wheelWert), t1 = o.t1 || Date.now();
+  const ende = Math.min(o.startSoc, wheelWert), t1 = fahrtEnde(o.t0, o.t1 || Date.now());   // auch für eine schon so beendete, offene Fahrt
   const f = { id: 'f' + o.t0, tag: datum(o.t0), t0: o.t0, t1, von: uhrzeit(o.t0), nach: uhrzeit(t1), km: Math.round(o.km * 10) / 10, start: o.startSoc, ende, temp: o.temp, zweck, punkte: o.punkte };
   f.startQuelle = o.startQuelle || 'drehrad'; f.endeQuelle = wheelHerkunft();
   if (o.fotoStart) f.fotoStart = o.fotoStart;
@@ -989,7 +989,7 @@ const tracker = createTracker({
     if (kurzVerwerfen(o, ruhe.t)) return;
     melde(2, 'Fahrt beendet', `${km(o.km)} – tippen, um den Akkustand einzutragen.`);
     if (document.visibilityState === 'visible') fahrtBeenden(ruhe.t);
-    else { o.status = 'beendet'; o.t1 = ruhe.t; parkplatzSetzen(o); sichern(); tracker.setModus(zielModus()); render(); devlog.log('fahrt', { schritt: 'ende', ausgeloest: 'hintergrund', km: o.km, t1: ruhe.t }); }
+    else { o.status = 'beendet'; o.t1 = fahrtEnde(o.t0, ruhe.t); parkplatzSetzen(o); sichern(); tracker.setModus(zielModus()); render(); devlog.log('fahrt', { schritt: 'ende', ausgeloest: 'hintergrund', km: o.km, t1: o.t1, gemeldet: ruhe.t }); }
   },
   onFehler(code) {
     if (code === 'standort') { V.standortFehler = true; toast('Standort nicht erlaubt. In den Einstellungen freigeben.'); }
