@@ -244,17 +244,24 @@ const cacheAus = r => ({ km: r.km, minuten: r.minuten, auf: r.auf, ab: r.ab, hoe
 // neu berechnen: kein Eintrag, älter als CACHE_TAGE, oder Höhen fehlten (dann frühestens nach einer Stunde wieder versuchen)
 const cacheAlt = c => !c || Date.now() - c.t > CACHE_TAGE * 864e5 || (!c.hoeheBekannt && Date.now() - c.t > 3600e3);
 let cacheLaeuft = false;
+// Wird Zuhause während des Laufs geändert, gilt die laufende Route nicht und alle Ziele kommen ab dem neuen Zuhause dran.
 async function cacheFuellen() {   // fehlende Routen ab Zuhause nacheinander holen, mit Pause wegen der Grenzen der Dienste
   if (cacheLaeuft || V.sandbox || !eigen.zuhause || !navigator.onLine) return;
-  const offen = favoriten().filter(f => cacheAlt(f.cache)); if (!offen.length) return;
   cacheLaeuft = true;
-  for (const f of offen) {
-    if (!eigen.zuhause || !favoriten().includes(f)) continue;
+  const ort = () => eigen.zuhause?.p.join();   // Vergleich über die Koordinaten (im Sim-Tab ist eigen eine Kopie)
+  let heim = ort(), versucht = new Set();      // pro Zuhause jedes Ziel höchstens einmal versuchen
+  while (!V.sandbox) {
+    if (ort() !== heim) { heim = ort(); versucht = new Set(); }
+    const f = heim && favoriten().find(x => cacheAlt(x.cache) && !versucht.has(x)); if (!f) break;
+    versucht.add(f);
     try {
       const r = await routeBerechnen(eigen.zuhause.p, f.p);
-      f.cache = cacheAus(r); sichern();
-      devlog.log('cache', { kurz: f.kurz, km: r.km, auf: r.auf, ab: r.ab, hoeheBekannt: r.hoeheBekannt });
-      if (V.tab === 'reichweite' && !V.zielwahl && document.activeElement?.id !== 'zSuche' && !sheetOffen() && !V.fahrtAnsicht) render();
+      if (ort() !== heim || V.sandbox) devlog.log('cache', { kurz: f.kurz, verworfen: 'zuhause geändert' });
+      else {
+        f.cache = cacheAus(r); sichern();
+        devlog.log('cache', { kurz: f.kurz, km: r.km, auf: r.auf, ab: r.ab, hoeheBekannt: r.hoeheBekannt });
+        if (V.tab === 'reichweite' && !V.zielwahl && document.activeElement?.id !== 'zSuche' && !sheetOffen() && !V.fahrtAnsicht) render();
+      }
     } catch (e) { devlog.log('fehler', { quelle: 'cache', kurz: f.kurz, text: e.message }); }
     await new Promise(r => setTimeout(r, 12000));   // Open-Meteo erlaubt etwa 600 Höhenpunkte pro Minute, eine Route hat bis zu 100
   }
