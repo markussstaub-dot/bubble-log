@@ -32,6 +32,7 @@ const ZUHAUSE_RADIUS = 1000;   // m: so nah an Zuhause gilt der gespeicherte Weg
 const CACHE_TAGE = 90;         // danach wird eine gespeicherte Route neu berechnet
 const MAX_LINIENPUNKTE = 200;  // Routenlinie für Karte und Speicher ausgedünnt
 const BEXBACH = { name: 'Bexbach', p: [49.3466, 7.2561] };
+const KOFI = 'https://ko-fi.com/markusbaut';   // Spendenseite (Einstellungen), Adresse hier anpassen
 // Startliste der gemerkten Ziele (Ortsmitte), einmalig beim ersten Start mit dieser Version
 const STARTLISTE = [
   ['Homburg', 49.3264, 7.3383], ['Neunkirchen', 49.3449, 7.1803], ['St. Ingbert', 49.2775, 7.1167], ['Zweibrücken', 49.2489, 7.3639],
@@ -1191,6 +1192,11 @@ function settingsSheet() {
     ${V.loeschen ? `<p class="small bad" style="margin:0">Alle ${fahrten().length} Fahrten und ${ladungen().length} Ladevorgänge werden gelöscht. Das lässt sich nicht rückgängig machen.</p>
       <div class="grid2"><button class="btn" data-act="loeschenNein">Abbrechen</button><button class="btn danger" data-act="loeschenJa">Endgültig löschen</button></div>`
       : `<button class="btn block danger" data-act="loeschen">Alle Daten löschen</button>`}
+    <section class="card list">
+      <div class="label">Gefällt dir Bubble Log?</div>
+      <p class="small muted" style="margin:0">Die App ist kostenlos und bleibt es. Wenn sie dir gefällt, hilft ein Kaffee, die nächste zu bauen.</p>
+      <a class="btn block" href="${KOFI}" target="_blank" rel="noopener">☕ Kaffee ausgeben</a>
+    </section>
     <p class="small muted" style="margin:0">Alle Daten bleiben auf diesem Handy. Nur die Temperatur wird bei Open-Meteo abgefragt.</p>
     <p class="small muted mono" style="margin:0;text-align:center">Bubble Log ${__APP_VERSION__}</p>
     <button class="btn primary block" data-act="close">Fertig</button>`);
