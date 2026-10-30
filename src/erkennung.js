@@ -10,6 +10,8 @@ export const SCHWELLEN = {
   STOPP_RADIUS: 40,        // m: Bewegung darunter zählt als Stillstand
   STOPP_DAUER: 180000,     // 3 min Stillstand beendet die Fahrt
   BEWEGT_TEMPO: 1,         // m/s: ab hier gilt ein Punkt als bewegt (Fahrtende = letzter bewegter Punkt)
+  GEH_TEMPO: 2,            // m/s ≈ 7 km/h: darunter kann es auch Gehen sein (Handy mit in den Laden)
+  PARK_RADIUS: 150,        // m um den Halt: so weit gilt langsame Bewegung danach als Fußweg, nicht als Fahrt
   MAX_UNGENAU: 40,         // m: ungenauere Punkte werden verworfen
   MAX_TEMPO: 40,           // m/s: Sprünge darüber sind GPS-Fehler
   SPRUNG_NEU: 3,           // so viele Sprünge in Folge: dann gilt die neue Position
@@ -28,6 +30,20 @@ export function createErkennung({ onStart = () => {}, onPunkt = () => {}, onStop
   let kandidat = null, letzter = null, ruhe = null, bewegt = null;   // bewegt: letzter Punkt mit echtem Tempo = Fahrtende
   let spruenge = 0;   // verworfene Sprünge in Folge; ab SPRUNG_NEU gilt die neue Position (der alte Punkt war wohl der Fehler)
   let vorModus = null;   // letzter Punkt beim Moduswechsel: stammt er aus dem Warten, ist er für die Fahrt kein Bezug
+  // Handy mit in den Laden (30.10.2026): nach dem ersten Halt hinter schneller Fahrt (park) werden langsame Punkte
+  // zurückgehalten. Kommt wieder Fahrt (GEH_TEMPO) oder geht es weiter als PARK_RADIUS, zählen sie nachträglich zur
+  // Strecke (Stau, Rangieren); endet die Fahrt, war es der Fußweg: sie fallen weg und das Ende ist der Halt.
+  let park = null, zurueck = [], gefahren = false;   // gefahren: schon ein Punkt mit GEH_TEMPO in dieser Fahrt
+  function nachholen() {
+    for (const [pt, vor] of zurueck) onPunkt(pt, vor);
+    park = null; zurueck = [];
+  }
+  function stopp(ende, schritt, mehr) {
+    if (park) { ende = park; mehr = { ...mehr, park: park.t, fussweg: zurueck.length }; }
+    onLog('erkennung', { schritt, ...mehr, ende: ende.t });
+    park = null; zurueck = [];
+    onStopp(ende);
+  }
 
   function verarbeite(loc) {
     if (!loc) return;
@@ -65,20 +81,24 @@ export function createErkennung({ onStart = () => {}, onPunkt = () => {}, onStop
       // Lange Lücke ohne GPS (Tiefgarage, Handy aus) und dabei kaum vom Fleck: hat gestanden, Fahrt endet vor der Lücke
       const luecke = letzter ? t - letzter.t : 0;
       if (luecke >= S.STOPP_DAUER && distanz(letzter.p, p) / (luecke / 1000) < S.BEWEGT_TEMPO) {
-        const ende = bewegt ?? letzter;
-        onLog('erkennung', { schritt: 'stopp nach Lücke', luecke, ende: ende.t });
-        onStopp(ende); ruhe = { p, t }; letzter = punkt;
+        stopp(bewegt ?? letzter, 'stopp nach Lücke', { luecke });
+        ruhe = { p, t }; letzter = punkt;
         return;
       }
+      if (park && (neuAufgesetzt || punkt.tempo >= S.GEH_TEMPO || distanz(park.p, p) > S.PARK_RADIUS)) nachholen();
       // Punkt nach dem Neuaufsetzen nicht an die Strecke hängen: war der alte Punkt doch richtig, käme der Umweg
       // sonst zweimal in die km (hin und zurück); war der neue richtig, zählt der nächste Punkt den Weg einmal.
-      if (!neuAufgesetzt) onPunkt(punkt, letzter);
+      if (park) zurueck.push([punkt, letzter]);
+      else if (!neuAufgesetzt) onPunkt(punkt, letzter);
+      if (punkt.tempo >= S.GEH_TEMPO) gefahren = true;
+      else if (!park && gefahren && punkt.tempo < S.BEWEGT_TEMPO) park = { p, t };
       if (punkt.tempo >= S.BEWEGT_TEMPO || !bewegt) bewegt = { p, t };
       if (!ruhe || distanz(ruhe.p, p) > S.STOPP_RADIUS) ruhe = { p, t };
+      // Im Laden springt das GPS oft weiter als STOPP_RADIUS: nahe am Halt zählt die Zeit seit dem Halt
+      if (park && t - park.t >= S.STOPP_DAUER) { stopp(park, 'stopp am Halt', { ruheSeit: park.t }); ruhe = { p, t }; }
       else if (t - ruhe.t >= S.STOPP_DAUER) {
-        const ende = bewegt.t <= ruhe.t ? bewegt : ruhe;
-        onLog('erkennung', { schritt: 'stopp', ruheSeit: ruhe.t, ende: ende.t });
-        onStopp(ende); ruhe = { p, t };
+        stopp(bewegt.t <= ruhe.t ? bewegt : ruhe, 'stopp', { ruheSeit: ruhe.t });
+        ruhe = { p, t };
       }
     }
     letzter = punkt;
@@ -92,7 +112,7 @@ export function createErkennung({ onStart = () => {}, onPunkt = () => {}, onStop
     setModus(neu) {
       if (neu === modus) return false;
       onLog('modus', { von: modus, nach: neu });
-      modus = neu; kandidat = null; ruhe = null; bewegt = null; vorModus = letzter;
+      modus = neu; kandidat = null; ruhe = null; bewegt = null; vorModus = letzter; park = null; zurueck = []; gefahren = false;
       return true;
     },
     // Wächter beim Öffnen der App (SPEC-gps-abbruch.md): Beendet Android den GPS-Dienst, kommen keine Punkte mehr und
@@ -109,7 +129,7 @@ export function createErkennung({ onStart = () => {}, onPunkt = () => {}, onStop
       return true;
     },
     // alles vergessen, auch den letzten Punkt (Wechsel zwischen echtem GPS und Simulator)
-    zuruecksetzen() { kandidat = null; letzter = null; ruhe = null; bewegt = null; spruenge = 0; },
+    zuruecksetzen() { kandidat = null; letzter = null; ruhe = null; bewegt = null; spruenge = 0; park = null; zurueck = []; gefahren = false; },
   };
 }
 

@@ -66,7 +66,8 @@ export function spieleAb(eingabe, { schwellen, startModus, geoeffnet = [] } = {}
   });
   function abschliessen() {
     const { letzter, gps, ...f } = offen;
-    fahrten.push({ ...f, km: runde(f.km), startUhr: f.start != null ? uhr(f.start) : null, endeUhr: f.ende != null ? uhr(f.ende) : null });
+    // parkplatz: letzter gespeicherter Streckenpunkt, wie parkplatzSetzen in main.js
+    fahrten.push({ ...f, parkplatz: letzter, km: runde(f.km), startUhr: f.start != null ? uhr(f.start) : null, endeUhr: f.ende != null ? uhr(f.ende) : null });
     offen = null;
   }
 

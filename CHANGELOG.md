@@ -3,6 +3,12 @@
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
 ## Unveröffentlicht
+- **Handy mit in den Laden** (bisher lag es bei den Testfahrten im Auto): Nach dem ersten Halt hinter einer Fahrt
+  werden langsame Punkte (unter 7 km/h) zurückgehalten. Kommt wieder Fahrt oder geht es weiter als 150 m, zählen sie
+  nachträglich zur Strecke (Stau, Rangieren). Endet die Fahrt, war es der Fußweg: Ende, Parkplatz und km bleiben am
+  Auto. Die Fahrt endet 3 min nach dem Halt, auch wenn das GPS im Laden um mehr als 40 m springt (Log `stopp am Halt`,
+  `park`, `fussweg`). Neue Schwellen `GEH_TEMPO`, `PARK_RADIUS` in `src/erkennung.js`, Tests in
+  `tests/erkennung.test.js`. Noch nicht mit echtem Log geprüft.
 - **12-V-Bordspannung mit dem BM6** (SPEC-12v.md, Meilenstein 1 fertig, Meilenstein 2 gebaut, aber ohne Gerät ungetestet):
   Einstellungen → „12-V-Wächter (BM6)“ (suchen, koppeln). Beim Fahren werden Minutenwerte mitgeschrieben, rund 2 min nach
   dem Abstellen ein Ruhewert; Bewertung ok/beobachten/verdächtig, Warnung bei Ruhe unter 12,4 V. Im Fahrtenbuch ein

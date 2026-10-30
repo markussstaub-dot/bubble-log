@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { fahrplan, BEXBACH, T0 } from './hilfe.js';
-import { createErkennung, gpsStand, gpsAusfall, fahrtEnde, SCHWELLEN } from '../src/erkennung.js';
+import { createErkennung, distanz, gpsStand, gpsAusfall, fahrtEnde, SCHWELLEN } from '../src/erkennung.js';
 import { spieleAb, pruefe } from '../src/replay.js';
 
 const fahrten = plan => spieleAb(fahrplan(plan)).fahrten;
@@ -96,6 +96,55 @@ test('Befund: Ampel von 178 s beendet die Fahrt schon (Stillstand zählt ab bis 
 
 test('Parken ohne GPS (Tiefgarage) mit ungenauem erstem Fix danach: zwei getrennte Fahrten', () => {
   assert.equal(fahrten([{ s: 120, v: 10 }, { s: 1200, v: 0, luecke: true }, { s: 10, v: 10, gen: 60 }, { s: 120, v: 10 }, { s: 240, v: 0 }]).length, 2);
+});
+
+// Handy mit zum Bäcker (30.10.2026): bisher lag es bei den Testfahrten im Auto. Geparkt wird nach 1200 m bei 12:02:00,
+// dann zu Fuß 80 m weiter in den Laden, 4 min drin, zurück und weiter.
+const PARKEN = [BEXBACH[0], BEXBACH[1] + 1200 / (111320 * Math.cos(BEXBACH[0] * Math.PI / 180))];
+const zumBaecker = drinnen => [{ s: 120, v: 10 }, { s: 15, v: 0 }, { s: 60, v: 1.33 }, ...drinnen, { s: 60, v: -1.33 }, { s: 15, v: 0 }, { s: 120, v: 10 }, { s: 240, v: 0 }];
+const bisParkplatz = f => Math.round(distanz(f.nach, PARKEN));
+
+test('Handy mit in den Laden: Fahrt endet am Auto, der Fußweg zählt nicht in die km', () => {
+  const r = spieleAb(fahrplan(zumBaecker([{ s: 240, v: 0 }])));
+  assert.deepEqual(pruefe(r, { tag: '2026-10-28', fahrten: [
+    { start: '12:00:00', ende: '12:02:00', toleranz_s: 5, km: 1.2, km_toleranz: 0.02 },
+    { start: '12:08:30', toleranz_s: 10, km: 1.2, km_toleranz: 0.05 },
+  ] }), []);
+  assert.ok(bisParkplatz(r.fahrten[0]) <= 10, `Ende ${bisParkplatz(r.fahrten[0])} m vom Auto`);
+  assert.ok(distanz(r.fahrten[0].parkplatz, PARKEN) <= 25, `Parkplatz ${Math.round(distanz(r.fahrten[0].parkplatz, PARKEN))} m vom Auto`);
+});
+
+test('Handy mit in den Laden, GPS springt drinnen um 60 m: Fahrt endet trotzdem am Auto', () => {
+  const drift = [];
+  for (let i = 0; i < 4; i++) drift.push({ s: 40, v: 0, gen: 20 }, { sprung: 30, v: 0, n: 3, gen: 20 }, { sprung: 60, v: 0, n: 5, gen: 20 }, { sprung: 30, v: 0, n: 3, gen: 20 });
+  const r = spieleAb(fahrplan(zumBaecker(drift)));
+  assert.equal(r.fahrten.length, 2, r.fahrten.map(f => `${f.startUhr}–${f.endeUhr} ${f.km} km`).join(', '));
+  assert.ok(bisParkplatz(r.fahrten[0]) <= 10, `Ende ${bisParkplatz(r.fahrten[0])} m vom Auto`);
+  assert.ok(Math.abs(r.fahrten[0].km - 1.2) <= 0.02, `km ${r.fahrten[0].km}`);
+});
+
+test('Handy mit in den Laden nach langsamem Abbremsen: Fahrt endet trotzdem am Auto', () => {
+  const r = spieleAb(fahrplan([{ s: 115, v: 10 }, { s: 3, v: 4 }, { s: 2, v: 1.5 }, { s: 15, v: 0 }, { s: 60, v: 1.33 }, { s: 240, v: 0 }]));
+  assert.equal(r.fahrten.length, 1);
+  assert.ok(Math.abs(r.fahrten[0].km - 1.16) <= 0.04, `km ${r.fahrten[0].km}`);
+  assert.ok(r.fahrten[0].endeUhr <= '12:02:01', `Ende ${r.fahrten[0].endeUhr}`);
+});
+
+test('Funkloch im Laden (keine Punkte): Fahrt endet am Auto', () => {
+  const r = spieleAb(fahrplan(zumBaecker([{ s: 240, v: 0, luecke: true }])));
+  assert.equal(r.fahrten.length, 2);
+  assert.ok(bisParkplatz(r.fahrten[0]) <= 10, `Ende ${bisParkplatz(r.fahrten[0])} m vom Auto`);
+  assert.ok(Math.abs(r.fahrten[0].km - 1.2) <= 0.02, `km ${r.fahrten[0].km}`);
+});
+
+test('Parken im Schritttempo bleibt Teil der Fahrt (km und Ende)', () => {
+  passt([{ s: 120, v: 10 }, { s: 30, v: 2 }, { s: 240, v: 0 }],
+    { fahrten: [{ start: '12:00:00', ende: '12:02:30', toleranz_s: 5, km: 1.26, km_toleranz: 0.03 }] });
+});
+
+test('Stau im Schritttempo (unter 7 km/h) über 150 m beendet die Fahrt nicht', () => {
+  passt([{ s: 120, v: 10 }, { s: 10, v: 0 }, { s: 200, v: 1.5 }, { s: 60, v: 10 }, { s: 240, v: 0 }],
+    { fahrten: [{ start: '12:00:00', ende: '12:06:30', toleranz_s: 5, km: 2.1, km_toleranz: 0.05 }] });
 });
 
 // Wächter beim Öffnen der App (SPEC-gps-abbruch.md, Stufe 1): GPS-Dienst beendet, es kommen keine Punkte mehr
