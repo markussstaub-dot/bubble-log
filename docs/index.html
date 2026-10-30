@@ -4,11 +4,22 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Bubble Log Gesamtstory</title>
+<meta name="description" content="Ein Bordcomputer für den Microlino – mit einem Menschen als OBD. Die ganze Geschichte in knapp drei Minuten, gezeichnet und animiert.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Bubble Log – die Gesamtstory">
+<meta property="og:description" content="Ein Bordcomputer für den Microlino – mit einem Menschen als OBD. Knapp drei Minuten, gezeichnet und animiert.">
+<meta property="og:url" content="https://markussstaub-dot.github.io/bubble-log/">
+<meta property="og:image" content="https://markussstaub-dot.github.io/bubble-log/vorschau.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Saira+Condensed:wght@500;600;700&display=swap">
 <style>
 /* Bubble Log – Gesamtstory in sechs Kapiteln plus Schluss (Storyboard: storyboard-gesamtstory.md).
-   Szenen übernommen aus erklaervideo-schweigsam (w*), -humanes-obd (h*) und -ziel-check (z*), neu: i*, s* (12 V) und m*.
+   Szenen übernommen aus erklaervideo-schweigsam (w*), -humanes-obd (h*) und -ziel-check (z*), neu: i*, s* (12 V), m* und st (Sticker).
+   Bling: Wischblende bei jedem Kapitelwechsel, Ton per Knopf (WebAudio, data-sfx), QR-Code (#qr) im Sticker und im Abschluss.
+   Die Fassung für GitHub Pages liegt als bubble-log-app/docs/index.html, Vorschaubild docs/vorschau.png (aus sticker/sticker.py).
    Jede Szene trägt Länge (data-len), Kapitel (data-kap) und optional ihre Uhr-Funktion (data-tick).
    Eine Uhr (JS) treibt alles, CSS-Animationen starten beim Szenenwechsel neu. Farben aus bubble-log-app/src/style.css. */
 :root {
@@ -761,6 +772,33 @@ body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink); f
 .ausruf { position: absolute; left: 192px; top: 200px; font: 700 40px var(--f-display); color: #F2C66D; opacity: 0; }
 .m8.on .ausruf { animation: pop .4s ease 1.2s forwards, nod2 .6s ease-in-out 1.6s infinite; }
 
+/* Kapitelwechsel: türkise Wischblende, der Micro fährt mit durch */
+.wipe { position: absolute; inset: 0; z-index: 9; pointer-events: none; transform: translateX(-115%); }
+.wipe .band { position: absolute; inset: 0 -40px; background: linear-gradient(90deg, transparent, #3CC3AE 12%, #3CC3AE 88%, transparent); }
+.wipe .car { left: 70px; top: 255px; }
+.wipe.go { animation: wipe .9s cubic-bezier(.6, .05, .4, .95) forwards; }
+.wipe.go .car { animation: wob .2s ease-in-out infinite alternate; }
+.wipe.go .rad { animation: spin .3s linear infinite; }
+@keyframes wipe { from { transform: translateX(-115%); } to { transform: translateX(115%); } }
+
+/* st · Sticker auf den Micro: heranzoomen, Sticker fliegt ein und klebt, Glanz läuft drüber */
+.st .zoom { position: absolute; inset: 0; transform-origin: 170px 406px; }
+.st.on .zoom { animation: ranzoom 1.1s ease-in-out .7s forwards; }
+@keyframes ranzoom { to { transform: translate(10px, -130px) scale(3); } }
+.kleber { position: absolute; left: 153px; top: 399px; width: 36px; height: 15px; border-radius: 2px; overflow: hidden; opacity: 0;
+  box-shadow: 0 .5px 1.5px rgba(0,0,0,.5); }
+.kleber svg { display: block; width: 100%; height: 100%; }
+.kleber::after { content: ""; position: absolute; top: 0; bottom: 0; width: 30%; left: -40%;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,.55), transparent); }
+.st.on .kleber { animation: kleben .55s cubic-bezier(.3, .7, .4, 1.2) 1.85s forwards; }
+.st.on .kleber::after { animation: glanz .7s ease 2.7s forwards; }
+@keyframes kleben { 0% { opacity: 0; transform: translate(60px, -90px) rotate(-28deg) scale(2.4); } 30% { opacity: 1; }
+  85% { transform: scale(.93); } 100% { opacity: 1; transform: none; } }
+@keyframes glanz { to { left: 110%; } }
+
+/* Abschluss: QR-Code zum Repo, im Video scanbar */
+.qrkarte { display: block; width: 118px; height: 118px; padding: 6px; border-radius: 14px; background: #fff; pointer-events: auto; }
+.qrkarte svg { display: block; width: 100%; height: 100%; }
 
 /* Bedienung */
 .ctrl { display: flex; align-items: center; gap: 12px; width: min(100%, 460px); }
@@ -778,6 +816,9 @@ body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink); f
 </style>
 </head>
 <body>
+
+<!-- QR-Code zum Repo (Fehlerkorrektur Q, 33 × 33 Module), genutzt im Sticker und im Abschluss -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><path id="qr" fill="#0D1312" d="M0 0h7v1h-7zM8 0h3v1h-3zM16 0h2v1h-2zM19 0h3v1h-3zM23 0h1v1h-1zM26 0h7v1h-7zM0 1h1v1h-1zM6 1h1v1h-1zM9 1h5v1h-5zM16 1h2v1h-2zM20 1h1v1h-1zM26 1h1v1h-1zM32 1h1v1h-1zM0 2h1v1h-1zM2 2h3v1h-3zM6 2h1v1h-1zM9 2h1v1h-1zM13 2h1v1h-1zM21 2h1v1h-1zM26 2h1v1h-1zM28 2h3v1h-3zM32 2h1v1h-1zM0 3h1v1h-1zM2 3h3v1h-3zM6 3h1v1h-1zM9 3h1v1h-1zM12 3h1v1h-1zM15 3h1v1h-1zM17 3h1v1h-1zM22 3h1v1h-1zM24 3h1v1h-1zM26 3h1v1h-1zM28 3h3v1h-3zM32 3h1v1h-1zM0 4h1v1h-1zM2 4h3v1h-3zM6 4h1v1h-1zM8 4h2v1h-2zM12 4h1v1h-1zM15 4h1v1h-1zM18 4h6v1h-6zM26 4h1v1h-1zM28 4h3v1h-3zM32 4h1v1h-1zM0 5h1v1h-1zM6 5h1v1h-1zM8 5h6v1h-6zM15 5h1v1h-1zM17 5h2v1h-2zM26 5h1v1h-1zM32 5h1v1h-1zM0 6h7v1h-7zM8 6h1v1h-1zM10 6h1v1h-1zM12 6h1v1h-1zM14 6h1v1h-1zM16 6h1v1h-1zM18 6h1v1h-1zM20 6h1v1h-1zM22 6h1v1h-1zM24 6h1v1h-1zM26 6h7v1h-7zM9 7h2v1h-2zM13 7h1v1h-1zM15 7h1v1h-1zM18 7h1v1h-1zM20 7h2v1h-2zM23 7h1v1h-1zM1 8h7v1h-7zM15 8h1v1h-1zM17 8h1v1h-1zM19 8h1v1h-1zM23 8h1v1h-1zM27 8h2v1h-2zM32 8h1v1h-1zM0 9h2v1h-2zM7 9h1v1h-1zM9 9h1v1h-1zM11 9h1v1h-1zM13 9h2v1h-2zM18 9h4v1h-4zM23 9h1v1h-1zM26 9h2v1h-2zM29 9h4v1h-4zM0 10h1v1h-1zM2 10h2v1h-2zM6 10h3v1h-3zM10 10h2v1h-2zM14 10h1v1h-1zM17 10h1v1h-1zM20 10h3v1h-3zM24 10h1v1h-1zM28 10h1v1h-1zM30 10h2v1h-2zM0 11h1v1h-1zM3 11h1v1h-1zM9 11h1v1h-1zM11 11h1v1h-1zM13 11h4v1h-4zM20 11h3v1h-3zM24 11h1v1h-1zM26 11h1v1h-1zM28 11h5v1h-5zM3 12h1v1h-1zM5 12h3v1h-3zM11 12h1v1h-1zM14 12h1v1h-1zM16 12h1v1h-1zM18 12h2v1h-2zM22 12h3v1h-3zM27 12h3v1h-3zM0 13h4v1h-4zM5 13h1v1h-1zM8 13h3v1h-3zM13 13h2v1h-2zM16 13h5v1h-5zM23 13h2v1h-2zM26 13h1v1h-1zM30 13h3v1h-3zM1 14h2v1h-2zM4 14h1v1h-1zM6 14h1v1h-1zM8 14h1v1h-1zM11 14h1v1h-1zM14 14h1v1h-1zM18 14h1v1h-1zM20 14h1v1h-1zM22 14h1v1h-1zM24 14h3v1h-3zM29 14h1v1h-1zM31 14h1v1h-1zM3 15h1v1h-1zM5 15h1v1h-1zM7 15h7v1h-7zM18 15h1v1h-1zM20 15h2v1h-2zM25 15h2v1h-2zM29 15h2v1h-2zM0 16h1v1h-1zM2 16h3v1h-3zM6 16h2v1h-2zM9 16h1v1h-1zM11 16h2v1h-2zM17 16h1v1h-1zM19 16h1v1h-1zM22 16h1v1h-1zM24 16h2v1h-2zM27 16h3v1h-3zM32 16h1v1h-1zM0 17h2v1h-2zM3 17h1v1h-1zM7 17h2v1h-2zM10 17h4v1h-4zM15 17h1v1h-1zM19 17h3v1h-3zM23 17h1v1h-1zM26 17h2v1h-2zM29 17h4v1h-4zM2 18h5v1h-5zM8 18h1v1h-1zM11 18h5v1h-5zM17 18h1v1h-1zM20 18h1v1h-1zM24 18h5v1h-5zM30 18h2v1h-2zM0 19h1v1h-1zM3 19h3v1h-3zM7 19h3v1h-3zM11 19h11v1h-11zM25 19h1v1h-1zM27 19h5v1h-5zM1 20h2v1h-2zM5 20h2v1h-2zM8 20h2v1h-2zM18 20h2v1h-2zM22 20h1v1h-1zM25 20h1v1h-1zM28 20h2v1h-2zM31 20h1v1h-1zM0 21h1v1h-1zM2 21h4v1h-4zM7 21h2v1h-2zM10 21h2v1h-2zM16 21h2v1h-2zM19 21h1v1h-1zM21 21h1v1h-1zM23 21h1v1h-1zM26 21h1v1h-1zM30 21h1v1h-1zM32 21h1v1h-1zM0 22h1v1h-1zM4 22h3v1h-3zM8 22h3v1h-3zM13 22h1v1h-1zM15 22h1v1h-1zM20 22h1v1h-1zM25 22h1v1h-1zM29 22h1v1h-1zM31 22h1v1h-1zM0 23h1v1h-1zM3 23h3v1h-3zM8 23h5v1h-5zM14 23h1v1h-1zM16 23h1v1h-1zM20 23h4v1h-4zM25 23h3v1h-3zM29 23h2v1h-2zM32 23h1v1h-1zM0 24h1v1h-1zM2 24h2v1h-2zM6 24h1v1h-1zM8 24h1v1h-1zM10 24h4v1h-4zM15 24h1v1h-1zM17 24h2v1h-2zM22 24h8v1h-8zM31 24h2v1h-2zM8 25h3v1h-3zM12 25h2v1h-2zM15 25h5v1h-5zM21 25h1v1h-1zM23 25h2v1h-2zM28 25h1v1h-1zM30 25h3v1h-3zM0 26h7v1h-7zM8 26h2v1h-2zM11 26h1v1h-1zM13 26h1v1h-1zM16 26h1v1h-1zM20 26h1v1h-1zM23 26h2v1h-2zM26 26h1v1h-1zM28 26h1v1h-1zM30 26h2v1h-2zM0 27h1v1h-1zM6 27h1v1h-1zM8 27h2v1h-2zM11 27h6v1h-6zM18 27h1v1h-1zM20 27h2v1h-2zM23 27h2v1h-2zM28 27h5v1h-5zM0 28h1v1h-1zM2 28h3v1h-3zM6 28h1v1h-1zM8 28h3v1h-3zM13 28h1v1h-1zM15 28h1v1h-1zM17 28h1v1h-1zM19 28h1v1h-1zM22 28h1v1h-1zM24 28h6v1h-6zM32 28h1v1h-1zM0 29h1v1h-1zM2 29h3v1h-3zM6 29h1v1h-1zM8 29h2v1h-2zM14 29h3v1h-3zM18 29h3v1h-3zM23 29h3v1h-3zM28 29h3v1h-3zM32 29h1v1h-1zM0 30h1v1h-1zM2 30h3v1h-3zM6 30h1v1h-1zM8 30h2v1h-2zM11 30h4v1h-4zM16 30h1v1h-1zM22 30h1v1h-1zM26 30h2v1h-2zM30 30h1v1h-1zM0 31h1v1h-1zM6 31h1v1h-1zM8 31h1v1h-1zM11 31h1v1h-1zM14 31h5v1h-5zM20 31h3v1h-3zM25 31h1v1h-1zM28 31h3v1h-3zM0 32h7v1h-7zM10 32h3v1h-3zM14 32h6v1h-6zM22 32h3v1h-3zM27 32h1v1h-1zM31 32h1v1h-1z"/></defs></svg>
 
 <div class="frame" id="frame">
 <div class="stage" id="stage">
@@ -801,7 +842,7 @@ body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink); f
     <div class="cap">Und mit ihm kam die Reichweitenangst.</div>
   </section>
 
-  <section class="scene w2" data-len="4" data-kap="1">
+  <section class="scene w2" data-len="4" data-kap="1" data-sfx="zirp@.6,1.4,2.2,3">
     <div data-land></div>
     <div class="car wcar" data-car></div>
     <div class="blase"><i>●</i> <i>●</i> <i>●</i></div>
@@ -929,7 +970,7 @@ body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink); f
     </div>
     <div class="cap">Bubble Log zeichnet die Strecke per GPS auf.</div>
   </section>
-  <section class="scene h6" data-len="4" data-kap="2" data-tick="h6">
+  <section class="scene h6" data-len="4" data-kap="2" data-tick="h6" data-sfx="ding@2.5">
     <div data-land></div>
     <div class="schild" style="left:268px"><b>Homburg</b><i></i></div>
     <div class="radius"><span>40 m</span></div>
@@ -1111,7 +1152,7 @@ body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink); f
     </div>
     <div class="cap">Deine Stammziele: ein Blick, und du weißt Bescheid.</div>
   </section>
-  <section class="scene s1" data-len="4" data-kap="5">
+  <section class="scene s1" data-len="4" data-kap="5" data-sfx="zirp@.6,1.4,2.2,3">
     <div data-land></div>
     <div class="car wcar" data-car></div>
     <svg class="warn1" viewBox="0 0 132 84" aria-hidden="true">
@@ -1310,9 +1351,29 @@ body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink); f
     <div class="cap">Mein Fazit: Ich bin baff.</div>
   </section>
 
+  <section class="scene st" data-len="5" data-kap="7" data-sfx="plopp@2.35">
+    <div class="zoom">
+      <div data-land></div>
+      <div class="car wcar" data-car></div>
+      <div class="kleber"><svg viewBox="0 0 120 50" aria-label="Sticker: Powered by Bubble Log">
+        <rect width="120" height="50" rx="6" fill="#0D1312"/>
+        <rect x="1.2" y="1.2" width="117.6" height="47.6" rx="5" fill="none" stroke="#3CC3AE" stroke-width=".5" stroke-opacity=".6"/>
+        <rect x="4.5" y="4.5" width="41" height="41" rx="3" fill="#FFFFFF"/>
+        <use href="#qr" transform="translate(7.5 7.5) scale(1.0606)"/>
+        <text x="52" y="14" font-family="IBM Plex Mono" font-weight="500" font-size="3.4" letter-spacing=".55" fill="#3CC3AE">POWERED BY</text>
+        <rect x="52" y="17.5" width="11" height="11" rx="3.08" fill="#3CC3AE"/>
+        <text x="57.5" y="26.08" text-anchor="middle" font-family="Saira Condensed" font-weight="700" font-size="8.58" fill="#06211D">B</text>
+        <text x="65.5" y="27.6" font-family="Saira Condensed" font-weight="700" font-size="12" fill="#E6EEEC">Bubble Log</text>
+        <text x="52" y="36" font-family="IBM Plex Sans" font-weight="500" font-size="3.05" fill="#E6EEEC">Der zweitbeste Bordcomputer der Welt.</text>
+        <text x="52" y="41.6" font-family="IBM Plex Mono" font-weight="500" font-size="2.45" letter-spacing=".1" fill="#94A3A0">mit einem Menschen als OBD</text>
+      </svg></div>
+    </div>
+    <div class="cap">Und mein Micro bekommt einen Sticker – mit QR-Code zu GitHub.</div>
+  </section>
+
   <section class="scene w6" data-len="7" data-kap="7">
     <div class="outro">
-      <div class="icon">B</div>
+      <a class="qrkarte" href="https://github.com/markussstaub-dot/bubble-log" target="_blank" rel="noopener" aria-label="QR-Code: Bubble Log auf GitHub"><svg viewBox="-2 -2 37 37"><use href="#qr"/></svg></a>
       <div class="name">Bubble Log</div>
       <div class="claim">Der zweitbeste Bordcomputer der Welt.</div>
       <div class="sub">mit einem Menschen als OBD</div>
@@ -1321,6 +1382,7 @@ body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink); f
     <div class="fine">Fahrten bleiben auf dem Handy. Ortssuche, Route und Höhen kommen online von OpenStreetMap, OSRM und Open-Meteo. Werte direkt vom Fahrzeug sind eine Idee, noch nicht gebaut. Die 12-V-Messung braucht einen BM6-Batteriewächter. Alle Zahlen im Video sind Beispielwerte.</div>
   </section>
 
+  <div class="wipe" id="wipe"><div class="band"></div><div class="car" data-car></div></div>
 </div>
 </div>
 
@@ -1328,9 +1390,10 @@ body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink); f
   <button id="play" aria-label="Abspielen/Pause">❚❚</button>
   <div class="track" id="track"></div>
   <span class="time" id="time">0:00</span>
+  <button id="ton" aria-label="Ton an/aus" aria-pressed="false">🔇</button>
 </div>
 <div class="kapitel" id="kapitel"></div>
-<div class="hint">Leertaste: Pause · Pfeiltasten: Szene vor/zurück · Kapitel anklicken: dorthin springen</div>
+<div class="hint">Leertaste: Pause · Pfeiltasten: Szene vor/zurück · M: Ton · Kapitel anklicken: dorthin springen</div>
 
 <script>
 const de = (v, d = 0) => v.toFixed(d).replace('.', ',');
@@ -1676,10 +1739,62 @@ track.style.gridTemplateColumns = kLen.map(l => l + 'fr').join(' ');
 track.innerHTML = KAPITEL.map(n => `<button aria-label="${n}"><i></i></button>`).join('');
 $('kapitel').innerHTML = KAPITEL.map((n, k) => `<button>${k < 6 ? k + 1 + ' · ' : ''}${n}</button>`).join('');
 const bars = [...track.querySelectorAll('i')], kBtns = [...$('kapitel').children];
-const playBtn = $('play'), timeEl = $('time');
-let t = 0, cur = -1, playing = true, last = performance.now(), scale = 1;
+const playBtn = $('play'), timeEl = $('time'), wipe = $('wipe');
+let t = 0, cur = -1, playing = true, last = performance.now(), scale = 1, prevLt = 0;
+
+// Ton: per Knopf zuschaltbar (Browser erlauben Ton erst nach einem Klick), alles mit WebAudio erzeugt, keine Dateien.
+// Ereignisse hängen an der Szenenzeit: jeder Tipp (.tap mit --at) piept, dazu data-sfx="name@sek,sek" an der Szene.
+let audio = null, tonAn = false;
+function ton(a, z, typ, f, dauer, laut) {
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = typ; o.frequency.value = f;
+  g.gain.setValueAtTime(0, z); g.gain.linearRampToValueAtTime(laut, z + .005); g.gain.exponentialRampToValueAtTime(.001, z + dauer);
+  o.connect(g).connect(a.destination); o.start(z); o.stop(z + dauer + .02);
+}
+const TON = {
+  piep: (a, z) => ton(a, z, 'sine', 1320, .08, .16),
+  ding: (a, z) => { ton(a, z, 'sine', 1568, .5, .18); ton(a, z + .12, 'sine', 2093, .7, .14); },
+  zirp: (a, z) => { for (let k = 0; k < 3; k++) ton(a, z + k * .07, 'square', 4300, .035, .02); },
+  plopp: (a, z) => {
+    const o = a.createOscillator(), g = a.createGain();
+    o.frequency.setValueAtTime(420, z); o.frequency.exponentialRampToValueAtTime(110, z + .15);
+    g.gain.setValueAtTime(.3, z); g.gain.exponentialRampToValueAtTime(.001, z + .2);
+    o.connect(g).connect(a.destination); o.start(z); o.stop(z + .22);
+  },
+  wusch: (a, z) => {
+    const n = a.sampleRate * .6, b = a.createBuffer(1, n, a.sampleRate), d = b.getChannelData(0);
+    for (let k = 0; k < n; k++) d[k] = Math.random() * 2 - 1;
+    const q = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain();
+    q.buffer = b; f.type = 'bandpass'; f.Q.value = 1.2;
+    f.frequency.setValueAtTime(400, z); f.frequency.exponentialRampToValueAtTime(2400, z + .6);
+    g.gain.setValueAtTime(0, z); g.gain.linearRampToValueAtTime(.1, z + .25); g.gain.linearRampToValueAtTime(0, z + .6);
+    q.connect(f).connect(g).connect(a.destination); q.start(z);
+  },
+};
+const sfx = name => { if (tonAn && audio) TON[name]?.(audio, audio.currentTime + .01); };
+const SFX = scenes.map(s => {
+  const ev = [...s.querySelectorAll('.tap')].map(e => [parseFloat(e.style.getPropertyValue('--at')), 'piep']);
+  (s.dataset.sfx || '').split(' ').filter(Boolean).forEach(x => { const [n, z] = x.split('@'); z.split(',').forEach(v => ev.push([+v, n])); });
+  return ev.filter(([z]) => !isNaN(z));
+});
+const tonBtn = $('ton');
+function toggleTon() {
+  audio ??= new AudioContext();
+  audio.resume();
+  tonAn = !tonAn;
+  tonBtn.textContent = tonAn ? '🔊' : '🔇';
+  tonBtn.setAttribute('aria-pressed', tonAn);
+  sfx('piep');
+}
+tonBtn.onclick = toggleTon;
 
 function show(i) {
+  // Kapitelwechsel (nicht beim Neustart vorn): Wischblende mit Micro
+  if (cur >= 0 && i > 0 && KAP[i] !== KAP[cur]) {
+    wipe.classList.remove('go'); void wipe.offsetWidth; wipe.classList.add('go');
+    sfx('wusch');
+  }
+  prevLt = -.001;
   scenes.forEach(s => s.classList.remove('on'));
   void document.body.offsetWidth;
   scenes[i].classList.add('on');
@@ -1699,7 +1814,10 @@ function frame(now) {
   if (t >= TOTAL) t = 0;
   const i = START.findLastIndex(s => t >= s);
   if (i !== cur) show(i);
-  TICK[scenes[i].dataset.tick]?.(t - START[i]);
+  const lt = t - START[i];
+  if (playing) SFX[i].forEach(([z, n]) => { if (z > prevLt && z <= lt) sfx(n); });
+  prevLt = lt;
+  TICK[scenes[i].dataset.tick]?.(lt);
   bars.forEach((b, k) => b.style.width = clamp((t - kStart[k]) / kLen[k]) * 100 + '%');
   timeEl.textContent = `${fmt(t)} / ${fmt(TOTAL)}`;
   requestAnimationFrame(frame);
@@ -1715,6 +1833,7 @@ track.querySelectorAll('button').forEach((b, k) => b.onclick = () => seekKap(k))
 kBtns.forEach((b, k) => b.onclick = () => seekKap(k));
 addEventListener('keydown', e => {
   if (e.code === 'Space') { e.preventDefault(); setPlaying(!playing); }
+  if (e.key === 'm' || e.key === 'M') toggleTon();
   if (e.key === 'ArrowRight') seek(Math.min(cur + 1, scenes.length - 1));
   if (e.key === 'ArrowLeft') seek(Math.max(cur - 1, 0));
 });
