@@ -8,6 +8,7 @@ Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten
   beim Zurückkommen der Akku-Abfrage „Fahrt beendet“; „Fahrt jetzt starten“, „Nur Akkustand merken“ und „Fahrt
   nachtragen“ aus so einem Dialog öffnen stattdessen die wartende Fahrt (`src/dialoge.js`, Tests). Log: `beginn
   abgelehnt`, `dialog ersetzt`, `knopf veraltet`.
+- Knopf „📷 Display fotografieren“ im Akku-Dialog größer (Wunsch Markus, 30.10.).
 - **Fix Foto vom Display am Fold6** („The source image could not be decoded.“): Das Foto wird jetzt nativ in
   `Texterkennung.java` gelesen und verkleinert (JPEG und HEIF), nicht mehr im WebView. Log `foto` mit Bildangaben
   (`bild`) bzw. Fehlercode.

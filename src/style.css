@@ -136,6 +136,7 @@ input[type=number], input[type=datetime-local], select { font: inherit; color: v
 .hinweis { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 12px; font-size: 13.5px; background: color-mix(in srgb, var(--warn) 12%, var(--surface)); border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line)); }
 .btn-link { border: 0; background: none; color: var(--muted); text-decoration: underline; min-height: 44px; font-size: 14px; }
 .btn.gestrichelt { border-style: dashed; color: var(--muted); background: transparent; font-weight: 600; }
+.btn.foto-knopf { padding: 18px 14px; font-size: 18px; font-weight: 600; }   /* Foto vom Display: gut zu treffen, Wunsch 30.10.2026 */
 .seg { display: grid; grid-template-columns: 1fr 1fr; padding: 4px; border-radius: 12px; background: var(--sunk); }
 .seg button { border: 0; background: transparent; border-radius: 9px; min-height: 40px; color: var(--muted); font-weight: 600; font-size: 14px; }
 .seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--line); }

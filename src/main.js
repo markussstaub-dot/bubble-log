@@ -619,7 +619,7 @@ function socSheet(ueberschrift, v, knopf, text, extra = '') {
   V.fotoZiel = knopf[0] === 'save' ? 'ende' : 'start'; V.fotoErkannt = null;
   sheet(`<h2>${ueberschrift}</h2><p class="small muted" style="margin:0">${text}</p>
     ${wheelHtml()}
-    <button class="btn block" data-act="foto">📷 Display fotografieren</button>
+    <button class="btn block foto-knopf" data-act="foto">📷 Display fotografieren</button>
     <div class="foto-info small" id="fotoInfo" hidden></div>${extra}
     <button class="btn primary block" data-act="${knopf[0]}">${knopf[1]}</button>
     ${knopf[2] ? `<button class="btn block danger" data-act="${knopf[2][0]}">${knopf[2][1]}</button>` : ''}`, knopf[0] === 'go' ? 'losfahren' : '');
@@ -729,7 +729,7 @@ function wartenSheet() {
   sheet(`<div class="between"><h2>Akkustand jetzt</h2><span class="small muted">${uhrzeit(Date.now())}</span></div>
     <p class="small muted" style="margin:0">Wert vom Microlino-Display übernehmen. Vorgeschlagen ist der letzte bekannte Stand.</p>
     ${wheelHtml()}
-    <button class="btn block" data-act="foto">📷 Display fotografieren</button>
+    <button class="btn block foto-knopf" data-act="foto">📷 Display fotografieren</button>
     <div class="foto-info small" id="fotoInfo" hidden></div>
     ${oben ? `<div class="hinweis"><b class="warn">Unterwegs gewesen?</b><span>Seit ${zeitpunkt(l.von)} war die App zu, und das Handy hat sich bewegt. Akku seitdem ${socJetzt()} → <span id="lueckeSoc">${socJetzt()}</span> %.</span></div>` : ''}
     ${oben ? nachtragen + starten : starten + nachtragen}
