@@ -3,6 +3,8 @@
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
 ## Unveröffentlicht
+
+## Bubble-Log-1121 (30.10.2026, Version 2026.10.30-1121)
 - **Fix Datenverlust (Testfahrt 30.10.):** Eine beendete, noch nicht gespeicherte Fahrt wird nie mehr überschrieben.
   Blieb „Akkustand jetzt“ offen, während im Hintergrund eine Fahrt erkannt und beendet wurde, weicht der alte Dialog
   beim Zurückkommen der Akku-Abfrage „Fahrt beendet“; „Fahrt jetzt starten“, „Nur Akkustand merken“ und „Fahrt
