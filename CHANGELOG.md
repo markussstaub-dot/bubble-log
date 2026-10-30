@@ -3,6 +3,14 @@
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
 ## Unveröffentlicht
+- **Fix Datenverlust (Testfahrt 30.10.):** Eine beendete, noch nicht gespeicherte Fahrt wird nie mehr überschrieben.
+  Blieb „Akkustand jetzt“ offen, während im Hintergrund eine Fahrt erkannt und beendet wurde, weicht der alte Dialog
+  beim Zurückkommen der Akku-Abfrage „Fahrt beendet“; „Fahrt jetzt starten“, „Nur Akkustand merken“ und „Fahrt
+  nachtragen“ aus so einem Dialog öffnen stattdessen die wartende Fahrt (`src/dialoge.js`, Tests). Log: `beginn
+  abgelehnt`, `dialog ersetzt`, `knopf veraltet`.
+- **Fix Foto vom Display am Fold6** („The source image could not be decoded.“): Das Foto wird jetzt nativ in
+  `Texterkennung.java` gelesen und verkleinert (JPEG und HEIF), nicht mehr im WebView. Log `foto` mit Bildangaben
+  (`bild`) bzw. Fehlercode.
 - **Fahrt nachtragen** (`SPEC-gps-abbruch.md`, Mockup „Fahrt nachtragen“): „Fahrt starten“ bei laufender
   Fahrterkennung öffnet „Akkustand jetzt“ mit drei Wegen: Fahrt nachtragen, Fahrt jetzt starten, Nur Akkustand merken.
   War die App über 10 min zu und hat sich das Handy bewegt (GPS mit Tempo oder Vibration), steht „Nachtragen“ oben mit

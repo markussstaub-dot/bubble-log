@@ -15,6 +15,7 @@ import * as devlog from './devlog.js';
 import { suchen, route as routeBerechnen } from './route.js';
 import * as lade from './laden.js';
 import * as nt from './nachtragen.js';
+import * as dialoge from './dialoge.js';
 import { simTabVerbinden, simTabZeichnen, simTabStoppen, simHud, simAktion } from './simtab.js';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -597,7 +598,9 @@ function toast(t, rueckgaengig = null) {
 }
 const overlay = html => { $('overlay').innerHTML = html; V.fahrtAnsicht = html.includes('class="drive"'); };
 const sheetOffen = () => !!$('overlay').querySelector('.sheet');
-const sheet = inner => overlay(`<div class="backdrop" data-act="close"></div><div class="sheet" role="dialog" aria-modal="true"><div class="grip"></div>${inner}</div>`);
+// art: Art des Dialogs für src/dialoge.js ('warten', 'losfahren', 'ergebnis'); sheetArt(): null = kein Dialog offen
+const sheet = (inner, art = '') => { V.sheetNr = (V.sheetNr || 0) + 1; overlay(`<div class="backdrop" data-act="close"></div><div class="sheet" role="dialog" aria-modal="true" data-art="${art}"><div class="grip"></div>${inner}</div>`); };
+const sheetArt = () => { const el = $('overlay').querySelector('.sheet'); return el ? el.dataset.art || 'anderes' : null; };
 
 let wheelWert = 0, rad = null;
 // Akkustand-Rad nach dem Standard Scrollrad MK IV (src/scrollrad.js): Index 0 = 100 %, Index 100 = 0 %
@@ -619,25 +622,27 @@ function socSheet(ueberschrift, v, knopf, text, extra = '') {
     <button class="btn block" data-act="foto">📷 Display fotografieren</button>
     <div class="foto-info small" id="fotoInfo" hidden></div>${extra}
     <button class="btn primary block" data-act="${knopf[0]}">${knopf[1]}</button>
-    ${knopf[2] ? `<button class="btn block danger" data-act="${knopf[2][0]}">${knopf[2][1]}</button>` : ''}`);
+    ${knopf[2] ? `<button class="btn block danger" data-act="${knopf[2][0]}">${knopf[2][1]}</button>` : ''}`, knopf[0] === 'go' ? 'losfahren' : '');
   wheelInit(v);
 }
 
 // Foto vom Tacho-Display: Drehrad auf den erkannten Wert stellen, übernommen wird erst mit dem Knopf darunter
 async function fotoAufnehmen() {
-  const ziel = V.fotoZiel, datei = await foto.aufnehmen(); if (!datei) return;
+  const ziel = V.fotoZiel, nr = V.sheetNr, datei = await foto.aufnehmen(); if (!datei) return;
   const info = $('fotoInfo'); if (info) { info.hidden = false; info.textContent = 'Foto wird gelesen …'; }
   let r;
   try { r = await foto.verarbeiten(datei, ziel, { speichern: !V.sandbox }); }
-  catch (e) { console.warn(e); devlog.log('foto', { schritt: 'fehler', ziel, text: e.message }); if (info) info.textContent = 'Foto konnte nicht gelesen werden.'; return; }
-  // Foto gehört zur Fahrt; beim Start ohne offene Fahrt („Losfahren“) wartet es bis zum Beginn
-  const o = eigen.offen, feld = ziel === 'ende' ? 'fotoEnde' : 'fotoStart';
+  catch (e) { console.warn(e); devlog.log('foto', { schritt: 'fehler', ziel, text: e.message, ...e.daten }); if (info) info.textContent = 'Foto konnte nicht gelesen werden.'; return; }
+  // Dialog inzwischen ersetzt (z. B. beim Zurückkommen aus der Kamera wartete eine beendete Fahrt): Foto gehört nirgends hin
+  if (nr !== V.sheetNr) { foto.loeschen(r.name); devlog.log('foto', { schritt: 'verworfen', ziel, grund: 'dialog ersetzt', soc: r.soc }); return; }
+  // Foto gehört zur Fahrt; aus einem Dialog ohne Fahrt („Akkustand jetzt“, „Losfahren“) wartet es bis zum Beginn
+  const o = dialoge.OHNE_FAHRT.includes(sheetArt()) ? null : eigen.offen, feld = ziel === 'ende' ? 'fotoEnde' : 'fotoStart';
   if (r.name) {
     if (o) { foto.loeschen(o[feld]); o[feld] = r.name; sichern(); }
     else { foto.loeschen(V.fotoNeu); V.fotoNeu = r.name; }
   }
   const ok = socPlausibel(r.soc, { start: ziel === 'ende' ? o?.startSoc : null });
-  devlog.log('foto', { schritt: 'erkannt', ziel, text: r.text, soc: r.soc, kandidaten: r.kandidaten, km: r.km, plausibel: ok, dauer: r.dauer, quelle: r.quelle, fehler: r.fehler, datei: r.name });
+  devlog.log('foto', { schritt: 'erkannt', ziel, text: r.text, soc: r.soc, kandidaten: r.kandidaten, km: r.km, plausibel: ok, dauer: r.dauer, quelle: r.quelle, fehler: r.fehler, datei: r.name, bild: r.bild });
   if (ok) { V.fotoErkannt = { ziel, soc: r.soc }; wheelSetze(r.soc); }
   if (!$('fotoInfo')) return;   // Dialog inzwischen geschlossen
   $('fotoInfo').innerHTML = `${r.name ? `<img class="foto-mini" data-foto="${r.name}" alt="Foto vom Display">` : ''}
@@ -671,12 +676,15 @@ async function temperaturHolen(p) {
 }
 function zielModus() { return eigen.offen?.status === 'faehrt' ? 'fahrt' : eigen.erfassung ? 'warten' : 'aus'; }
 
+// Nie eine offene Fahrt überschreiben (Testfahrt 30.10.2026: so ging eine beendete 4,9-km-Fahrt verloren). false = nicht begonnen
 function fahrtBeginnen({ startSoc, startQuelle, punkte = [], km: strecke = 0, manuell }) {
+  if (eigen.offen) { devlog.log('fahrt', { schritt: 'beginn abgelehnt', manuell, startSoc, offen: eigen.offen.status, km: eigen.offen.km }); return false; }
   eigen.offen = { t0: Date.now(), km: strecke, punkte, startSoc, startQuelle, status: 'faehrt', manuell, temp: null, brems: 0, beschl: 0, ausschlaege: [] };
   verlauf = []; wartend = [];
   devlog.log('fahrt', { schritt: 'beginn', manuell, startSoc, startQuelle, km: strecke });
   sichern(); tracker.setModus('fahrt');
   if (punkte[0]) temperaturHolen(punkte[0]);
+  return true;
 }
 function fahrtAnsicht() {
   const o = eigen.offen; if (!o || o.status !== 'faehrt') return;
@@ -725,7 +733,7 @@ function wartenSheet() {
     <div class="foto-info small" id="fotoInfo" hidden></div>
     ${oben ? `<div class="hinweis"><b class="warn">Unterwegs gewesen?</b><span>Seit ${zeitpunkt(l.von)} war die App zu, und das Handy hat sich bewegt. Akku seitdem ${socJetzt()} → <span id="lueckeSoc">${socJetzt()}</span> %.</span></div>` : ''}
     ${oben ? nachtragen + starten : starten + nachtragen}
-    <button class="btn-link" data-act="socMerken">Nur Akkustand merken</button>`);
+    <button class="btn-link" data-act="socMerken">Nur Akkustand merken</button>`, 'warten');
   wheelInit(socJetzt());
 }
 // Gemerkte Ziele mit gespeichertem Weg ab Zuhause ({ kurz, km } einfach)
@@ -907,7 +915,7 @@ function fahrtSpeichern() {
            ${f.rau != null ? `<div class="between"><span>Fahrstil</span><b>${f.brems}× stark gebremst, ${f.beschl}× stark beschleunigt</b></div>
            <div class="between"><span>Straße</span><b>${f.rau ? `${f.rau} % rau` : 'glatt'}</b></div>` : ''}</div></section>`}
     <div class="card hero">${ring(ende)}<div><div class="label">Jetzt</div><div class="big">ca. ${reichweite(ende)} km</div><div class="muted small">Reichweite bei ${ende} %</div></div></div>
-    <button class="btn primary block" data-act="close">Fertig</button>`);
+    <button class="btn primary block" data-act="close">Fertig</button>`, 'ergebnis');
   render();
 }
 
@@ -1018,11 +1026,17 @@ sensoren.aufEreignisse((name, d) => {
   else if (name === 'energie') devlog.log('modus', d);
 });
 
-// Beim Öffnen der App: offene Fahrt fortsetzen oder nachfragen
+// Beim Öffnen der App: offene Fahrt fortsetzen oder nachfragen. Ein Dialog von vor der Fahrt („Akkustand jetzt“,
+// „Losfahren“, Ergebnis der vorigen Fahrt) gilt dann nicht mehr und weicht (src/dialoge.js).
 function pruefeOffen() {
-  const o = eigen.offen; if (!o || sheetOffen()) return;
-  if (o.status === 'beendet') endeSheet();
-  else if (o.startSoc == null) { fahrtAnsicht(); startSocSheet(); }
+  const art = sheetArt(), was = dialoge.beimOeffnen(eigen.offen, art); if (!was) return;
+  if (art) {
+    devlog.log('fahrt', { schritt: 'dialog ersetzt', dialog: art, offen: eigen.offen.status, km: eigen.offen.km });
+    foto.loeschen(V.fotoNeu); V.fotoNeu = null; V.fotoErkannt = null;
+  }
+  if (was === 'ende') endeSheet();
+  else if (was === 'start') { fahrtAnsicht(); startSocSheet(); }
+  else fahrtAnsicht();
 }
 
 async function erfassungSetzen(an) {
@@ -1091,10 +1105,15 @@ document.addEventListener('click', e => {
   if (d.filter) { V.filter = d.filter; render(); return; }
   if (d.zweck) { t.parentElement.querySelectorAll('[data-zweck]').forEach(b => b.setAttribute('aria-pressed', String(b === t))); return; }
   if (simAktion(d.act)) return;
+  if (dialoge.veraltet(d.act, eigen.offen)) {   // Knopf aus einem Dialog von vor der Fahrt: nichts überschreiben
+    devlog.log('fahrt', { schritt: 'knopf veraltet', aktion: d.act, offen: eigen.offen.status, km: eigen.offen.km });
+    toast('Inzwischen wurde eine Fahrt erkannt'); pruefeOffen(); return;
+  }
   switch (d.act) {
     case 'start': if (!eigen.offen && zielModus() === 'warten') wartenSheet(); else if (!eigen.offen) socSheet('Akkustand beim Start', socJetzt(), ['go', 'Losfahren'], 'Wert vom Microlino-Display übernehmen. Vorgeschlagen ist der letzte bekannte Stand.'); break;
     case 'go':
-      fahrtBeginnen({ startSoc: wheelWert, startQuelle: wheelHerkunft(), manuell: true }); fotoBestaetigt(wheelWert);
+      if (!fahrtBeginnen({ startSoc: wheelWert, startQuelle: wheelHerkunft(), manuell: true })) break;
+      fotoBestaetigt(wheelWert);
       if (V.fotoNeu) { eigen.offen.fotoStart = V.fotoNeu; V.fotoNeu = null; sichern(); }
       fahrtAnsicht(); break;
     case 'foto': fotoAufnehmen(); break;

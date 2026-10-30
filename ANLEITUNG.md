@@ -204,6 +204,16 @@ Hintergrund-GPS, Benachrichtigungen, Sensor-Plugin und Teilen/Speichern gehen nu
   den Einstellungen, Log von GPS-Dienst und Energiesparmodus, Vibrationsfenster pro GPS-Punkt.
   **Nur am Handy prüfbar:** ob der Broadcast des GPS-Plugins ankommt (Lebenszeichen), die Benachrichtigung nach 90 s,
   `status()` (Akku/Standort), die Energiespar-/Doze-Zeilen. Stufe 3 (Heimfahrt ohne laufendes GPS) erst nach neuen Logs.
+- **Veraltete Dialoge (Befund Testfahrt 30.10.2026, behoben 30.10.):** „Akkustand jetzt“ blieb nach Fahrt 1 offen, die
+  App ging in den Hintergrund, dort wurde Fahrt 2 (4,9 km) erkannt und beendet. Beim Zurückkommen tat `pruefeOffen()`
+  nichts, weil ein Dialog offen war, und „Fahrt jetzt starten“ überschrieb die beendete Fahrt ohne `verworfen` im Log.
+  Jetzt: `fahrtBeginnen()` überschreibt nie eine offene Fahrt (Log `beginn abgelehnt`); Dialoge tragen eine Art
+  (`sheet(inner, art)`), und die Dialoge von vor der Fahrt (`warten`, `losfahren`, `ergebnis`) weichen beim
+  Sichtbarwerden der Akku-Abfrage bzw. Fahrtansicht (Log `dialog ersetzt`). Ihre Knöpfe „Fahrt jetzt starten“, „Nur
+  Akkustand merken“ und „Fahrt nachtragen“ sind bei offener Fahrt gesperrt (Log `knopf veraltet`, Meldung „Inzwischen
+  wurde eine Fahrt erkannt“). Ein Foto, dessen Dialog inzwischen ersetzt wurde, wird verworfen statt an die falsche
+  Fahrt gehängt. Regeln in `src/dialoge.js`, Tests in `tests/dialoge.test.js`; im Browser über den Sim-Tab nachgestellt.
+  Andere Dialoge (Einstellungen, Formular „Fahrt nachtragen“) werden nicht ersetzt, damit Eingaben nicht verloren gehen.
 - Logs aus dem Entwicklermodus von echten Fahrten auswerten und Schwellen abstimmen (Erkennung, Höhenmeter,
   Rauheit, Bremsen), sobald der Nutzer sie schickt.
 - **Akkustand per Foto vom Tacho-Display** (`SPEC-foto.md`, gebaut 28.10.2026, im Browser durchgespielt):
@@ -216,7 +226,17 @@ Hintergrund-GPS, Benachrichtigungen, Sensor-Plugin und Teilen/Speichern gehen nu
   `foto`-Zeilen (`erkannt` mit Text, Zahl, km, Dauer; `bestätigt` mit `richtig`). Gesamt-km wird nur geloggt.
   Im Browser: Dateiauswahl, Zahl aus dem Dateinamen (`akku-48.jpg`, `akku-48-km-007973.jpg`).
   **Nur am Handy prüfbar:** Start der Kamera-App aus dem WebView, Treffer von ML Kit am echten Display (beide
-  Ansichten), Dauer der Erkennung, Teilen/Speichern mit Fotos. Die APK enthält nur noch `arm64-v8a` (ML Kit ≈ 11 MB
+  Ansichten), Dauer der Erkennung, Teilen/Speichern mit Fotos.
+  **Befund 30.10.2026 (APK 1715, Fold6):** Foto scheiterte mit „The source image could not be decoded.“ Das ist die
+  Meldung von `createImageBitmap` im WebView; das Kamerafoto kam gar nicht bis ML Kit (und auch nicht ins Speichern).
+  Warum der WebView es nicht lesen konnte (leere Datei, Format, Größe), lässt sich ohne das Foto nicht mehr klären:
+  `aufraeumen()` hatte das Original schon gelöscht. **Behoben (30.10.2026):** Nativ dekodiert jetzt
+  `Texterkennung.java` mit `ImageDecoder` (JPEG und HEIF, verkleinert beim Dekodieren auf 1600 px, dreht nach EXIF) und
+  liefert auch die 640-px-Kopie zum Speichern; der WebView fasst das Foto nicht mehr an. Gelesen wird das Original der
+  Kamera-App in `Android/data/…/files/Pictures/JPEG_*` (über die Größe gefunden), sonst schickt `foto.js` die Bytes.
+  Das Log hat jetzt `bild` (`quelle` datei/daten, `bytes`, `mime`, `original`, `breite`, `hoehe`) und beim Fehler
+  `groesse`, `typ`, `code` (`LEER` = Kamera-App hat nichts gespeichert, `DEKODIEREN`). Im Browser bleibt
+  `createImageBitmap`. **Nur am Handy prüfbar:** ob das Foto jetzt gelesen wird, die Ausrichtung des gespeicherten Fotos. Die APK enthält nur noch `arm64-v8a` (ML Kit ≈ 11 MB
   je Architektur; für den Emulator `x86_64` in `android/app/build.gradle` ergänzen).
 - **Idee (28.10.2026): Stillstand/Fahrt per Beschleunigungssensor** statt nur GPS. Der Microlino vibriert im Stand
   kaum, fahrend rauscht die Straße (misst Fahrsensoren schon für die Rauheit). Damit: Fahrtende früher bestätigen,
@@ -255,6 +275,7 @@ die Fahrt dort und die App fragt den Akkustand ab.
 | Datei | Inhalt |
 |---|---|
 | `src/main.js` | Oberfläche, Fahrtablauf, Benachrichtigungen |
+| `src/dialoge.js` | welcher Dialog bei offener Fahrt veraltet ist und weicht (Tests: `tests/dialoge.test.js`) |
 | `src/erkennung.js` | Kern der Fahrterkennung ohne GPS: Kandidat, Start, Stopp, Sprünge (Schwellwerte `SCHWELLEN` oben in der Datei) |
 | `src/tracker.js` | hängt die Erkennung ans GPS (Hintergrund-Plugin, Browser, Sim-Tab) |
 | `src/replay.js` | spielt ein Entwickler-Log (JSONL) durch die Erkennung, Ergebnis und damals Geloggtes zum Vergleich |
@@ -266,7 +287,7 @@ die Fahrt dort und die App fragt den Akkustand ab.
 | `src/export.js` | Fahrtenbuch als CSV-Datei teilen oder unter Dokumente/Bubble Log speichern, auf Wunsch mit Display-Fotos |
 | `src/foto.js` | Foto vom Tacho-Display: Kamera, verkleinert speichern (`Directory.Data/fotos`), Erkennung aufrufen |
 | `src/fototext.js` | aus dem erkannten Text Akkustand („99 %“) und Gesamt-km heraussuchen, Plausibilität (Tests: `tests/fototext.test.js`) |
-| `android/…/Texterkennung.java` | eigenes Plugin: Google ML Kit Text Recognition (Latin, bundled, offline); löscht das Kamera-Original |
+| `android/…/Texterkennung.java` | eigenes Plugin: Foto dekodieren und verkleinern (ImageDecoder), Google ML Kit Text Recognition (Latin, bundled, offline); löscht das Kamera-Original |
 | `src/devlog.js` | Entwicklermodus: Logs schreiben, teilen, löschen, nach 14 Tagen aufräumen |
 | `src/route.js` | Ziel-Check: Ortssuche, Straßenroute, Höhenmeter entlang der Route |
 | `src/laden.js`, `src/ladepunkte.json` | Ladepunkte offline: Umkreis, entlang der Route, Ladezeit |
