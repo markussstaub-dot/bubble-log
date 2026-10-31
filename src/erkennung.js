@@ -125,7 +125,7 @@ export function createErkennung({ onStart = () => {}, onPunkt = () => {}, onStop
       if (!ende) return false;
       onLog('erkennung', { schritt: 'stopp nach GPS-Ausfall', luecke: ende.luecke, ende: ende.t });
       ruhe = null; bewegt = null;
-      onStopp(ende);
+      onStopp({ ...ende, ausfall: true });   // Strecke unvollständig: main.js verwirft sie nicht als „zu kurz“
       return true;
     },
     // alles vergessen, auch den letzten Punkt (Wechsel zwischen echtem GPS und Simulator)

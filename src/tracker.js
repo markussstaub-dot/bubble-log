@@ -21,31 +21,44 @@ export function createTracker({ onStart, onPunkt, onStopp, onFehler, onLog = () 
   const nacheinander = f => (kette = kette.catch(() => {}).then(f));
   const beobachte = abstand => nacheinander(() => watcherStarten(abstand));
   const stoppeWatcher = () => nacheinander(watcherStoppen);
+  let generation = 0;   // nur der neueste Watcher zählt; der alte kann bis zum Entfernen noch Punkte liefern
   async function watcherStarten(abstand) {
-    await watcherStoppen();
-    if (simQuelle) return;
+    if (simQuelle) return watcherStoppen();
     if (Capacitor.isNativePlatform()) {
-      watcherId = await BackgroundGeolocation.addWatcher({
-        backgroundTitle: 'Bubble Log',
-        backgroundMessage: modusJetzt() === 'fahrt' ? 'Fahrt wird aufgezeichnet' : 'Wartet auf die nächste Fahrt',
-        requestPermissions: true, stale: false, distanceFilter: abstand,
-      }, (loc, err) => {
-        if (err) { onLog('fehler', { quelle: 'gps', code: err.code, text: err.message }); onFehler?.(err.code === 'NOT_AUTHORIZED' ? 'standort' : err.message); return; }
-        verarbeite(loc); sensoren.beiGpsPunkt();
-      });
+      // Erst den neuen Watcher anlegen, dann den alten entfernen (Testfahrt 31.10.2026): Entfernt man den letzten
+      // Watcher, beendet das Plugin den Vordergrund-Dienst. Startet er aus dem Hintergrund neu, gibt Android ihm
+      // ohne „Standort immer erlauben“ keine Positionen mehr („Foreground service started from background can not
+      // have location access“). So bleibt der Dienst beim Moduswechsel durchgehend im Vordergrund.
+      const alt = watcherId, gen = ++generation;
+      try {
+        watcherId = await BackgroundGeolocation.addWatcher({
+          backgroundTitle: 'Bubble Log',
+          backgroundMessage: modusJetzt() === 'fahrt' ? 'Fahrt wird aufgezeichnet' : 'Wartet auf die nächste Fahrt',
+          requestPermissions: true, stale: false, distanceFilter: abstand,
+        }, (loc, err) => {
+          if (gen !== generation) return;
+          if (err) { onLog('fehler', { quelle: 'gps', code: err.code, text: err.message }); onFehler?.(err.code === 'NOT_AUTHORIZED' ? 'standort' : err.message); return; }
+          verarbeite(loc); sensoren.beiGpsPunkt();
+        });
+      } catch (e) {   // neuer Watcher kam nicht zustande: der alte läuft weiter und zählt wieder
+        generation--; onLog('fehler', { quelle: 'gps', text: `addWatcher: ${e.message}` }); return;
+      }
       onLog('modus', { gpsDienst: 'start', modus: modusJetzt(), abstand });
+      if (alt) await watcherEntfernen(alt);
     } else if (navigator.geolocation) {   // Browser zum Ausprobieren: nur solange die Seite offen ist
+      await watcherStoppen();
       webId = navigator.geolocation.watchPosition(
         pos => verarbeite({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy, speed: pos.coords.speed, altitude: pos.coords.altitude, time: pos.timestamp }),
         e => onFehler?.(e.code === 1 ? 'standort' : e.message), { enableHighAccuracy: true });
     }
   }
+  async function watcherEntfernen(id) {
+    await BackgroundGeolocation.removeWatcher({ id }).catch(e => onLog('fehler', { quelle: 'gps', text: `removeWatcher: ${e.message}` }));
+    onLog('modus', { gpsDienst: 'stopp', modus: modusJetzt() });
+  }
   async function watcherStoppen() {
-    if (watcherId) {
-      const id = watcherId; watcherId = null;
-      await BackgroundGeolocation.removeWatcher({ id }).catch(e => onLog('fehler', { quelle: 'gps', text: `removeWatcher: ${e.message}` }));
-      onLog('modus', { gpsDienst: 'stopp', modus: modusJetzt() });
-    }
+    generation++;
+    if (watcherId) { const id = watcherId; watcherId = null; await watcherEntfernen(id); }
     if (webId != null) { navigator.geolocation.clearWatch(webId); webId = null; }
   }
 

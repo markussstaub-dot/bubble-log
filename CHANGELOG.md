@@ -3,6 +3,14 @@
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
 ## Unveröffentlicht
+- **Fix GPS weg nach Fahrtbeginn im Hintergrund** (Testfahrt 31.10.2026, `logs/AUSWERTUNG-2026-10-31.md`): Beim
+  Wechsel warten↔fahrt wird erst der neue Watcher angelegt, dann der alte entfernt (`tracker.js`). Bisher beendete
+  das Plugin mit dem letzten Watcher den Vordergrund-Dienst, und der aus dem Hintergrund neu gestartete Dienst bekam
+  von Android keine Positionen mehr. Punkte des alten Watchers zählen in der Überlappung nicht. Nur mit APK prüfbar.
+- **Kein stilles Verwerfen nach GPS-Ausfall:** Endet eine Fahrt über den Wächter (`stopp nach GPS-Ausfall`), wird sie
+  nicht mehr als „zu kurz“ verworfen. Stattdessen „GPS unterwegs ausgefallen“: Akku jetzt, dann „Fahrt nachtragen“
+  (Beginn und Start-Akku vorbelegt, das Bruchstück wird verworfen, Log `gps-ausfall, nachtragen`) oder verwerfen.
+  Test in `tests/erkennung.test.js`.
 - **Handy mit in den Laden** (bisher lag es bei den Testfahrten im Auto): Nach dem ersten Halt hinter einer Fahrt
   werden langsame Punkte (unter 7 km/h) zurückgehalten. Kommt wieder Fahrt oder geht es weiter als 150 m, zählen sie
   nachträglich zur Strecke (Stau, Rangieren). Endet die Fahrt, war es der Fußweg: Ende, Parkplatz und km bleiben am

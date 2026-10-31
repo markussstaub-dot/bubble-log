@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { fahrplan, BEXBACH, T0 } from './hilfe.js';
 import { createErkennung, distanz, gpsStand, gpsAusfall, fahrtEnde, SCHWELLEN } from '../src/erkennung.js';
-import { spieleAb, pruefe } from '../src/replay.js';
+import { spieleAb, pruefe, gpsZuLoc } from '../src/replay.js';
 
 const fahrten = plan => spieleAb(fahrplan(plan)).fahrten;
 const typen = r => r.ereignisse.map(e => e.typ);
@@ -175,6 +175,22 @@ test('Wächter: Punkt aus dem Warten zählt nicht, nur Punkte der Fahrt selbst',
   const stand = gpsStand(null, { p: BEXBACH, t: T0, tempo: 5 });
   assert.equal(e.pruefeAusfall(T0 + SCHWELLEN.STOPP_DAUER - 1, stand), false);
   assert.equal(e.pruefeAusfall(T0 + SCHWELLEN.STOPP_DAUER, stand), true);
+});
+
+// Testfahrt 31.10.2026: GPS nach 0,17 km weg, beim Öffnen als „zu kurz“ verworfen. Der Stopp nach Ausfall ist markiert,
+// damit main.js die Fahrt zum Nachtragen anbietet; ein normaler Stopp nicht.
+test('Stopp nach GPS-Ausfall trägt ausfall, normaler Stopp nicht', () => {
+  const stopps = [];
+  const e = createErkennung({ onStopp: ende => stopps.push(ende) });
+  e.setModus('fahrt');
+  e.pruefeAusfall(T0 + SCHWELLEN.STOPP_DAUER, gpsStand(null, { p: BEXBACH, t: T0, tempo: 5 }));
+  assert.equal(stopps.at(-1).ausfall, true);
+  const normal = [];
+  const e2 = createErkennung({ onStopp: ende => normal.push(ende) });
+  e2.setModus('fahrt');
+  for (const z of fahrplan([{ s: 120, v: 10 }, { s: 240, v: 0 }])) e2.verarbeite(gpsZuLoc(z));
+  assert.equal(normal.length, 1);
+  assert.equal(normal[0].ausfall, undefined);
 });
 
 // Testfahrt 29.10.2026: Fahrt vergessen, um 17:00 zu Hause Akku eingetippt → Start per Hand, letzter Punkt von 16:22

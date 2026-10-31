@@ -960,6 +960,12 @@ function fahrtBeenden(zeit = Date.now()) {
 }
 function endeSheet() {
   const o = eigen.offen; if (!o) return;
+  if (o.gpsAusfall) {   // Strecke unvollständig (Testfahrt 31.10.2026): nicht so speichern, sondern nachtragen
+    socSheet('GPS unterwegs ausgefallen', socJetzt(), ['ntAusfall', 'Fahrt nachtragen', ['discard', 'Fahrt verwerfen']],
+      `Ab ${uhrzeit(o.gpsAusfall)} hat die App keine Position mehr bekommen, aufgezeichnet sind nur ${km(o.km)}. Akkustand <b>jetzt</b> übernehmen, dann Ende und Strecke nachtragen.`);
+    V.fotoZiel = 'ende';
+    return;
+  }
   if (o.startSoc == null) {   // erst den Start nachtragen, dann das Ende
     socSheet(`Fahrt beendet · ${km(o.km)}`, socJetzt(), ['startok', 'Weiter'], 'Zuerst den Akkustand beim <b>Start</b> nachtragen. Vorgeschlagen ist der letzte bekannte Stand.');
     return;
@@ -982,7 +988,7 @@ function plausibel() {
 }
 // Automatisch erkannte Mini-Fahrt (Rangieren, GPS-Wackler) ohne Rückfrage verwerfen
 function kurzVerwerfen(o, zeit) {
-  if (o.manuell || o.km >= MIN_KM) return false;
+  if (o.manuell || o.gpsAusfall || o.km >= MIN_KM) return false;   // nach GPS-Ausfall fehlt nur der Rest der Strecke
   devlog.log('fahrt', { schritt: 'verworfen', ausgeloest: 'zu kurz', km: o.km, t1: zeit });
   fahrtVerwerfen(); toast(`Kurze Bewegung (${Math.round(o.km * 1000)} m) nicht als Fahrt gespeichert`);
   return true;
@@ -1091,8 +1097,10 @@ const tracker = createTracker({
   },
   onStopp(ruhe) {
     const o = eigen.offen; if (!o || o.status !== 'faehrt') return;
+    if (ruhe.ausfall) o.gpsAusfall = ruhe.t;
     if (kurzVerwerfen(o, ruhe.t)) return;
-    melde(2, 'Fahrt beendet', `${km(o.km)} – tippen, um den Akkustand einzutragen.`);
+    if (o.gpsAusfall) melde(2, 'GPS unterwegs ausgefallen', 'Tippen, um die Fahrt nachzutragen.');
+    else melde(2, 'Fahrt beendet', `${km(o.km)} – tippen, um den Akkustand einzutragen.`);
     if (document.visibilityState === 'visible') fahrtBeenden(ruhe.t);
     else { o.status = 'beendet'; o.t1 = fahrtEnde(o.t0, ruhe.t); parkplatzSetzen(o); sichern(); bordnetz.fahrtEnde(o, { ruheNach: ruheNach(), sichtbar: false }); tracker.setModus(zielModus()); render(); devlog.log('fahrt', { schritt: 'ende', ausgeloest: 'hintergrund', km: o.km, t1: o.t1, gemeldet: ruhe.t }); }
   },
@@ -1281,6 +1289,14 @@ document.addEventListener('click', e => {
       const l = V.luecke;
       ntOeffnen({ ausAkku: true, vorgeschlagen: !!l, t0: l?.von ?? NaN, t1: Date.now(), start: socJetzt(), ende: wheelWert, endeQuelle: wheelHerkunft(), fotoEnde: V.fotoNeu });
       fotoBestaetigt(wheelWert); V.fotoNeu = null; break;
+    }
+    case 'ntAusfall': {   // Fahrt mit GPS-Ausfall: Bruchstück verwerfen, Nachtrag ab ihrem Beginn mit dem Akku von eben
+      const o = eigen.offen; if (!o) break;
+      const n = { ausAkku: true, vorgeschlagen: true, t0: o.t0, t1: NaN, start: o.startSoc ?? eigen.soc, startQuelle: o.startQuelle ?? 'vorschlag',
+        ende: wheelWert, endeQuelle: wheelHerkunft(), fotoEnde: V.fotoNeu };
+      devlog.log('fahrt', { schritt: 'verworfen', ausgeloest: 'gps-ausfall, nachtragen', km: o.km, t1: o.t1 });
+      fotoBestaetigt(wheelWert); V.fotoNeu = null;
+      fahrtVerwerfen(); ntOeffnen(n); break;
     }
     case 'ntNeu': ntOeffnen({ t0: NaN, t1: NaN, start: eigen.soc, ende: null }); break;
     case 'ntBearbeiten': {

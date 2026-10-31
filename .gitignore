@@ -14,3 +14,6 @@ tests/fahrten/*.erwartet.json
 # Windows/OneDrive
 desktop.ini
 Thumbs.db
+
+# Rohe Devlogs vom Handy (per adb geholt), nur lokal
+logs/
