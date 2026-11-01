@@ -2,7 +2,7 @@
 
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
-## Unveröffentlicht
+## Bubble-Log-1122 (01.11.2026, Version 2026.11.01-1122)
 - **Eigene Ladeorte mit Namen** (01.11.2026, z. B. „Mami“): Tab Laden → „Eigene Ladeorte“ → Namen eingeben, „Hier als
   Ladeort merken“ speichert den aktuellen Standort. Der Ort erscheint in der Ort-Auswahl (nach Zuhause), wird in 200 m
   Umkreis von selbst vorgeschlagen und hat 0 € als Strompreis. Nur auf dem Handy gespeichert (`eigen.ladeorte`), bleibt
