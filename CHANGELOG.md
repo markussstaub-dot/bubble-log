@@ -2,7 +2,7 @@
 
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
-## Unveröffentlicht
+## Bubble-Log-0816 (01.11.2026, Version 2026.11.01-0816)
 - **Fix GPS weg nach Fahrtbeginn im Hintergrund** (Testfahrt 31.10.2026, `logs/AUSWERTUNG-2026-10-31.md`): Beim
   Wechsel warten↔fahrt wird erst der neue Watcher angelegt, dann der alte entfernt (`tracker.js`). Bisher beendete
   das Plugin mit dem letzten Watcher den Vordergrund-Dienst, und der aus dem Hintergrund neu gestartete Dienst bekam
