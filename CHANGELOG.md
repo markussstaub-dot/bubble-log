@@ -2,6 +2,13 @@
 
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
+## Unveröffentlicht
+- **Zwei Fahrten hintereinander** (Testfahrt 01.11.2026, `logs/AUSWERTUNG-2026-11-01.md`): Wartete die vorige Fahrt
+  noch auf den Akkustand, wurde jeder neue Start still ignoriert (24 km gingen verloren). Jetzt wird sie zurückgestellt
+  (`eigen.ohneAkku`), die neue Fahrt beginnt. Unter „Heute“ erscheint „Fahrt wartet auf den Akkustand“; der Dialog fragt
+  den Akku am Ende dieser Fahrt. Ältere Fahrten werden nach Beginn einsortiert und überschreiben den neueren Akkustand
+  nicht. Ignorierte Starts stehen im Log (`start ignoriert`). Im Browser mit SIM geprüft.
+
 ## Bubble-Log-1122 (01.11.2026, Version 2026.11.01-1122)
 - **Eigene Ladeorte mit Namen** (01.11.2026, z. B. „Mami“): Tab Laden → „Eigene Ladeorte“ → Namen eingeben, „Hier als
   Ladeort merken“ speichert den aktuellen Standort. Der Ort erscheint in der Ort-Auswahl (nach Zuhause), wird in 200 m

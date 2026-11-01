@@ -169,6 +169,9 @@ function viewHeute() {
     ${o ? `<button class="card between" data-act="${o.status === 'faehrt' ? 'zeigen' : 'ende'}" style="text-align:left;border-color:var(--accent)">
       <div><div class="label">${o.status === 'faehrt' ? 'Fahrt läuft' : 'Fahrt beendet'}</div><b>${km(o.km)} seit ${uhrzeit(o.t0)}</b></div>
       <span class="pill good">${o.status === 'faehrt' ? 'Anzeigen' : 'Akku eintragen'}</span></button>` : ''}
+    ${ohneAkku().map((x, i) => `<button class="card between" data-act="ohneAkku" data-i="${i}" style="text-align:left">
+      <div><div class="label">Fahrt wartet auf den Akkustand</div><b>${km(x.km)} · ${x.tag ?? datum(x.t0)} ${uhrzeit(x.t0)}–${uhrzeit(x.t1 ?? x.t0)}</b></div>
+      <span class="pill warn">Nachtragen</span></button>`).join('')}
     <section class="card hero">
       ${ring(soc)}
       <div style="min-width:0">
@@ -1018,7 +1021,8 @@ function endeSheet() {
     return;
   }
   socSheet(`Fahrt beendet · ${km(o.km)}`, schaetzung(o), ['save', 'Fahrt speichern', ['discard', 'Fahrt verwerfen']],
-    'Akkustand <b>jetzt</b> vom Microlino-Display übernehmen. Vorgeschlagen ist die Schätzung aus deinem Verbrauch.',
+    o.zurueckgestellt ? `Akkustand <b>am Ende dieser Fahrt</b> (${uhrzeit(o.t1 ?? o.t0)}), nicht von jetzt: danach bist du schon weitergefahren. Weißt du ihn nicht mehr, nimm die Schätzung.`
+      : 'Akkustand <b>jetzt</b> vom Microlino-Display übernehmen. Vorgeschlagen ist die Schätzung aus deinem Verbrauch.',
     `<div class="label">Zweck</div><div class="chips" id="zweck">${ZWECKE.map((z, i) => `<button class="chip" data-zweck="${z}" aria-pressed="${i === 0}">${z}</button>`).join('')}</div>
      <p class="small warn" id="plausi" style="margin:0" hidden></p>`);
   V.plausiGefragt = false;
@@ -1060,7 +1064,10 @@ function fahrtSpeichern() {
   if (hm) { f.hm = hm.auf; f.hmAb = hm.ab; }
   if (rau != null) Object.assign(f, { rau, brems: o.brems ?? 0, beschl: o.beschl ?? 0, ausschlaege: o.ausschlaege ?? [] });
   { const { punkte, ausschlaege, ...kurzfassung } = f; devlog.log('fahrt', { schritt: 'gespeichert', ...kurzfassung, punkte: punkte.length }); }
-  const vorher = avg(); eigen.fahrten.push(f); eigen.soc = ende; eigen.socT = t1; eigen.offen = null; sichern();
+  // nach Beginn einsortieren: eine zurückgestellte Fahrt kann älter sein als die letzte gespeicherte
+  const vorher = avg(); eigen.fahrten.splice(eigen.fahrten.findLastIndex(x => x.t0 <= f.t0) + 1, 0, f); eigen.offen = null;
+  if (eigen.socT == null || t1 >= eigen.socT) { eigen.soc = ende; eigen.socT = t1; }   // ein älteres Ende überschreibt den neueren Stand nicht
+  sichern();
   tracker.setModus(zielModus());
   const kurz = f.start - f.ende < 3 || f.km < 1, v = kurz ? 0 : (f.start - f.ende) / f.km, steig = steigAnteil(f);
   const d = kurz ? 0 : Math.round(((v - steig / f.km) / vorher - 1) * 100);   // Vergleich ohne den Anteil der Steigung
@@ -1113,11 +1120,27 @@ function ausschlaegeEinordnen(o, jetzt) {
   });
 }
 
+// Beendete Fahrten, die noch auf den Akkustand warten, während schon die nächste läuft
+const ohneAkku = () => eigen.ohneAkku || [];
+function zurueckstellen() {
+  const o = eigen.offen; o.zurueckgestellt = true;
+  eigen.ohneAkku = [...ohneAkku(), o]; eigen.offen = null; sichern();
+  devlog.log('fahrt', { schritt: 'zurückgestellt', t0: o.t0, t1: o.t1, km: o.km });
+}
+function ohneAkkuOeffnen(i) {
+  if (eigen.offen) { toast('Erst die laufende Fahrt abschließen.'); return; }
+  const [o] = eigen.ohneAkku.splice(i, 1); if (!o) return;
+  eigen.offen = o; sichern(); render(); endeSheet();
+}
+
 // Fahrterkennung: Rückmeldungen vom GPS
 const tracker = createTracker({
   onLog(typ, daten) { devlog.log(typ, daten); if (typ === 'gps') V.devGps = daten; },
   onStart(start, punkt) {
-    if (eigen.offen) return;
+    // Testfahrt 01.11.2026: Fahrt 1 wartete nach dem Ende im Hintergrund noch auf den Akkustand, und alle Starts
+    // der Fahrt 2 (24 km) wurden still ignoriert. Eine beendete Fahrt wird darum zurückgestellt, die neue beginnt.
+    if (eigen.offen?.status === 'beendet') zurueckstellen();
+    if (eigen.offen) { devlog.log('fahrt', { schritt: 'start ignoriert', offen: eigen.offen.status }); return; }
     fahrtBeginnen({ startSoc: null, punkte: [start.p, punkt.p], km: distanz(start.p, punkt.p) / 1000, manuell: false });
     eigen.offen.gps = gpsStand(null, punkt);
     if (V.sandbox) {   // im Simulator nicht unterbrechen: Start-Akku = aktueller Stand, Anzeige oben im Sim-Tab
@@ -1368,6 +1391,7 @@ document.addEventListener('click', e => {
     case 'markePunkt': markieren('punkt', d.key, d.wert); break;
     case 'markeBetreiber': markieren('betreiber', d.key, d.wert); break;
     case 'zielFavorit': zielPruefen(favoriten()[Number(d.i)]); break;
+    case 'ohneAkku': ohneAkkuOeffnen(Number(d.i)); break;
     case 'wegeHolen': {
       const r = V.zroute, z = V.zielwahl; if (!r?.start || !z) break;
       V.wege = 'laedt'; render();
