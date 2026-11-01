@@ -2,6 +2,15 @@
 
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
+## Unveröffentlicht
+- **Eigene Ladeorte mit Namen** (01.11.2026, z. B. „Mami“): Tab Laden → „Eigene Ladeorte“ → Namen eingeben, „Hier als
+  Ladeort merken“ speichert den aktuellen Standort. Der Ort erscheint in der Ort-Auswahl (nach Zuhause), wird in 200 m
+  Umkreis von selbst vorgeschlagen und hat 0 € als Strompreis. Nur auf dem Handy gespeichert (`eigen.ladeorte`), bleibt
+  beim Löschen aller Daten wie die gemerkten Ziele erhalten.
+- **Mini-Navi** (Spielerei): Im Ziel-Check „Andere Wege vergleichen“ holt bis zu drei Wege von OSRM, je mit km, Minuten,
+  Höhenmetern und Ankunfts-Akku. Antippen schaltet Karte und Rechnung um; dazu eine Abbiegeliste auf Deutsch
+  (`anweisung()` in `src/route.js`). OSRM liefert oft nur einen Weg; eigene Lieblingsstrecken kennt es nicht.
+
 ## Bubble-Log-0816 (01.11.2026, Version 2026.11.01-0816)
 - **Fix GPS weg nach Fahrtbeginn im Hintergrund** (Testfahrt 31.10.2026, `logs/AUSWERTUNG-2026-10-31.md`): Beim
   Wechsel warten↔fahrt wird erst der neue Watcher angelegt, dann der alte entfernt (`tracker.js`). Bisher beendete

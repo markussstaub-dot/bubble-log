@@ -12,7 +12,7 @@ import { scrollrad } from './scrollrad.js';
 import { herkunft, nurSchaetzung } from './herkunft.js';
 import * as sensoren from './sensoren.js';
 import * as devlog from './devlog.js';
-import { suchen, route as routeBerechnen } from './route.js';
+import { suchen, route as routeBerechnen, wege as wegeBerechnen } from './route.js';
 import * as lade from './laden.js';
 import * as nt from './nachtragen.js';
 import * as dialoge from './dialoge.js';
@@ -145,7 +145,8 @@ function hierHolen() {   // eigener Standort nur, solange die Karte "Heute" offe
   navigator.geolocation.getCurrentPosition(pos => {
     V.hier = [pos.coords.latitude, pos.coords.longitude];
     const tippt = document.activeElement?.id === 'zSuche';
-    if ((V.tab === 'heute' || V.tab === 'reichweite' && !tippt) && !sheetOffen() && !V.fahrtAnsicht) render();
+    const laden = V.tab === 'laden' && !V.lOrt && !document.activeElement?.closest?.('form');   // Ort vorschlagen, solange niemand tippt
+    if ((V.tab === 'heute' || V.tab === 'reichweite' && !tippt || laden) && !sheetOffen() && !V.fahrtAnsicht) render();
   }, () => {}, { enableHighAccuracy: true, maximumAge: 60000, timeout: 15000 });
 }
 function parkplatzKarte() {
@@ -285,7 +286,7 @@ function startpunkt() {   // aktueller Standort, sonst der Abstellort, sonst Zuh
   });
 }
 async function zielPruefen(z) {
-  V.zielwahl = z; V.treffer = null; V.zroute = 'laedt'; render();
+  V.zielwahl = z; V.treffer = null; V.zroute = 'laedt'; V.wege = null; V.wegIdx = 0; render();
   const start = await startpunkt();
   if (!start) { V.zroute = { fehler: 'Eigener Standort unbekannt. Standort freigeben oder einmal fahren, damit es einen Abstellort gibt.' }; render(); return; }
   const fav = favorit(z.p), abZuhause = eigen.zuhause && nahe(start.p, eigen.zuhause.p, ZUHAUSE_RADIUS);
@@ -313,6 +314,25 @@ function zielRechnung(r, retour = V.retour) {
   const steig = steigProzent(r.auf - REKUP * r.ab) + (retour ? steigProzent(r.ab - REKUP * r.auf) : 0);   // zurück werden die Abfahrten zu Steigungen
   const ankunft = Math.round(soc - basis - kalt - steig);
   return { soc, t, weg, basis, kalt, steig, ankunft, urteil: ankunft >= 15 ? ['good', 'Reicht'] : ankunft >= 5 ? ['warn', 'Knapp'] : ['bad', 'Unterwegs laden'] };
+}
+// Mini-Navi: andere Wege zum Ziel vergleichen (km, Höhenmeter, Ankunft) und eine Abbiegeliste für den gewählten
+const meter = m => m < 1000 ? `${Math.round(m / 10) * 10} m` : km(m / 1000);
+function miniNavi(r) {
+  const w = V.wege;
+  if (!w) return `<button class="btn" data-act="wegeHolen" style="align-self:flex-start">Andere Wege vergleichen · Mini-Navi</button>`;
+  if (w === 'laedt') return `<section class="card"><div class="label">Mini-Navi</div><p class="small muted" style="margin:6px 0 0">Wege und Höhenmeter werden berechnet …</p></section>`;
+  if (w.fehler) return `<section class="card"><div class="label">Mini-Navi</div><p class="small bad" style="margin:6px 0 0">${esc(w.fehler)}</p></section>`;
+  const gew = w[V.wegIdx] || w[0];
+  return `<section class="card">
+    <div class="label">Mini-Navi · ${w.length === 1 ? 'nur ein sinnvoller Weg gefunden' : `${w.length} Wege`}</div>
+    <div class="list" style="margin-top:8px">${w.map((x, i) => { const a = zielRechnung(x); return `
+      <button class="card between" data-act="wegWahl" data-i="${i}" aria-pressed="${i === V.wegIdx}" style="text-align:left">
+        <span><b>Weg ${'ABC'[i]}</b> · ${km(x.km)} · ${Math.round(x.minuten)} min<br><span class="small muted">${x.hoeheBekannt ? `↑ ${x.auf} m / ↓ ${x.ab} m` : 'Höhenmeter fehlen'}</span></span>
+        <b class="mono ${a.urteil[0]}">${a.ankunft} %</b></button>`; }).join('')}</div>
+    <details style="margin-top:8px"><summary class="small"><b>Abbiegeliste Weg ${'ABC'[V.wegIdx] || 'A'}</b> (${gew.schritte.length} Schritte)</summary>
+      <ol class="small" style="margin:6px 0 0;padding-left:20px">${gew.schritte.map(s => `<li>${esc(s.text)}${s.m ? ` <span class="muted">· dann ${meter(s.m)}</span>` : ''}</li>`).join('')}</ol></details>
+    <p class="small muted" style="margin:6px 0 0">Weg antippen: Karte und Rechnung oben folgen. Die Wege kommen von OSRM, eigene Lieblingsstrecken (z. B. über den Berg) kennt es nicht.</p>
+  </section>`;
 }
 function viewReichweite() {
   if (!V.hier) hierHolen();
@@ -349,6 +369,7 @@ function viewReichweite() {
           <div class="between" style="border-top:1px solid var(--line);padding-top:6px"><span>${V.retour ? 'Zurück' : 'Ankunft'} · etwa ${Math.round(r.minuten * (V.retour ? 2 : 1))} min Fahrt</span><b class="mono ${x.urteil[0]}">${x.ankunft} %</b></div>
         </div>
       </section>
+      ${miniNavi(r)}
       ${ladenAbschnitt(r, z)}`;
   }
   return `
@@ -535,8 +556,33 @@ function karteZeichnen() {
   groessen();
 }
 const LADEORTE = ['Zuhause', 'Bei Freunden', 'Arbeit', 'Öffentlich'];
-// Preisvorschlag: zuletzt eingetragener Preis an diesem Ort, sonst Haushaltsstrom bzw. gratis bei Freunden
-const preisFuer = ort => eigen.laden.findLast(l => l.ort === ort)?.preis ?? (ort === 'Bei Freunden' ? 0 : STROMPREIS);
+const LADEORT_RADIUS = 200;   // m: so nah an einem eigenen Ladeort wird er beim Laden vorgeschlagen
+// Eigene Ladeorte mit Namen (z. B. „Mami“), nur auf diesem Handy gespeichert: { name, p }
+const eigeneLadeorte = () => eigen.ladeorte || [];
+const ortListe = () => [LADEORTE[0], ...eigeneLadeorte().map(o => o.name), ...LADEORTE.slice(1)];
+// Preisvorschlag: zuletzt eingetragener Preis an diesem Ort, sonst Haushaltsstrom bzw. gratis bei Freunden und eigenen Orten
+const preisFuer = ort => eigen.laden.findLast(l => l.ort === ort)?.preis
+  ?? (ort === 'Bei Freunden' || eigeneLadeorte().some(o => o.name === ort) ? 0 : STROMPREIS);
+// Ort fürs Formular: eigene Wahl, sonst ein eigener Ladeort oder Zuhause in der Nähe des Standorts
+function ortVorschlag() {
+  if (V.lOrt && ortListe().includes(V.lOrt)) return V.lOrt;
+  const hier = V.hier || eigen.parkplatz?.p;
+  const nah = hier && eigeneLadeorte().find(o => nahe(o.p, hier, LADEORT_RADIUS));
+  return nah ? nah.name : 'Zuhause';
+}
+function ladeorteKarte() {
+  const liste = eigeneLadeorte();
+  return `<details class="card"${V.ladeorteOffen ? ' open' : ''} id="ladeorteKarte"><summary><b>Eigene Ladeorte</b> <span class="small muted">${liste.length ? liste.map(o => esc(o.name)).join(', ') : 'z. B. bei Familie'}</span></summary>
+    <div class="list" style="margin-top:8px">
+      ${liste.map((o, i) => `<div class="between"><span>${esc(o.name)}</span><button class="btn-link" data-act="ladeortLoeschen" data-i="${i}" aria-label="${esc(o.name)} löschen">Löschen</button></div>`).join('')}
+      <form id="ladeortForm" class="list">
+        <div class="field"><label for="ladeortName">Name für den Ort, an dem du gerade stehst</label><input id="ladeortName" maxlength="30" placeholder="z. B. Mami" autocomplete="off"></div>
+        <p class="small muted" id="ladeortFehler" hidden></p>
+        <button class="btn block" type="submit">Hier als Ladeort merken</button>
+        <span class="small muted">Wird beim Laden in der Nähe (${LADEORT_RADIUS} m) von selbst vorgeschlagen, Strompreis 0 €. Bleibt nur auf diesem Handy.</span>
+      </form>
+    </div></details>`;
+}
 // Ladepunkte zur Auswahl: in der Nähe des eigenen Standorts, bewährte zuerst
 function ladepunktOptionen() {
   const start = V.hier || eigen.parkplatz?.p || eigen.zuhause?.p; if (!start) return [];
@@ -549,14 +595,14 @@ function ladepunktAuswahl() {
 function viewLaden() {
   hierHolen();
   const l = ladungen().slice().reverse(), kwh = x => (x.bis - x.von) / 100 * eigen.akku;
-  const ort = V.lOrt || 'Zuhause';
+  const ort = ortVorschlag();
   return `
     <section class="card">
       <div class="label">Neuer Ladevorgang</div>
       <form id="ladeForm" class="list" style="margin-top:8px">
         <div class="grid2"><div class="field"><label for="lVon">Akku vorher %</label><input id="lVon" type="number" inputmode="numeric" min="0" max="100" value="${socJetzt()}"></div>
         <div class="field"><label for="lBis">Akku nachher %</label><input id="lBis" type="number" inputmode="numeric" min="0" max="100" value="100"></div></div>
-        <div class="grid2"><div class="field"><label for="lOrt">Ort</label><select id="lOrt">${LADEORTE.map(o => `<option${o === ort ? ' selected' : ''}>${o}</option>`).join('')}</select></div>
+        <div class="grid2"><div class="field"><label for="lOrt">Ort</label><select id="lOrt">${ortListe().map(o => `<option${o === ort ? ' selected' : ''}>${o}</option>`).join('')}</select></div>
         <div class="field"><label for="lPreis">€ pro kWh</label><input id="lPreis" type="number" inputmode="decimal" min="0" step="0.01" value="${preisFuer(ort)}"></div></div>
         <div class="field" id="lPunktFeld"${ort === 'Öffentlich' ? '' : ' hidden'}><label for="lPunkt">Ladepunkt</label>${ort === 'Öffentlich' ? ladepunktAuswahl() : ''}
           <span class="small muted">Nächste Säulen von ${V.hier ? 'deinem Standort' : eigen.parkplatz ? 'deinem Abstellort' : 'Zuhause'}. Nach dem Speichern kannst du sie gleich markieren.</span></div>
@@ -564,6 +610,7 @@ function viewLaden() {
         <button class="btn primary block" type="submit">Ladevorgang speichern</button>
       </form>
     </section>
+    ${ladeorteKarte()}
     <div class="list">${l.map(x => `
       <section class="card between"${x.ladepunkt ? ` data-act="ladepunkt" data-key="${x.ladepunkt}" role="button" style="cursor:pointer"` : ''}><div style="min-width:0"><b>${esc(x.ort)}${x.ladepunktName ? ` · ${esc(x.ladepunktName)}` : ''}</b><div class="muted small">${esc(x.tag)} · ${x.von} → ${x.bis} %${x.ladepunkt ? ` · ${esc(lade.adresse(lade.finde(x.ladepunkt) || { a: '', o: '' }))}` : ''}</div></div>
         <div style="text-align:right"><div class="mono">${de(kwh(x), 1)} kWh</div><div class="muted small mono">${x.preis ? `${de(kwh(x) * x.preis, 2)} €` : 'gratis'}</div></div></section>`).join('')}</div>`;
@@ -1321,6 +1368,22 @@ document.addEventListener('click', e => {
     case 'markePunkt': markieren('punkt', d.key, d.wert); break;
     case 'markeBetreiber': markieren('betreiber', d.key, d.wert); break;
     case 'zielFavorit': zielPruefen(favoriten()[Number(d.i)]); break;
+    case 'wegeHolen': {
+      const r = V.zroute, z = V.zielwahl; if (!r?.start || !z) break;
+      V.wege = 'laedt'; render();
+      wegeBerechnen(r.start.p, z.p).then(w => { if (V.zielwahl !== z) return; V.wege = w; V.wegIdx = 0; V.zroute = { ...w[0], start: r.start }; devlog.log('wege', { kurz: z.kurz, anzahl: w.length, km: w.map(x => +x.km.toFixed(1)) }); render(); })
+        .catch(e => { V.wege = { fehler: `Wege nicht berechnet (${e.message}). Ohne Netz geht das Mini-Navi nicht.` }; render(); });
+      break;
+    }
+    case 'wegWahl': {
+      const w = V.wege?.[Number(d.i)]; if (!w) break;
+      V.wegIdx = Number(d.i); V.zroute = { ...w, start: V.zroute.start }; render(); break;
+    }
+    case 'ladeortLoeschen': {
+      const weg = eigeneLadeorte()[Number(d.i)]; if (!weg) break;
+      eigen.ladeorte = eigeneLadeorte().filter(o => o !== weg); if (V.lOrt === weg.name) V.lOrt = null; V.ladeorteOffen = true; sichern(); render();
+      toast(`„${weg.name}“ gelöscht. Frühere Ladevorgänge behalten den Namen.`); break;
+    }
     case 'zielListe': V.zielwahl = null; V.zroute = null; V.retour = false; render(); break;
     case 'zielMerken': {
       const z = V.zielwahl; if (!z) break;
@@ -1356,8 +1419,8 @@ document.addEventListener('click', e => {
     case 'loeschen': V.loeschen = true; settingsSheet(); break;
     case 'loeschenNein': V.loeschen = false; settingsSheet(); break;
     case 'loeschenJa': {
-      const { erfassung, parkplatzMerken, entwickler, zuhause, favoriten: fav, startlisteGesetzt, ladestrom: a, ladekarte: lk, ladeErfahrung, fotoExport, bm6: g6 } = eigen;   // Einstellungen, Ziele und Lade-Erfahrung bleiben
-      eigen = { ...LEER, akku: eigen.akku, erfassung, parkplatzMerken, entwickler, zuhause, favoriten: fav, startlisteGesetzt, ladestrom: a, ladekarte: lk, ladeErfahrung, fotoExport, bm6: g6 }; foto.alleLoeschen(); V.loeschen = false; sichern(); tracker.setModus(zielModus());
+      const { erfassung, parkplatzMerken, entwickler, zuhause, favoriten: fav, startlisteGesetzt, ladestrom: a, ladekarte: lk, ladeErfahrung, fotoExport, bm6: g6, ladeorte } = eigen;   // Einstellungen, Ziele, Ladeorte und Lade-Erfahrung bleiben
+      eigen = { ...LEER, akku: eigen.akku, erfassung, parkplatzMerken, entwickler, zuhause, favoriten: fav, startlisteGesetzt, ladestrom: a, ladekarte: lk, ladeErfahrung, fotoExport, bm6: g6, ladeorte }; foto.alleLoeschen(); V.loeschen = false; sichern(); tracker.setModus(zielModus());
       overlay(''); render(); toast('Alle Daten gelöscht'); break;
     }
     case 'csv':
@@ -1423,6 +1486,16 @@ document.addEventListener('submit', e => {
       // ein eindeutiger Treffer wird gleich geprüft
       if (t.length === 1) zielPruefen(t[0]); else { V.treffer = t; render(); }
     }).catch(err => { V.treffer = null; toast('Suche nicht möglich. Ohne Netz geht der Ziel-Check nicht.'); devlog.log('fehler', { quelle: 'suche', text: err.message }); });
+    return;
+  }
+  if (e.target.id === 'ladeortForm') {
+    e.preventDefault();
+    const name = $('ladeortName').value.trim(), fehler = $('ladeortFehler'), zeig = t => { fehler.hidden = false; fehler.className = 'small bad'; fehler.textContent = t; };
+    if (!name) return zeig('Gib dem Ort erst einen Namen.');
+    if (ortListe().includes(name)) return zeig(`„${name}“ gibt es schon.`);
+    if (!V.hier) { hierAbfrage = 0; hierHolen(); return zeig('Standort noch unbekannt. Kurz warten und nochmal tippen.'); }
+    eigen.ladeorte = [...eigeneLadeorte(), { name, p: [V.hier[0], V.hier[1]] }]; V.lOrt = name; V.ladeorteOffen = true; sichern();
+    devlog.log('ladeort', { neu: name }); render(); toast(`Ladeort „${name}“ gemerkt`);
     return;
   }
   if (e.target.id !== 'ladeForm') return; e.preventDefault();

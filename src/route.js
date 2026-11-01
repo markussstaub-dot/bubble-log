@@ -52,12 +52,8 @@ export function hoehenmeter(hoehen) {
   return { auf: Math.round(auf), ab: Math.round(ab) };
 }
 
-// { km, minuten, coords: [[lat, lon], …], auf, ab, hoeheBekannt }
-export async function route(von, nach) {
-  const url = `${OSRM}/${von[1]},${von[0]};${nach[1]},${nach[0]}?overview=full&geometries=geojson`;
-  const d = await holen(url);
-  const r = d.routes?.[0];
-  if (d.code !== 'Ok' || !r) throw new Error(d.message || 'Keine Route gefunden');
+// OSRM-Route → { km, minuten, coords: [[lat, lon], …], auf, ab, hoeheBekannt }, Höhenmeter dazu von Open-Meteo
+async function mitHoehen(r) {
   const coords = r.geometry.coordinates.map(([lon, lat]) => [lat, lon]);
   const ergebnis = { km: r.distance / 1000, minuten: r.duration / 60, coords, auf: 0, ab: 0, hoeheBekannt: false };
   try {
@@ -67,4 +63,48 @@ export async function route(von, nach) {
     if (Array.isArray(h.elevation) && h.elevation.length === pts.length) Object.assign(ergebnis, hoehenmeter(h.elevation), { hoeheBekannt: true });
   } catch (e) { console.warn('Höhen nicht geladen', e); }
   return ergebnis;
+}
+
+export async function route(von, nach) {
+  const d = await holen(`${OSRM}/${von[1]},${von[0]};${nach[1]},${nach[0]}?overview=full&geometries=geojson`);
+  const r = d.routes?.[0];
+  if (d.code !== 'Ok' || !r) throw new Error(d.message || 'Keine Route gefunden');
+  return mitHoehen(r);
+}
+
+// ---------- Mini-Navi: bis zu drei Wege mit Abbiegeliste ----------
+const RICHTUNG = { left: 'links', right: 'rechts', 'slight left': 'leicht links', 'slight right': 'leicht rechts',
+  'sharp left': 'scharf links', 'sharp right': 'scharf rechts', straight: 'geradeaus', uturn: 'wenden' };
+// ein OSRM-Schritt als deutscher Satz, z. B. „rechts abbiegen auf Rombachstraße“
+export function anweisung(s) {
+  const m = s.maneuver || {}, r = RICHTUNG[m.modifier] || '', auf = s.name ? ` auf ${s.name}` : '';
+  switch (m.type) {
+    case 'depart': return `Losfahren${auf}`;
+    case 'arrive': return 'Ziel erreicht';
+    case 'roundabout': case 'rotary': case 'exit roundabout': case 'exit rotary':
+      return `Im Kreisverkehr ${m.exit ? `${m.exit}. Ausfahrt` : 'raus'}${auf}`;
+    case 'continue': case 'new name': return r && r !== 'geradeaus' ? `${r[0].toUpperCase()}${r.slice(1)} halten${auf}` : `Weiter${auf}`;
+    case 'fork': return `An der Gabelung ${r || 'weiter'}${auf}`;
+    case 'merge': return `Einfädeln${auf}`;
+    case 'on ramp': return `Auffahrt ${r}${auf}`.replace('  ', ' ');
+    case 'off ramp': return `Ausfahrt ${r}${auf}`.replace('  ', ' ');
+    case 'end of road': return `Am Ende der Straße ${r}${auf}`;
+    default: return r === 'wenden' ? 'Wenden' : r ? `${r[0].toUpperCase()}${r.slice(1)} abbiegen${auf}` : `Weiter${auf}`;
+  }
+}
+
+// [{ …route, schritte: [{ text, m }] }], die schnellste zuerst; OSRM liefert je nach Lage nur eine oder zwei Alternativen
+export async function wege(von, nach) {
+  const d = await holen(`${OSRM}/${von[1]},${von[0]};${nach[1]},${nach[0]}?overview=full&geometries=geojson&alternatives=3&steps=true`);
+  if (d.code !== 'Ok' || !d.routes?.length) throw new Error(d.message || 'Keine Route gefunden');
+  const out = [];
+  for (const r of d.routes.slice(0, 3)) {   // nacheinander, wegen der Abfragegrenze von Open-Meteo
+    const schritte = [];
+    for (const s of r.legs.flatMap(l => l.steps)) {   // „aus dem Kreisverkehr raus“ steckt schon in der Einfahrt: Strecke dort dazuzählen
+      if (/^exit (roundabout|rotary)$/.test(s.maneuver?.type) && schritte.length) schritte.at(-1).m += Math.round(s.distance);
+      else schritte.push({ text: anweisung(s), m: Math.round(s.distance) });
+    }
+    out.push({ ...(await mitHoehen(r)), schritte });
+  }
+  return out;
 }
