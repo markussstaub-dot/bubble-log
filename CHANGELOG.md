@@ -2,7 +2,7 @@
 
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
-## Unveröffentlicht
+## Bubble-Log-1234 (01.11.2026, Version 2026.11.01-1234)
 - **Zwei Fahrten hintereinander** (Testfahrt 01.11.2026, `logs/AUSWERTUNG-2026-11-01.md`): Wartete die vorige Fahrt
   noch auf den Akkustand, wurde jeder neue Start still ignoriert (24 km gingen verloren). Jetzt wird sie zurückgestellt
   (`eigen.ohneAkku`), die neue Fahrt beginnt. Unter „Heute“ erscheint „Fahrt wartet auf den Akkustand“; der Dialog fragt
