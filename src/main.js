@@ -6,6 +6,7 @@ import { laden, speichern, speichernSpaeter, LEER } from './store.js';
 import { createTracker, distanz, fahrtEnde, gpsStand } from './tracker.js';
 import { temperatur, tiefstwert } from './wetter.js';
 import { verteilen } from './tagesabschluss.js';
+import { unscharf, kreisMitte, beruehrt, tagestour } from './logbuch.js';
 import { csvText, fotosVon, teilen, dateiname, speichern as csvSpeichern } from './export.js';
 import * as foto from './foto.js';
 import { socPlausibel } from './fototext.js';
@@ -230,7 +231,7 @@ function viewFahrten() {
         <div><div class="num">${de(avg(liste.length ? liste : fahrten()), 2)}</div><div class="muted small">Ø %/km</div></div>
       </div>
     </section>
-    <div class="list">${liste.map(f => `
+    <div class="list">${liste.map((f, i) => `${i === 0 || liste[i - 1].tag !== f.tag ? `<button class="btn tagkopf" data-act="tagestour" data-tag="${esc(f.tag)}">🗺️ Tagestour ${esc(f.tag)} · ${liste.filter(x => x.tag === f.tag).length} Fahrten</button>` : ''}
       <section class="card trip"${f.nachgetragen ? ` data-act="ntBearbeiten" data-id="${esc(f.id)}" role="button" style="cursor:pointer"` : ''}>${miniRoute(f)}
         <div style="min-width:0"><b>${titel(f)}</b>${f.nachgetragen ? '<span class="pill siegel">nachgetragen</span>' : ''}
           <div class="muted small">${esc(f.tag)} · ${f.nachgetragen ? '≈ ' : ''}${km(f.km)} · ${f.start} → ${f.ende} % · ${esc(f.zweck)}${f.temp != null ? ` · ${f.temp} °C` : ''}${f.hm != null ? ` · ↑ ${f.hm} Hm` : ''}${f.brems ? ` · ${f.brems}× stark gebremst` : ''}${f.nachgetragen ? ` · ${f.strecke?.quelle === 'ziel' ? `${esc(f.strecke.ziel)}${f.strecke.retour ? ', hin und zurück' : ''}` : 'km von Hand'}` : ''}</div>
@@ -1163,6 +1164,74 @@ function ohneAkkuOeffnen(i) {
   eigen.offen = o; sichern(); render(); endeSheet();
 }
 
+// ---------- Visuelles Logbuch: Tagestour (SPEC-logbuch.md) ----------
+const privatRadius = () => eigen.privatRadius ?? 400;
+const privatOrte = () => [eigen.zuhause && { name: 'Zuhause', p: eigen.zuhause.p }, ...eigeneLadeorte().map(o => ({ name: o.name, p: o.p }))].filter(Boolean);
+let tourKarte = null;
+function tagestourSheet(tag) {
+  const tf = fahrten().filter(f => f.tag === tag); if (!tf.length) return;
+  const t = tagestour(tf), r = privatRadius();
+  sheet(`<div class="label">Tagestour · ${esc(tag)}</div>
+    <div class="stat3">
+      <div><div class="num">${de(t.km, 1)}</div><div class="muted small">km</div></div>
+      <div><div class="num">${t.verbraucht}</div><div class="muted small">% Akku</div></div>
+      <div><div class="num">${t.fahrten.length}</div><div class="muted small">Fahrten</div></div>
+    </div>
+    <p class="small" style="margin:0">${[t.hm ? `↑ ${t.hm} Hm` : '', t.geladen ? `⚡ +${t.geladen} % geladen` : '', t.kalt ? `❄️ Kaltstart${t.nachtMin != null ? `, Nacht ${t.nachtMin} °C` : ''}` : '', t.km >= 1 && t.verbraucht ? `${de(t.verbraucht / t.km, 2)} %/km` : ''].filter(Boolean).join(' · ')}</p>
+    <div id="tKarte" class="tkarte" aria-label="Karte der Tagestour"></div>
+    ${tourHoehe(t)}${tourAkku(t)}
+    <div class="list small">${t.fahrten.map(f => `<div class="between"><span>${esc(f.von)}–${esc(f.nach)} · ${km(f.km)}${f.kalt ? ' ❄️' : ''}${f.endeQuelle === 'vorschlag' ? ' <span class="muted">(geschätzt)</span>' : ''}</span><b class="mono">${f.start} → ${f.ende} %</b></div>`).join('')}</div>
+    <p class="small muted" style="margin:0">${r ? `Zuhause und eigene Ladeorte sind auf ${r} m unscharf (Einstellungen).` : 'Unschärfe ist aus (Einstellungen).'} Karte: © OpenStreetMap.</p>
+    <button class="btn primary block" data-act="close">Schließen</button>`, 'tour');
+  requestAnimationFrame(() => tourKarteZeichnen(t, r));
+}
+function tourKarteZeichnen(t, r) {
+  if (tourKarte) { tourKarte.remove(); tourKarte = null; }
+  const el = $('tKarte'); if (!el) return;
+  const farbe = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#0E8F7E';
+  const orte = r ? beruehrt(t.fahrten, privatOrte(), r) : [], alle = [];
+  tourKarte = L.map(el, { zoomControl: false, attributionControl: true });
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '© OpenStreetMap' }).addTo(tourKarte);
+  t.fahrten.forEach((f, i) => {
+    for (const ab of unscharf(f.punkte || [], orte.map(o => o.p), r)) {
+      const ll = ab.map(p => [p[0], p[1]]);
+      L.polyline(ll, { color: farbe, weight: 5, opacity: i % 2 ? 0.6 : 0.95 }).bindTooltip(`${f.von}–${f.nach} · ${km(f.km)}`).addTo(tourKarte);
+      alle.push(...ll);
+    }
+  });
+  for (const o of orte) {
+    const m = kreisMitte(o.p, r);
+    L.circle(m, { radius: r, color: '#E0A84A', weight: 2, dashArray: '6 6', fillOpacity: 0.12 }).bindTooltip(`${o.name} (unscharf)`, { permanent: true, direction: 'top' }).addTo(tourKarte);
+    alle.push(m);
+  }
+  if (alle.length) tourKarte.fitBounds(L.latLngBounds(alle), { padding: [24, 24] });
+  else el.innerHTML = '<p class="small muted" style="padding:12px;margin:0">Für diesen Tag ist keine Strecke aufgezeichnet (nur nachgetragene Fahrten).</p>';
+}
+// Höhenprofil über alle Fahrten des Tages, aus dem Barometer (Punkt [lat, lon, Höhe, …])
+function tourHoehe(t) {
+  const pts = []; let km0 = 0;
+  for (const f of t.fahrten) {
+    const P = f.punkte || []; let d = 0;
+    P.forEach((p, i) => { if (i) d += distanz(P[i - 1], p) / 1000; if (p[2] != null) pts.push([km0 + d, p[2]]); });
+    km0 += d || f.km || 0;
+  }
+  if (pts.length < 3) return '';
+  const hs = pts.map(p => p[1]), lo = Math.min(...hs), hi = Math.max(...hs), sp = Math.max(10, hi - lo), x = k => 6 + k / Math.max(0.1, km0) * 588, y = h => 104 - (h - lo) / sp * 90;
+  const linie = pts.map((p, i) => `${i ? 'L' : 'M'}${x(p[0]).toFixed(1)} ${y(p[1]).toFixed(1)}`).join('');
+  return `<figure style="margin:0"><div class="label">Höhe über den Tag · ${Math.round(sp)} m Unterschied</div>
+    <svg viewBox="0 0 600 112" width="100%" role="img" aria-label="Höhenprofil des Tages"><path d="${linie}L${x(pts.at(-1)[0])} 110L6 110Z" fill="var(--accent)" opacity=".18"/><path d="${linie}" fill="none" stroke="var(--accent)" stroke-width="2"/></svg></figure>`;
+}
+// Akku über den Tag: fallend beim Fahren, gestrichelt hoch beim Laden
+function tourAkku(t) {
+  const v = t.verlauf; if (v.length < 2) return '';
+  const t0 = v[0].t, t1 = v.at(-1).t, x = z => 6 + (z - t0) / Math.max(1, t1 - t0) * 588, y = s => 104 - s / 100 * 96;
+  const teile = v.slice(1).map((p, i) => { const a = v[i]; return `<line x1="${x(a.t).toFixed(1)}" y1="${y(a.soc).toFixed(1)}" x2="${x(p.t).toFixed(1)}" y2="${y(p.soc).toFixed(1)}" stroke="${p.art === 'laden' ? '#E0A84A' : 'var(--accent)'}" stroke-width="${p.art === 'fahrt' ? 3 : 1.5}"${p.art === 'fahrt' ? '' : ' stroke-dasharray="4 4"'}/>`; }).join('');
+  return `<figure style="margin:0"><div class="label">Akku über den Tag · ${uhrzeit(t0)}–${uhrzeit(t1)}</div>
+    <svg viewBox="0 0 600 112" width="100%" role="img" aria-label="Akkuverlauf des Tages"><line x1="6" x2="594" y1="${y(15)}" y2="${y(15)}" stroke="var(--bad, #c47a6a)" stroke-dasharray="2 4" opacity=".6"/>${teile}
+      ${v.filter(p => p.art !== 'stand').map(p => `<circle cx="${x(p.t).toFixed(1)}" cy="${y(p.soc).toFixed(1)}" r="3" fill="var(--accent)"/>`).join('')}
+      <text x="594" y="${y(15) - 4}" text-anchor="end" font-size="11" fill="currentColor" opacity=".6">15 % Sparmodus</text></svg></figure>`;
+}
+
 // ---------- Tagesabschluss: alle wartenden Fahrten mit einem Akkustand jetzt (und optional bekannten Zwischenwerten) ----------
 function tagFahrten() {
   const l = [...ohneAkku()]; if (eigen.offen?.status === 'beendet') l.push(eigen.offen);
@@ -1341,6 +1410,8 @@ function settingsSheet() {
       <p class="small" style="margin:0">${eigen.zuhause ? `<b>${esc(eigen.zuhause.name)}</b> (${eigen.zuhause.p.map(v => v.toFixed(3)).join(', ')}). Wege ab hier zu gemerkten Zielen speichert die App, sie gehen dann auch ohne Netz.` : 'Nicht festgelegt.'}</p>
       <div class="grid2"><button class="btn" data-act="zuhauseHier">Hier ist Zuhause</button>${eigen.zuhause ? `<button class="btn" data-act="zuhauseWeg">Entfernen</button>` : ''}</div>
     </section>
+    <div class="field"><label for="privatRadius">Unschärfe im Logbuch</label><select id="privatRadius">${[0, 200, 400, 800].map(m => `<option value="${m}" ${m === privatRadius() ? 'selected' : ''}>${m ? `${m} m um Zuhause und eigene Ladeorte` : 'Aus'}</option>`).join('')}</select>
+      <span class="small muted">Die Tagestour zeichnet Zuhause und eigene Ladeorte (z. B. Mami) nicht, sondern als gestrichelten Kreis mit leicht versetzter Mitte. So kannst du Bildschirmfotos zeigen, ohne Adressen preiszugeben.</span></div>
     <label class="switch card" for="parkplatzMerken"><span><b>Abstellort merken</b><br><span class="small muted">Merkt sich am Ende jeder Fahrt, wo der Microlino steht, und zeigt es unter „Heute“. Bleibt nur auf diesem Handy. Ausschalten löscht den gespeicherten Ort.</span></span>
       <input type="checkbox" id="parkplatzMerken" ${eigen.parkplatzMerken ? 'checked' : ''}></label>
     ${V.standortFehler ? `<button class="btn block" data-act="standort">Standort-Freigabe öffnen</button>` : ''}
@@ -1480,6 +1551,7 @@ document.addEventListener('click', e => {
     case 'zielFavorit': zielPruefen(favoriten()[Number(d.i)]); break;
     case 'ohneAkku': ohneAkkuOeffnen(Number(d.i)); break;
     case 'tagAbschluss': tagSheet(); break;
+    case 'tagestour': tagestourSheet(d.tag); break;
     case 'tagSpeichern': tagSpeichern(); break;
     case 'wegeHolen': {
       const r = V.zroute, z = V.zielwahl; if (!r?.start || !z) break;
@@ -1567,6 +1639,7 @@ document.addEventListener('change', e => {
     feld.hidden = !oeffentlich;
     if (oeffentlich && !$('lPunkt')) feld.querySelector('label').insertAdjacentHTML('afterend', ladepunktAuswahl());
   }
+  if (e.target.id === 'privatRadius') { eigen.privatRadius = Number(e.target.value); sichern(); toast(eigen.privatRadius ? `Unschärfe ${eigen.privatRadius} m` : 'Unschärfe aus'); }
   if (e.target.id === 'ladekarte') { eigen.ladekarte = e.target.value.trim() || 'Electroverse'; sichern(); }
   if (e.target.id === 'ladestrom') {
     const a = Number(e.target.value);

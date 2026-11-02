@@ -3,6 +3,12 @@
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
 ## Unveröffentlicht
+- **Visuelles Logbuch, Meilenstein 1** (`SPEC-logbuch.md`): Im Fahrten-Tab je Tag ein Knopf „🗺️ Tagestour“. Zeigt
+  Kennzahlen (km, Akku, Fahrten, Höhenmeter, geladen, ❄️ Kaltstart, %/km), eine Karte mit allen Fahrten des Tages,
+  das Höhenprofil über den Tag (Barometer) und den Akku-Verlauf mit Ladesprüngen und 15-%-Linie. Neu: `src/logbuch.js`
+  (Tests in `tests/logbuch.test.js`).
+- **Privacy:** Einstellung „Unschärfe im Logbuch“ (aus · 200 · 400 · 800 m, Standard 400). Zuhause und eigene Ladeorte
+  werden nicht gezeichnet, sondern als gestrichelter Kreis mit fest versetzter Mitte. Im Browser in Handygröße geprüft.
 - **Tag abschließen** (02.11.2026): Warten zwei oder mehr Fahrten auf den Akkustand, zeigt „Heute“ einen Knopf dafür.
   Einmal „Akku jetzt“ eintragen, optional bekannte Start- oder Endwerte (z. B. nach dem Laden); die App verteilt den
   Verbrauch nach Strecke, Höhe und Kaltstart (`src/tagesabschluss.js`, Tests in `tests/tagesabschluss.test.js`).
