@@ -2,6 +2,18 @@
 
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
+## Unveröffentlicht
+- **Tag abschließen** (02.11.2026): Warten zwei oder mehr Fahrten auf den Akkustand, zeigt „Heute“ einen Knopf dafür.
+  Einmal „Akku jetzt“ eintragen, optional bekannte Start- oder Endwerte (z. B. nach dem Laden); die App verteilt den
+  Verbrauch nach Strecke, Höhe und Kaltstart (`src/tagesabschluss.js`, Tests in `tests/tagesabschluss.test.js`).
+  Steigt der Akku zwischen zwei Fahrten ohne Angabe, kommt ein Hinweis statt erfundener Werte. Geschätzte Fahrten
+  zählen nicht in den Verbrauch, nur Fahrten mit eingetragenem Start und Ende. Im Browser mit nachgebauten Fahrten
+  geprüft (Muster vom 01./02.11.).
+- **Frostnacht**: Startet eine Fahrt nach mehr als 3 h Stehen, holt die App den Tiefstwert seit dem Abstellen
+  (Open-Meteo, Stundenwerte). Bis 3 °C gilt die Fahrt als Kaltstart (❄️, +2 % beim Verteilen) und zeigt
+  „Davor X h gestanden · Tiefstwert Y °C“ im Ergebnis. Neu: `tiefstwert()` in `src/wetter.js`.
+- Speichern einer Fahrt aufgeteilt in `fahrtAus()` und `fahrtEinsortieren()` (gemeinsam für Einzel- und Tagesabschluss).
+
 ## Bubble-Log-1234 (01.11.2026, Version 2026.11.01-1234)
 - **Zwei Fahrten hintereinander** (Testfahrt 01.11.2026, `logs/AUSWERTUNG-2026-11-01.md`): Wartete die vorige Fahrt
   noch auf den Akkustand, wurde jeder neue Start still ignoriert (24 km gingen verloren). Jetzt wird sie zurückgestellt

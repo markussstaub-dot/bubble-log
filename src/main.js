@@ -4,7 +4,8 @@ import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { laden, speichern, speichernSpaeter, LEER } from './store.js';
 import { createTracker, distanz, fahrtEnde, gpsStand } from './tracker.js';
-import { temperatur } from './wetter.js';
+import { temperatur, tiefstwert } from './wetter.js';
+import { verteilen } from './tagesabschluss.js';
 import { csvText, fotosVon, teilen, dateiname, speichern as csvSpeichern } from './export.js';
 import * as foto from './foto.js';
 import { socPlausibel } from './fototext.js';
@@ -169,6 +170,9 @@ function viewHeute() {
     ${o ? `<button class="card between" data-act="${o.status === 'faehrt' ? 'zeigen' : 'ende'}" style="text-align:left;border-color:var(--accent)">
       <div><div class="label">${o.status === 'faehrt' ? 'Fahrt läuft' : 'Fahrt beendet'}</div><b>${km(o.km)} seit ${uhrzeit(o.t0)}</b></div>
       <span class="pill good">${o.status === 'faehrt' ? 'Anzeigen' : 'Akku eintragen'}</span></button>` : ''}
+    ${tagFahrten().length >= 2 ? `<button class="card between" data-act="tagAbschluss" style="text-align:left;border-color:var(--accent)">
+      <div><div class="label">${tagFahrten().length} Fahrten warten auf den Akkustand</div><b>Mit einem Wert alle abschließen</b></div>
+      <span class="pill good">Tag abschließen</span></button>` : ''}
     ${ohneAkku().map((x, i) => `<button class="card between" data-act="ohneAkku" data-i="${i}" style="text-align:left">
       <div><div class="label">Fahrt wartet auf den Akkustand</div><b>${km(x.km)} · ${x.tag ?? datum(x.t0)} ${uhrzeit(x.t0)}–${uhrzeit(x.t1 ?? x.t0)}</b></div>
       <span class="pill warn">Nachtragen</span></button>`).join('')}
@@ -825,6 +829,21 @@ async function temperaturHolen(p) {
   eigen.temp = t; if (eigen.offen && eigen.offen.temp == null) eigen.offen.temp = t;
   sichern(); if (!sheetOffen() && !V.fahrtAnsicht) render();
 }
+// Frostnacht (02.11.2026, Eiskratzen, 2 %/km auf dem Brötchenweg): nach langem Stehen den Tiefstwert seit dem
+// Abstellen holen. Ab KALT_GRAD gilt die Fahrt als Kaltstart und bekommt beim Tagesabschluss einen Zuschlag.
+const STAND_MIN = 3 * 3600e3, KALT_GRAD = 3, KALTSTART = 2;   // ms, °C, Prozentpunkte
+function standSeit() {
+  const enden = [...fahrten().map(f => f.t1), ...ohneAkku().map(o => o.t1 ?? o.t0)].filter(Boolean);
+  return enden.length ? Math.max(...enden) : null;
+}
+async function nachtHolen(o, p, seit) {
+  if (!seit || o.t0 - seit < STAND_MIN) return;
+  const t = await tiefstwert(p, seit, o.t0);
+  if (t == null) return;
+  Object.assign(o, { nachtMin: t, standH: Math.round((o.t0 - seit) / 3600e3), kalt: t <= KALT_GRAD });
+  devlog.log('fahrt', { schritt: 'nacht', nachtMin: t, standH: o.standH, kalt: o.kalt });
+  sichern();
+}
 function zielModus() { return eigen.offen?.status === 'faehrt' ? 'fahrt' : eigen.erfassung ? 'warten' : 'aus'; }
 
 // Nie eine offene Fahrt überschreiben (Testfahrt 30.10.2026: so ging eine beendete 4,9-km-Fahrt verloren). false = nicht begonnen
@@ -1050,23 +1069,33 @@ function fahrtVerwerfen() {
   if (eigen.offen && !V.sandbox) foto.loeschen(eigen.offen.fotoStart, eigen.offen.fotoEnde);
   eigen.offen = null; sichern(); tracker.setModus(zielModus()); overlay(''); render();
 }
-function fahrtSpeichern() {
-  const o = eigen.offen; if (!o) return;
-  const zweck = $('overlay').querySelector('[data-zweck][aria-pressed="true"]')?.dataset.zweck || 'Privat';
-  const ende = Math.min(o.startSoc, wheelWert), t1 = fahrtEnde(o.t0, o.t1 || Date.now());   // auch für eine schon so beendete, offene Fahrt
-  const f = { id: 'f' + o.t0, tag: datum(o.t0), t0: o.t0, t1, von: uhrzeit(o.t0), nach: uhrzeit(t1), km: Math.round(o.km * 10) / 10, start: o.startSoc, ende, temp: o.temp, zweck, punkte: o.punkte };
-  f.startQuelle = o.startQuelle || 'drehrad'; f.endeQuelle = wheelHerkunft();
+// Offene oder zurückgestellte Fahrt → Eintrag fürs Fahrtenbuch (auch für den Tagesabschluss ohne Drehrad)
+function fahrtAus(o, { start, ende, startQuelle, endeQuelle, zweck }) {
+  const t1 = fahrtEnde(o.t0, o.t1 || Date.now());   // auch für eine schon so beendete, offene Fahrt
+  const f = { id: 'f' + o.t0, tag: datum(o.t0), t0: o.t0, t1, von: uhrzeit(o.t0), nach: uhrzeit(t1), km: Math.round(o.km * 10) / 10, start, ende, temp: o.temp, zweck, punkte: o.punkte, startQuelle, endeQuelle };
   if (o.fotoStart) f.fotoStart = o.fotoStart;
   if (o.fotoEnde) f.fotoEnde = o.fotoEnde;
   if (o.v12?.minuten?.length) { const { summen, ...v12 } = o.v12; f.v12 = v12; }
-  fotoBestaetigt(wheelWert);
+  if (o.nachtMin != null) Object.assign(f, { nachtMin: o.nachtMin, standH: o.standH, kalt: o.kalt });
   const hm = sensoren.hoehenmeter(o.punkte), rau = sensoren.rauAnteil(o.punkte);
   if (hm) { f.hm = hm.auf; f.hmAb = hm.ab; }
   if (rau != null) Object.assign(f, { rau, brems: o.brems ?? 0, beschl: o.beschl ?? 0, ausschlaege: o.ausschlaege ?? [] });
   { const { punkte, ausschlaege, ...kurzfassung } = f; devlog.log('fahrt', { schritt: 'gespeichert', ...kurzfassung, punkte: punkte.length }); }
-  // nach Beginn einsortieren: eine zurückgestellte Fahrt kann älter sein als die letzte gespeicherte
-  const vorher = avg(); eigen.fahrten.splice(eigen.fahrten.findLastIndex(x => x.t0 <= f.t0) + 1, 0, f); eigen.offen = null;
-  if (eigen.socT == null || t1 >= eigen.socT) { eigen.soc = ende; eigen.socT = t1; }   // ein älteres Ende überschreibt den neueren Stand nicht
+  return f;
+}
+// nach Beginn einsortieren: eine zurückgestellte Fahrt kann älter sein als die letzte gespeicherte;
+// ein älteres Ende überschreibt den neueren Stand nicht
+function fahrtEinsortieren(f) {
+  eigen.fahrten.splice(eigen.fahrten.findLastIndex(x => x.t0 <= f.t0) + 1, 0, f);
+  if (eigen.socT == null || f.t1 >= eigen.socT) { eigen.soc = f.ende; eigen.socT = f.t1; }
+}
+function fahrtSpeichern() {
+  const o = eigen.offen; if (!o) return;
+  const zweck = $('overlay').querySelector('[data-zweck][aria-pressed="true"]')?.dataset.zweck || 'Privat';
+  const ende = Math.min(o.startSoc, wheelWert);
+  const f = fahrtAus(o, { start: o.startSoc, ende, startQuelle: o.startQuelle || 'drehrad', endeQuelle: wheelHerkunft(), zweck }), t1 = f.t1;
+  fotoBestaetigt(wheelWert);
+  const vorher = avg(); fahrtEinsortieren(f); eigen.offen = null;
   sichern();
   tracker.setModus(zielModus());
   const kurz = f.start - f.ende < 3 || f.km < 1, v = kurz ? 0 : (f.start - f.ende) / f.km, steig = steigAnteil(f);
@@ -1080,6 +1109,7 @@ function fahrtSpeichern() {
          <p style="margin:0" class="${d > 5 ? 'warn' : d < -5 ? 'good' : 'muted'}">${d > 5 ? `${d} % mehr als ${gelernt(eigen.fahrten.slice(0, -1)) ? 'üblich' : 'der Startwert'}` : d < -5 ? `${-d} % sparsamer als ${gelernt(eigen.fahrten.slice(0, -1)) ? 'üblich' : 'der Startwert'}` : 'Verbrauch wie üblich'}</p>
          <section class="card small"><div class="label">Warum?</div><div class="list" style="margin-top:6px">
            <div class="between"><span>Temperatur</span><b>${f.temp != null ? `${f.temp} °C` : 'unbekannt'}</b></div>
+           ${f.nachtMin != null ? `<div class="between"><span>Davor ${f.standH} h gestanden</span><b>${f.kalt ? '❄️ ' : ''}Tiefstwert ${f.nachtMin} °C</b></div>` : ''}
            <div class="between"><span>Ø Tempo</span><b>${de(tempo, 0)} km/h</b></div>
            ${f.hm != null ? `<div class="between"><span>Höhenmeter ↑ ${f.hm} / ↓ ${f.hmAb}</span><b>${steig >= .5 ? `≈ ${de(steig, 0)} % Akku` : 'kaum Einfluss'}</b></div>` : ''}
            ${f.rau != null ? `<div class="between"><span>Fahrstil</span><b>${f.brems}× stark gebremst, ${f.beschl}× stark beschleunigt</b></div>
@@ -1133,6 +1163,61 @@ function ohneAkkuOeffnen(i) {
   eigen.offen = o; sichern(); render(); endeSheet();
 }
 
+// ---------- Tagesabschluss: alle wartenden Fahrten mit einem Akkustand jetzt (und optional bekannten Zwischenwerten) ----------
+function tagFahrten() {
+  const l = [...ohneAkku()]; if (eigen.offen?.status === 'beendet') l.push(eigen.offen);
+  return l.sort((a, b) => a.t0 - b.t0);
+}
+function tagGewicht(o) {   // geschätzter Verbrauch der Fahrt; nur das Verhältnis zwischen den Fahrten zählt
+  const hm = sensoren.hoehenmeter(o.punkte);
+  return o.km * avg() + (hm ? steigProzent(hm.auf - REKUP * hm.ab) : 0) + (o.kalt ? KALTSTART : 0);
+}
+const tagWert = id => { const v = $(id)?.value; return v === '' || v == null ? null : Number(v); };
+function tagRechnen() {
+  const l = tagFahrten(), anker = [];
+  if (eigen.soc != null && eigen.socT != null && l.length && eigen.socT <= l[0].t0) anker.push({ t: eigen.socT, soc: eigen.soc });
+  l.forEach((o, i) => {
+    const s = tagWert('taS' + i), e = tagWert('taE' + i);
+    if (s != null) anker.push({ t: o.t0, soc: s });
+    if (e != null) anker.push({ t: o.t1 ?? o.t0, soc: e });
+  });
+  const jetzt = tagWert('taJetzt'); if (jetzt != null) anker.push({ t: Date.now(), soc: jetzt });
+  return { l, r: verteilen(l, l.map(tagGewicht), anker) };
+}
+function tagSheet() {
+  const l = tagFahrten(); if (!l.length) return;
+  sheet(`<div class="label">Tag abschließen · ${l.length} Fahrten</div>
+    <p class="small muted" style="margin:0">Akku <b>jetzt</b> eintragen. Kennst du zwischendurch einen Wert, etwa nach dem Laden, trag ihn bei der Fahrt ein. Der Rest wird nach Strecke, Höhe und Kaltstart (❄️) verteilt und zählt nicht in deinen Verbrauch.</p>
+    <div class="field"><label for="taJetzt">Akku jetzt %</label><input id="taJetzt" type="number" inputmode="numeric" min="0" max="100" value="${socJetzt()}"></div>
+    <div class="list">${l.map((o, i) => `<section class="card">
+      <div class="between"><b>${datum(o.t0)} ${uhrzeit(o.t0)} · ${km(o.km)}${o.kalt ? ' ❄️' : ''}</b><span class="small mono" id="taR${i}"></span></div>
+      <div class="grid2" style="margin-top:6px"><div class="field"><label for="taS${i}">Start % (wenn bekannt)</label><input id="taS${i}" type="number" inputmode="numeric" min="0" max="100" value="${o.startSoc ?? ''}"></div>
+      <div class="field"><label for="taE${i}">Ende % (wenn bekannt)</label><input id="taE${i}" type="number" inputmode="numeric" min="0" max="100"></div></div></section>`).join('')}</div>
+    <p class="small bad" id="taFehler" hidden></p>
+    <button class="btn primary block" data-act="tagSpeichern">Alle speichern</button>`, 'tag');
+  tagVorschau();
+}
+function tagVorschau() {
+  const { r } = tagRechnen(), fehler = r.find(x => x.fehler);
+  r.forEach((x, i) => { const el = $('taR' + i); if (el) { el.textContent = x.fehler ? '?' : `${x.start} → ${x.ende} %`; el.className = 'small mono' + (x.fehler ? ' bad' : ''); } });
+  const e = $('taFehler'); if (e) { e.hidden = !fehler; e.textContent = fehler ? fehler.fehler : ''; }
+}
+function tagSpeichern() {
+  const { l, r } = tagRechnen();
+  if (!l.length) return;
+  if (r.some(x => x.fehler)) { tagVorschau(); return; }
+  l.forEach((o, i) => {
+    const s = tagWert('taS' + i), e = tagWert('taE' + i);
+    const f = fahrtAus(o, { start: r[i].start, ende: Math.min(r[i].start, r[i].ende), zweck: 'Privat',
+      startQuelle: s != null ? 'drehrad' : 'tagesabschluss', endeQuelle: s != null && e != null ? 'drehrad' : 'vorschlag' });   // nur echte Paare zählen in den Verbrauch
+    f.tagesabschluss = true; fahrtEinsortieren(f);
+  });
+  eigen.ohneAkku = []; if (eigen.offen?.status === 'beendet') eigen.offen = null;
+  const jetzt = tagWert('taJetzt'); if (jetzt != null) { eigen.soc = jetzt; eigen.socT = Date.now(); }
+  devlog.log('fahrt', { schritt: 'tagesabschluss', anzahl: l.length, jetzt });
+  sichern(); tracker.setModus(zielModus()); overlay(''); render(); toast(`${l.length} Fahrten gespeichert`);
+}
+
 // Fahrterkennung: Rückmeldungen vom GPS
 const tracker = createTracker({
   onLog(typ, daten) { devlog.log(typ, daten); if (typ === 'gps') V.devGps = daten; },
@@ -1141,8 +1226,10 @@ const tracker = createTracker({
     // der Fahrt 2 (24 km) wurden still ignoriert. Eine beendete Fahrt wird darum zurückgestellt, die neue beginnt.
     if (eigen.offen?.status === 'beendet') zurueckstellen();
     if (eigen.offen) { devlog.log('fahrt', { schritt: 'start ignoriert', offen: eigen.offen.status }); return; }
+    const seit = standSeit();
     fahrtBeginnen({ startSoc: null, punkte: [start.p, punkt.p], km: distanz(start.p, punkt.p) / 1000, manuell: false });
     eigen.offen.gps = gpsStand(null, punkt);
+    if (!V.sandbox) nachtHolen(eigen.offen, start.p, seit);
     if (V.sandbox) {   // im Simulator nicht unterbrechen: Start-Akku = aktueller Stand, Anzeige oben im Sim-Tab
       eigen.offen.startSoc = socJetzt(); eigen.offen.startQuelle = 'vorschlag'; toast('Fahrt erkannt (Simulation)'); simHud(); return;
     }
@@ -1392,6 +1479,8 @@ document.addEventListener('click', e => {
     case 'markeBetreiber': markieren('betreiber', d.key, d.wert); break;
     case 'zielFavorit': zielPruefen(favoriten()[Number(d.i)]); break;
     case 'ohneAkku': ohneAkkuOeffnen(Number(d.i)); break;
+    case 'tagAbschluss': tagSheet(); break;
+    case 'tagSpeichern': tagSpeichern(); break;
     case 'wegeHolen': {
       const r = V.zroute, z = V.zielwahl; if (!r?.start || !z) break;
       V.wege = 'laedt'; render();
@@ -1466,6 +1555,7 @@ document.addEventListener('click', e => {
 document.addEventListener('input', e => {
   if (e.target.id === 'zSuche') V.zsuche = e.target.value;
   if (V.nt && e.target.id?.startsWith('nt')) { ntLesen(); ntAnzeige(); }
+  if (/^ta(S\d|E\d|Jetzt)/.test(e.target.id || '')) tagVorschau();
   if (e.target.id === 'spNotiz' && V.vorfall) { V.vorfall.notiz = e.target.value; sichern(); }
 });
 document.addEventListener('change', e => {
