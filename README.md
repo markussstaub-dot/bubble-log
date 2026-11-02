@@ -34,6 +34,13 @@ Zuschauen ist ausdrücklich erwünscht: Jede Änderung steht im [CHANGELOG](CHAN
 Ich schaue gelegentlich in Issues und Pull Requests, aber ohne Support, ohne Wunschliste und ohne Zusage.
 Nutzung auf eigenes Risiko; die App ersetzt keinen Blick auf die Akkuanzeige des Fahrzeugs.
 
+## Ökobilanz (grob)
+
+Überschlag, kein Messwert (Stand November 2026): Die Entwicklung hat etwa **20–110 kWh** gekostet, so viel wie
+**250 bis 1.400 km Microlino** (bei ≈ 8 kWh/100 km). Den größten und unsichersten Teil machen die KI-Sessions aus
+(geschätzt 10–100 kWh, Anthropic veröffentlicht keinen Verbrauch pro Anfrage), dazu ≈ 10 kWh Laptop. Im Betrieb
+kostet die App fast nichts: GPS am Handy ≈ 1 Wh pro Fahrt, kein Server.
+
 ## Lizenz
 
 Der Code steht unter der [MIT-Lizenz](LICENSE). Die Ladesäulendaten behalten ihre eigenen Lizenzen
