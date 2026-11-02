@@ -35,14 +35,6 @@ const CACHE_TAGE = 90;         // danach wird eine gespeicherte Route neu berech
 const MAX_LINIENPUNKTE = 200;  // Routenlinie für Karte und Speicher ausgedünnt
 const BEXBACH = { name: 'Bexbach', p: [49.3466, 7.2561] };
 const KOFI = 'https://ko-fi.com/markusbaut';   // Spendenseite (Einstellungen), Adresse hier anpassen
-// Startliste der gemerkten Ziele (Ortsmitte), einmalig beim ersten Start mit dieser Version
-const STARTLISTE = [
-  ['Homburg', 49.3264, 7.3383], ['Neunkirchen', 49.3449, 7.1803], ['St. Ingbert', 49.2775, 7.1167], ['Zweibrücken', 49.2489, 7.3639],
-  ['Saarbrücken', 49.2354, 6.9969], ['St. Wendel', 49.4669, 7.1688], ['Völklingen', 49.2526, 6.859], ['Bostalsee', 49.564, 7.063],
-  ['Kaiserslautern', 49.4447, 7.769], ['Pirmasens', 49.2011, 7.6052], ['Saarlouis', 49.3138, 6.7519], ['Sarreguemines', 49.11, 7.0683],
-  ['Merzig', 49.4432, 6.6378], ['Landstuhl', 49.4127, 7.5704], ['Trier', 49.7499, 6.6371], ['Metz', 49.1193, 6.1757],
-  ['Landau', 49.1987, 8.118], ['Mannheim', 49.4875, 8.466],
-].map(([kurz, lat, lon]) => ({ kurz, p: [lat, lon] }));
 const ZWECKE = ['Privat', 'Arbeitsweg', 'Geschäftlich'];
 const STARTWERT = 0.8;      // %/km bis genug eigene Fahrten da sind (Schnitt der Beispielfahrten im Prototyp)
 const MAX_VERBRAUCH = 5;    // %/km: mehr ist ein Eingabefehler, solche Fahrten zählen nicht in den Schnitt
@@ -1182,6 +1174,7 @@ function tagestourSheet(tag) {
     ${tourHoehe(t)}${tourAkku(t)}
     <div class="list small">${t.fahrten.map(f => `<div class="between"><span>${esc(f.von)}–${esc(f.nach)} · ${km(f.km)}${f.kalt ? ' ❄️' : ''}${f.endeQuelle === 'vorschlag' ? ' <span class="muted">(geschätzt)</span>' : ''}</span><b class="mono">${f.start} → ${f.ende} %</b></div>`).join('')}</div>
     <p class="small muted" style="margin:0">${r ? `Zuhause und eigene Ladeorte sind auf ${r} m unscharf (Einstellungen).` : 'Unschärfe ist aus (Einstellungen).'} Karte: © OpenStreetMap.</p>
+    ${r && !eigen.zuhause ? `<p class="small warn" style="margin:0">Noch kein Zuhause festgelegt: Die Strecke an deiner Haustür ist sichtbar. Einstellungen → „Hier ist Zuhause“.</p>` : ''}
     <button class="btn primary block" data-act="close">Schließen</button>`, 'tour');
   requestAnimationFrame(() => tourKarteZeichnen(t, r));
 }
@@ -1433,7 +1426,7 @@ function settingsSheet() {
       <p class="small muted" style="margin:0">Die App ist kostenlos und bleibt es. Wenn sie dir gefällt, hilft ein Kaffee, die nächste zu bauen.</p>
       <a class="btn block" href="${KOFI}" target="_blank" rel="noopener">☕ Kaffee ausgeben</a>
     </section>
-    <p class="small muted" style="margin:0">Alle Daten bleiben auf diesem Handy. Nur die Temperatur wird bei Open-Meteo abgefragt.</p>
+    <p class="small muted" style="margin:0">Fahrten, Akkustände, Zuhause und eigene Ladeorte bleiben auf diesem Handy. Online abgefragt werden nur: Temperatur und Nachttemperatur am Standort (Open-Meteo), beim Ziel-Check und Mini-Navi Ziel, Start und Höhen (OpenStreetMap, OSRM, Open-Meteo) sowie die Kartenbilder in Reichweite und Tagestour (OpenStreetMap).</p>
     <p class="small muted mono" style="margin:0;text-align:center">Bubble Log ${__APP_VERSION__}</p>
     <button class="btn primary block" data-act="close">Fertig</button>`);
   systemPruefen().then(neu => { if (neu && $('overlay').querySelector('.sheet h2')?.textContent === 'Einstellungen') settingsSheet(); });
@@ -1709,11 +1702,9 @@ setInterval(fahrtAnzeigeAktualisieren, 1000);
 // ---------- Start ----------
 (async () => {
   eigen = await laden();
-  if (!eigen.startlisteGesetzt) {   // einmalig: Bexbach als Zuhause und die Ziele aus dem ersten Reichweiten-Check
-    eigen.zuhause ??= { ...BEXBACH };
-    eigen.favoriten = [...favoriten(), ...STARTLISTE.filter(s => !favorit(s.p)).map(s => ({ ...s }))];
-    eigen.startlisteGesetzt = true; sichern();
-  }
+  // Früher bekam jeder beim ersten Start Bexbach als Zuhause und 18 Ziele aus dem Saarland (02.11.2026 entfernt):
+  // Zuhause legt jeder selbst fest, sonst läge auch die Unschärfe im Logbuch um Bexbach statt um das eigene Haus.
+  // Wer die Liste schon hat (startlisteGesetzt), behält sie.
   if (eigen.entwickler) await devlog.setAktiv(true);
   devlog.log('app', { start: true, offen: eigen.offen?.status ?? null, erfassung: eigen.erfassung, fahrten: eigen.fahrten.length });
   render();

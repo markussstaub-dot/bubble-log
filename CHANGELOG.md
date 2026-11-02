@@ -3,6 +3,10 @@
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
 ## Unveröffentlicht
+- **Für andere Nutzer** (02.11.2026): Beim ersten Start kein vorgegebenes Zuhause (bisher Bexbach) und keine Startliste
+  mit 18 Zielen aus dem Saarland mehr; wer sie schon hat, behält sie. Ohne Zuhause weist die Tagestour darauf hin, dass
+  die Strecke an der Haustür sichtbar ist. Datenschutz-Satz in den Einstellungen ehrlich ergänzt (Open-Meteo,
+  OpenStreetMap, OSRM). Im Browser mit leerem Speicher geprüft: alle Tabs ohne Fehler.
 - **Visuelles Logbuch, Meilenstein 1** (`SPEC-logbuch.md`): Im Fahrten-Tab je Tag ein Knopf „🗺️ Tagestour“. Zeigt
   Kennzahlen (km, Akku, Fahrten, Höhenmeter, geladen, ❄️ Kaltstart, %/km), eine Karte mit allen Fahrten des Tages,
   das Höhenprofil über den Tag (Barometer) und den Akku-Verlauf mit Ladesprüngen und 15-%-Linie. Neu: `src/logbuch.js`
