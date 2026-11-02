@@ -1,11 +1,16 @@
 // Ladepunkte für den Microlino (AC Typ 2 oder Schuko) aus dem Ladesäulenregister der Bundesnetzagentur.
-// Die Daten liegen in der App (src/ladepunkte.json, erzeugt mit tools/ladepunkte.mjs) und gehen offline.
+// Eingebaut ist ein Auszug um Bexbach (src/ladepunkte.json); wer sein Zuhause festlegt, lädt die Kacheln um sein
+// Zuhause herunter (src/ladecache.js, SPEC-ladepunkte.md) und ersetzt damit den Auszug. Beides geht offline.
 import daten from './ladepunkte.json';
 import { distanz } from './tracker.js';
 
-export const STAND = daten.stand;
-export const QUELLE = daten.quelle;
-const ALLE = daten.standorte;
+export let STAND = daten.stand, QUELLE = daten.quelle, BEREICH = `${daten.radiusKm} km um Bexbach, eingebaut`;
+let ALLE = daten.standorte, NACH_SCHLUESSEL = null;
+// Heruntergeladene Ladepunkte statt des eingebauten Auszugs verwenden
+export function setzeDaten(d) {
+  ALLE = d.standorte; STAND = d.stand; QUELLE = d.quelle; BEREICH = `${d.radiusKm} km um dein Zuhause, ${d.standorte.length} Standorte`;
+  NACH_SCHLUESSEL = null;
+}
 const SPANNUNG = 230, WIRKUNGSGRAD = 0.9;   // einphasig; etwa 10 % gehen beim Laden verloren
 
 // kW, die im Akku ankommen, bei gegebenem Ladestrom
@@ -50,5 +55,4 @@ export const alle = () => ALLE;
 
 // Fester Schlüssel eines Standorts (wie beim Zusammenfassen in tools/ladepunkte.mjs), für eigene Markierungen
 export const schluessel = s => `${s.p[0].toFixed(4)},${s.p[1].toFixed(4)}`;
-const NACH_SCHLUESSEL = new Map(ALLE.map(s => [schluessel(s), s]));
-export const finde = key => NACH_SCHLUESSEL.get(key);
+export const finde = key => (NACH_SCHLUESSEL ??= new Map(ALLE.map(s => [schluessel(s), s]))).get(key);

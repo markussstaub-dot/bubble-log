@@ -1,12 +1,15 @@
 // Ladesäulenregister der Bundesnetzagentur → src/ladepunkte.json (nur was der Microlino nutzen kann)
 // Aufruf: node tools/ladepunkte.mjs <Ladesaeulenregister.csv> [Radius km, Standard 150]
+//         node tools/ladepunkte.mjs <Ladesaeulenregister.csv> --kacheln   → ganz Deutschland in 1°-Kacheln nach
+//         docs/ladepunkte/ (GitHub Pages), die App lädt die um das Zuhause herunter (SPEC-ladepunkte.md)
 // Quelle: https://www.bundesnetzagentur.de/ladeinfrastruktur  (CSV „Liste der Ladesäulen“)
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 
 const [, , datei, radiusArg] = process.argv;
-if (!datei) { console.error('Aufruf: node tools/ladepunkte.mjs <Ladesaeulenregister.csv> [Radius km]'); process.exit(1); }
+if (!datei) { console.error('Aufruf: node tools/ladepunkte.mjs <Ladesaeulenregister.csv> [Radius km | --kacheln]'); process.exit(1); }
+const KACHELN = radiusArg === '--kacheln';
 const ZUHAUSE = [49.3466, 7.2561];   // Bexbach
-const RADIUS = Number(radiusArg || 150) * 1000;
+const RADIUS = KACHELN ? Infinity : Number(radiusArg || 150) * 1000;
 
 function distanz(a, b) {
   const R = 6371000, r = Math.PI / 180, dLat = (b[0] - a[0]) * r, dLon = (b[1] - a[1]) * r;
@@ -78,6 +81,16 @@ for (const z of alle.slice(kopfIndex + 1)) {
   standorte.set(key, s);
 }
 const liste = [...standorte.values()].sort((a, b) => a.p[0] - b.p[0]);
+const QUELLE = 'Bundesnetzagentur, Ladesäulenregister (CC BY 4.0)';
+if (KACHELN) {
+  const kacheln = new Map(), schluessel = s => `${Math.floor(s.p[0])}_${Math.floor(s.p[1])}`;
+  for (const s of liste) { const k = schluessel(s); if (!kacheln.has(k)) kacheln.set(k, []); kacheln.get(k).push(s); }
+  const ordner = new URL('../docs/ladepunkte/', import.meta.url); mkdirSync(ordner, { recursive: true });
+  for (const [k, l] of kacheln) writeFileSync(new URL(`${k}.json`, ordner), JSON.stringify({ quelle: QUELLE, stand, standorte: l }));
+  writeFileSync(new URL('index.json', ordner), JSON.stringify({ quelle: QUELLE, stand, kacheln: Object.fromEntries([...kacheln].map(([k, l]) => [k, l.length])) }));
+  console.log(`Stand ${stand}: ${liste.length} Standorte in ${kacheln.size} Kacheln → docs/ladepunkte/`);
+  process.exit(0);
+}
 const ziel = new URL('../src/ladepunkte.json', import.meta.url);
 writeFileSync(ziel, JSON.stringify({ quelle: 'Bundesnetzagentur, Ladesäulenregister (CC BY 4.0)', stand, zuhause: ZUHAUSE, radiusKm: RADIUS / 1000, standorte: liste }));
 console.log(`Stand ${stand}: ${gelesen} Ladeeinrichtungen gelesen, ${passend} mit Typ 2 oder Schuko im Umkreis von ${RADIUS / 1000} km → ${liste.length} Standorte`);

@@ -16,6 +16,7 @@ import * as sensoren from './sensoren.js';
 import * as devlog from './devlog.js';
 import { suchen, route as routeBerechnen, wege as wegeBerechnen } from './route.js';
 import * as lade from './laden.js';
+import * as ladecache from './ladecache.js';
 import * as nt from './nachtragen.js';
 import * as dialoge from './dialoge.js';
 import * as bm6 from './bm6.js';
@@ -389,7 +390,7 @@ function viewReichweite() {
       ${V.rwListe === 'laden' ? naheLadepunkte(15) : ampelListe()}` : ''}
     <p class="small muted" style="margin:0">„Reicht“ heißt mindestens 15 % Reserve bei Ankunft, „Knapp“ 5 bis 15 %, darunter besser unterwegs laden. Der Ring zeigt grob, wie weit der Akku reicht (ca. ${reichweite(socJetzt())} km Straße, als Luftlinie geteilt durch ${de(UMWEG, 1)}). Genau rechnet nur der Ziel-Check mit Route und Höhenmetern: ${gelernt() ? 'mit deinem Verbrauch' : 'noch mit dem Startwert, bis drei eigene Fahrten da sind'}.
     Suche, Route, Höhen und Karte kommen von OpenStreetMap, OSRM und Open-Meteo; dabei gehen Ziel und Startpunkt an diese Dienste.
-    Ladepunkte (AC Typ 2 und Schuko, 120 km um Bexbach): ${lade.QUELLE}, Stand ${lade.STAND}; in der App gespeichert, ohne Belegung und Preise.</p>`;
+    Ladepunkte (AC Typ 2 und Schuko, ${esc(lade.BEREICH)}): ${lade.QUELLE}, Stand ${lade.STAND}; in der App gespeichert, ohne Belegung und Preise.</p>`;
 }
 
 // ---------- Laden ----------
@@ -1402,6 +1403,9 @@ function settingsSheet() {
       <div class="label">Zuhause</div>
       <p class="small" style="margin:0">${eigen.zuhause ? `<b>${esc(eigen.zuhause.name)}</b> (${eigen.zuhause.p.map(v => v.toFixed(3)).join(', ')}). Wege ab hier zu gemerkten Zielen speichert die App, sie gehen dann auch ohne Netz.` : 'Nicht festgelegt.'}</p>
       <div class="grid2"><button class="btn" data-act="zuhauseHier">Hier ist Zuhause</button>${eigen.zuhause ? `<button class="btn" data-act="zuhauseWeg">Entfernen</button>` : ''}</div>
+      <div class="label" style="margin-top:6px">Ladesäulen</div>
+      <p class="small" style="margin:0">${esc(lade.BEREICH)} · Stand ${esc(lade.STAND)}. Aus dem Register der Bundesnetzagentur, nur AC Typ 2 und Schuko.</p>
+      ${eigen.zuhause ? `<button class="btn block" data-act="ladeLaden"${V.ladeLaeuft ? ' disabled' : ''}>${V.ladeLaeuft ? `Lade Ladesäulen … ${V.ladeLaeuft}` : `Ladesäulen für dein Zuhause laden (${ladecache.RADIUS_KM} km, etwa 1–2 MB)`}</button>` : '<p class="small muted" style="margin:0">Für Ladesäulen um dein eigenes Zuhause zuerst „Hier ist Zuhause“ tippen.</p>'}
     </section>
     <div class="field"><label for="privatRadius">Unschärfe im Logbuch</label><select id="privatRadius">${[0, 200, 400, 800].map(m => `<option value="${m}" ${m === privatRadius() ? 'selected' : ''}>${m ? `${m} m um Zuhause und eigene Ladeorte` : 'Aus'}</option>`).join('')}</select>
       <span class="small muted">Die Tagestour zeichnet Zuhause und eigene Ladeorte (z. B. Mami) nicht, sondern als gestrichelten Kreis mit leicht versetzter Mitte. So kannst du Bildschirmfotos zeigen, ohne Adressen preiszugeben.</span></div>
@@ -1581,9 +1585,18 @@ document.addEventListener('click', e => {
       startpunkt().then(s => {
         if (!s || s.name !== 'aktueller Standort') { toast('Standort nicht verfügbar. Standort freigeben und nochmal versuchen.'); return; }
         eigen.zuhause = { name: 'Zuhause', p: s.p }; favoriten().forEach(f => { f.cache = null; }); sichern();
-        settingsSheet(); toast('Zuhause gesetzt. Gemerkte Ziele werden neu berechnet.'); cacheFuellen();
+        settingsSheet(); toast('Zuhause gesetzt. Tipp: darunter Ladesäulen für dein Zuhause laden.'); cacheFuellen();
       });
       break;
+    case 'ladeLaden': {
+      if (!eigen.zuhause || V.ladeLaeuft) break;
+      V.ladeLaeuft = 'startet'; settingsSheet();
+      ladecache.herunterladen(eigen.zuhause.p, (i, n) => { V.ladeLaeuft = `${i + 1} von ${n}`; if ($('ladekarte')) settingsSheet(); })
+        .then(d => { lade.setzeDaten(d); devlog.log('ladepunkte', { geladen: d.standorte.length, stand: d.stand }); toast(`${d.standorte.length} Ladesäulen geladen, gehen jetzt offline`); })
+        .catch(e => { toast(`Ladesäulen nicht geladen: ${e.message}`); devlog.log('fehler', { quelle: 'ladepunkte', text: e.message }); })
+        .finally(() => { V.ladeLaeuft = null; if ($('ladekarte')) settingsSheet(); render(); });
+      break;
+    }
     case 'zuhauseWeg': eigen.zuhause = null; favoriten().forEach(f => { f.cache = null; }); sichern(); settingsSheet(); toast('Zuhause entfernt'); break;
     case 'zielTreffer': zielPruefen(V.treffer[Number(d.i)]); break;
     case 'zielZuletzt': zielPruefen(eigen.ziele[Number(d.i)]); break;
@@ -1702,6 +1715,7 @@ setInterval(fahrtAnzeigeAktualisieren, 1000);
 // ---------- Start ----------
 (async () => {
   eigen = await laden();
+  { const lc = await ladecache.gespeichert(); if (lc?.standorte?.length) lade.setzeDaten(lc); }   // heruntergeladene Ladesäulen statt des eingebauten Auszugs
   // Früher bekam jeder beim ersten Start Bexbach als Zuhause und 18 Ziele aus dem Saarland (02.11.2026 entfernt):
   // Zuhause legt jeder selbst fest, sonst läge auch die Unschärfe im Logbuch um Bexbach statt um das eigene Haus.
   // Wer die Liste schon hat (startlisteGesetzt), behält sie.

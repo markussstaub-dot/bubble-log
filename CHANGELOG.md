@@ -3,6 +3,12 @@
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
 ## Unveröffentlicht
+- **Ladesäulen für jede Homebase** (`SPEC-ladepunkte.md`): `tools/ladepunkte.mjs --kacheln` schneidet das
+  BNetzA-Register (Stand 01.09.2026, 57 797 Standorte mit Typ 2 oder Schuko) in 71 Kacheln zu 1° nach
+  `docs/ladepunkte/` (GitHub Pages, 7,7 MB). Einstellungen → Zuhause → „Ladesäulen für dein Zuhause laden“ holt die
+  Kacheln im Umkreis von 120 km (`src/ladecache.js`), speichert sie auf dem Handy und nutzt sie danach offline statt
+  des eingebauten Bexbach-Auszugs. Im Browser mit einem Zuhause in Hamburg geprüft: 5474 Standorte, nach Neustart aktiv.
+  Funktioniert in der App erst, wenn `docs/ladepunkte/` auf GitHub Pages liegt (Push).
 - **Für andere Nutzer** (02.11.2026): Beim ersten Start kein vorgegebenes Zuhause (bisher Bexbach) und keine Startliste
   mit 18 Zielen aus dem Saarland mehr; wer sie schon hat, behält sie. Ohne Zuhause weist die Tagestour darauf hin, dass
   die Strecke an der Haustür sichtbar ist. Datenschutz-Satz in den Einstellungen ehrlich ergänzt (Open-Meteo,
