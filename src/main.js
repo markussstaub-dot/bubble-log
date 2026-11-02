@@ -314,7 +314,7 @@ function zielRechnung(r, retour = V.retour) {
   const basis = weg * avg(), kalt = t < 5 ? basis * kaltZuschlag() : 0;
   const steig = steigProzent(r.auf - REKUP * r.ab) + (retour ? steigProzent(r.ab - REKUP * r.auf) : 0);   // zurück werden die Abfahrten zu Steigungen
   const ankunft = Math.round(soc - basis - kalt - steig);
-  return { soc, t, weg, basis, kalt, steig, ankunft, urteil: ankunft >= 15 ? ['good', 'Reicht'] : ankunft >= 5 ? ['warn', 'Knapp'] : ['bad', 'Unterwegs laden'] };
+  return { soc, t, weg, basis, kalt, steig, ankunft, urteil: ankunft >= reserve() ? ['good', 'Reicht'] : ankunft >= 5 ? ['warn', 'Knapp'] : ['bad', 'Unterwegs laden'] };
 }
 // Mini-Navi: andere Wege zum Ziel vergleichen (km, Höhenmeter, Ankunft) und eine Abbiegeliste für den gewählten
 const meter = m => m < 1000 ? `${Math.round(m / 10) * 10} m` : km(m / 1000);
@@ -388,7 +388,7 @@ function viewReichweite() {
       <button class="chip" role="tab" data-act="rwListe" data-wert="ziele" aria-pressed="${V.rwListe !== 'laden'}">Ziele (${favoriten().length})</button>
       <button class="chip" role="tab" data-act="rwListe" data-wert="laden" aria-pressed="${V.rwListe === 'laden'}">⚡ Ladepunkte</button></div>
       ${V.rwListe === 'laden' ? naheLadepunkte(15) : ampelListe()}` : ''}
-    <p class="small muted" style="margin:0">„Reicht“ heißt mindestens 15 % Reserve bei Ankunft, „Knapp“ 5 bis 15 %, darunter besser unterwegs laden. Der Ring zeigt grob, wie weit der Akku reicht (ca. ${reichweite(socJetzt())} km Straße, als Luftlinie geteilt durch ${de(UMWEG, 1)}). Genau rechnet nur der Ziel-Check mit Route und Höhenmetern: ${gelernt() ? 'mit deinem Verbrauch' : 'noch mit dem Startwert, bis drei eigene Fahrten da sind'}.
+    <p class="small muted" style="margin:0">„Reicht“ heißt mindestens ${reserve()} % Reserve bei Ankunft, „Knapp“ 5 bis ${reserve()} %, darunter besser unterwegs laden. Der Ring zeigt grob, wie weit der Akku reicht (ca. ${reichweite(socJetzt())} km Straße, als Luftlinie geteilt durch ${de(UMWEG, 1)}). Genau rechnet nur der Ziel-Check mit Route und Höhenmetern: ${gelernt() ? 'mit deinem Verbrauch' : 'noch mit dem Startwert, bis drei eigene Fahrten da sind'}.
     Suche, Route, Höhen und Karte kommen von OpenStreetMap, OSRM und Open-Meteo; dabei gehen Ziel und Startpunkt an diese Dienste.
     Ladepunkte (AC Typ 2 und Schuko, ${esc(lade.BEREICH)}): ${lade.QUELLE}, Stand ${lade.STAND}; in der App gespeichert, ohne Belegung und Preise.</p>`;
 }
@@ -396,6 +396,7 @@ function viewReichweite() {
 // ---------- Laden ----------
 const REST_LADEN = 10;   // % Reserve bei Ankunft an einer Ladesäule unterwegs
 const ladestrom = () => eigen.ladestrom || 8;
+const reserve = () => eigen.reserve || 15;   // Wohlfühlreserve bei Ankunft in %, darüber zeigt der Ziel-Check grün
 const minutenText = min => {   // auf 5 Minuten gerundet, mindestens 5
   const m = Math.max(5, Math.round(min / 5) * 5);
   return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${String(m % 60).padStart(2, '0')} min` : ''}`;
@@ -450,14 +451,14 @@ function ladenAbschnitt(r, z) {
   const hin = zielRechnung(r, false).ankunft, rz = zielRechnung(r, true).ankunft;
   const umZiel = lade.umkreis(z.p, 1000);
   const amZiel = nachErfahrung(umZiel, (a, b) => a.m - b.m).slice(0, 3);
-  if (rz >= 15) return umZiel.length ? `<p class="small muted" style="margin:0">⚡ ${umZiel.length} Ladepunkt${umZiel.length > 1 ? 'e' : ''} im Umkreis von 1 km ums Ziel, Laden ist aber nicht nötig.</p>` : '';
+  if (rz >= reserve()) return umZiel.length ? `<p class="small muted" style="margin:0">⚡ ${umZiel.length} Ladepunkt${umZiel.length > 1 ? 'e' : ''} im Umkreis von 1 km ums Ziel, Laden ist aber nicht nötig.</p>` : '';
   const zielNutzbar = umZiel.some(nutzbar);
   const zielZeilen = amZiel.length ? amZiel.map(s => ladepunktZeile(s, `${Math.round(s.m / 10) * 10} m`)).join('')
     : '<p class="small bad" style="margin:0">Kein öffentlicher Ladepunkt im Umkreis von 1 km ums Ziel. Steckdose beim Besuch fragen oder unterwegs laden.</p>';
-  const rueck = minutenText(lade.ladeMinuten(15 - rz, eigen.akku, ladestrom()));
-  if (hin >= 15) return `<section class="card list">
+  const rueck = minutenText(lade.ladeMinuten(reserve() - rz, eigen.akku, ladestrom()));
+  if (hin >= reserve()) return `<section class="card list">
       <div class="label">Laden am Ziel</div>
-      <p style="margin:0"><b>${rueck}</b> laden am Ziel, dann reicht es zurück mit 15 % Reserve <span class="small muted">(${15 - rz} % bei ${ladestrom()} A)</span>.</p>
+      <p style="margin:0"><b>${rueck}</b> laden am Ziel, dann reicht es zurück mit ${reserve()} % Reserve <span class="small muted">(${reserve() - rz} % bei ${ladestrom()} A)</span>.</p>
       ${zielZeilen}
     </section>`;
   // Ladepunkte an der Route, noch mit mindestens REST_LADEN % erreichbar, möglichst weit vorne; die letzten 2 km zählen als Ziel
@@ -465,16 +466,16 @@ function ladenAbschnitt(r, z) {
   const unterwegs = nachErfahrung(lade.entlang(r.coords).filter(s => s.kmAb < r.km - 2).map(s => ({ ...s, an: Math.round(x.soc - s.kmAb * proKm) }))
     .filter(s => s.an >= REST_LADEN), (a, b) => b.kmAb - a.kmAb).slice(0, 3);
   const unterwegsZeilen = unterwegs.map(s => ladepunktZeile(s, `nach ${km(s.kmAb)}<br>an mit ${s.an} %`)).join('');
-  const zwischen = minutenText(lade.ladeMinuten(15 - hin, eigen.akku, ladestrom()));
+  const zwischen = minutenText(lade.ladeMinuten(reserve() - hin, eigen.akku, ladestrom()));
   if (hin >= REST_LADEN && zielNutzbar) return `<section class="card list">
       <div class="label">Knapp: am Ziel laden</div>
-      <p style="margin:0">Du kommst mit etwa ${hin} % an, weniger als 15 % Reserve. Am Ziel <b>${rueck}</b> laden, dann reicht es zurück.</p>
+      <p style="margin:0">Du kommst mit etwa ${hin} % an, weniger als ${reserve()} % Reserve. Am Ziel <b>${rueck}</b> laden, dann reicht es zurück.</p>
       ${zielZeilen}
       ${unterwegsZeilen ? `<p class="small muted" style="margin:0">Sicherer: unterwegs ${zwischen} nachladen, z. B. hier:</p>${unterwegsZeilen}` : ''}
     </section>`;
   return `<section class="card list">
     <div class="label">Unterwegs laden</div>
-    <p style="margin:0">Unterwegs etwa <b>${zwischen}</b> laden, dann kommst du mit 15 % an <span class="small muted">(${15 - hin} % bei ${ladestrom()} A)</span>.</p>
+    <p style="margin:0">Unterwegs etwa <b>${zwischen}</b> laden, dann kommst du mit ${reserve()} % an <span class="small muted">(${reserve() - hin} % bei ${ladestrom()} A)</span>.</p>
     ${unterwegsZeilen || '<p class="small bad" style="margin:0">Kein Ladepunkt direkt an der Route in Reichweite. Vorher voll laden oder eine andere Route wählen.</p>'}
   </section>`;
 }
@@ -490,14 +491,14 @@ function naheLadepunkte(anzahl = 5) {
     <p class="small muted" style="margin:0">Strecke grob geschätzt (Luftlinie × ${de(UMWEG, 1)}). Tippen: Navigation und als „klappt mit ${esc(ladekarte())}“ oder „ging nicht“ markieren.</p>
   </section>`;
 }
-// Ampel: grün = hin und zurück mit mindestens 15 % Rest, gelb = nur hin, rot = unterwegs laden
+// Ampel: grün = hin und zurück mit mindestens Wohlfühlreserve, gelb = nur hin, rot = unterwegs laden
 function ampel(f) {
   if (!f.cache) return { klasse: 'muted', text: 'wird berechnet …', km: Infinity };
   const hin = zielRechnung(f.cache, false).ankunft, rz = zielRechnung(f.cache, true).ankunft;
-  if (rz < 15 && hin >= REST_LADEN && lade.umkreis(f.p, 1000).some(nutzbar)) {   // Rückweg nach Laden am Ziel
-    return { klasse: 'lade', text: `⚡ ${minutenText(lade.ladeMinuten(15 - rz, eigen.akku, ladestrom()))} am Ziel`, km: f.cache.km, hin, rz };
+  if (rz < reserve() && hin >= REST_LADEN && lade.umkreis(f.p, 1000).some(nutzbar)) {   // Rückweg nach Laden am Ziel
+    return { klasse: 'lade', text: `⚡ ${minutenText(lade.ladeMinuten(reserve() - rz, eigen.akku, ladestrom()))} am Ziel`, km: f.cache.km, hin, rz };
   }
-  return { klasse: rz >= 15 ? 'good' : hin >= 15 ? 'warn' : 'bad', text: rz >= 15 ? 'hin und zurück' : hin >= 15 ? 'nur hin' : 'laden', km: f.cache.km, hin, rz };
+  return { klasse: rz >= reserve() ? 'good' : hin >= reserve() ? 'warn' : 'bad', text: rz >= reserve() ? 'hin und zurück' : hin >= reserve() ? 'nur hin' : 'laden', km: f.cache.km, hin, rz };
 }
 function ampelListe() {
   if (!eigen.zuhause) return `<section class="card"><div class="label">Gemerkte Ziele</div><p class="small muted" style="margin:6px 0 0">Lege in den Einstellungen dein Zuhause fest. Dann zeigt die App hier alle gemerkten Ziele mit Ampel, auch ohne Netz.</p></section>`;
@@ -505,7 +506,7 @@ function ampelListe() {
   const zeilen = favoriten().map((f, i) => ({ f, i, ...ampel(f) })).sort((a, b) => a.km - b.km);
   return `<section class="card list">
     <div class="label">Ab ${esc(eigen.zuhause.name)} mit ${socJetzt()} % Akku</div>
-    <div class="small muted"><span class="good">●</span> hin und zurück · <span class="lade">●</span> zurück nach Laden am Ziel · <span class="warn">●</span> nur hin · <span class="bad">●</span> laden · jeweils mit 15 % Reserve</div>
+    <div class="small muted"><span class="good">●</span> hin und zurück · <span class="lade">●</span> zurück nach Laden am Ziel · <span class="warn">●</span> nur hin · <span class="bad">●</span> laden · jeweils mit ${reserve()} % Reserve</div>
     ${zeilen.map(z => `<button class="ampel" data-act="zielFavorit" data-i="${z.i}">
       <span class="punkt ${z.klasse}" aria-hidden="true">●</span>
       <span class="ampel-name"><b>${esc(z.f.kurz)}</b><span class="small muted">${z.f.cache ? `${km(z.f.cache.km)} · ↑ ${z.f.cache.auf} Hm` : z.text}</span></span>
@@ -1399,6 +1400,8 @@ function settingsSheet() {
       <span class="small muted">${Object.keys(erfahrung().punkte).length} Säulen und ${Object.keys(erfahrung().betreiber).length} Betreiber markiert. Markieren: in einer Ladepunkt-Liste auf die Säule tippen.</span></div>
     <div class="field"><label for="ladestrom">Ladestrom unterwegs (Ampere)</label><input id="ladestrom" type="number" inputmode="numeric" min="6" max="32" step="1" value="${ladestrom()}">
       <span class="small muted">≈ ${de(lade.ladeKw(ladestrom()), 1)} kW im Akku · 10 % dauern etwa ${minutenText(lade.ladeMinuten(10, eigen.akku, ladestrom()))}. Daraus rechnet die App die Ladezeiten.</span></div>
+    <div class="field"><label for="reserve">Wohlfühlreserve bei Ankunft</label><select id="reserve">${[10, 15, 20, 25, 30, 40].map(r => `<option value="${r}" ${r === reserve() ? 'selected' : ''}>${r} %${r === 15 ? ' (Sparmodus des Microlino)' : ''}</option>`).join('')}</select>
+      <span class="small muted">Ab hier zeigt der Ziel-Check „Reicht“ und die Ampel grün. Darunter wird es gelb, unter 5 % rot.</span></div>
     <section class="card list">
       <div class="label">Zuhause</div>
       <p class="small" style="margin:0">${eigen.zuhause ? `<b>${esc(eigen.zuhause.name)}</b> (${eigen.zuhause.p.map(v => v.toFixed(3)).join(', ')}). Wege ab hier zu gemerkten Zielen speichert die App, sie gehen dann auch ohne Netz.` : 'Nicht festgelegt.'}</p>
@@ -1610,8 +1613,8 @@ document.addEventListener('click', e => {
     case 'loeschen': V.loeschen = true; settingsSheet(); break;
     case 'loeschenNein': V.loeschen = false; settingsSheet(); break;
     case 'loeschenJa': {
-      const { erfassung, parkplatzMerken, entwickler, zuhause, favoriten: fav, startlisteGesetzt, ladestrom: a, ladekarte: lk, ladeErfahrung, fotoExport, bm6: g6, ladeorte } = eigen;   // Einstellungen, Ziele, Ladeorte und Lade-Erfahrung bleiben
-      eigen = { ...LEER, akku: eigen.akku, erfassung, parkplatzMerken, entwickler, zuhause, favoriten: fav, startlisteGesetzt, ladestrom: a, ladekarte: lk, ladeErfahrung, fotoExport, bm6: g6, ladeorte }; foto.alleLoeschen(); V.loeschen = false; sichern(); tracker.setModus(zielModus());
+      const { erfassung, parkplatzMerken, entwickler, zuhause, favoriten: fav, startlisteGesetzt, ladestrom: a, reserve: rs, ladekarte: lk, ladeErfahrung, fotoExport, bm6: g6, ladeorte } = eigen;   // Einstellungen, Ziele, Ladeorte und Lade-Erfahrung bleiben
+      eigen = { ...LEER, akku: eigen.akku, erfassung, parkplatzMerken, entwickler, zuhause, favoriten: fav, startlisteGesetzt, ladestrom: a, reserve: rs, ladekarte: lk, ladeErfahrung, fotoExport, bm6: g6, ladeorte }; foto.alleLoeschen(); V.loeschen = false; sichern(); tracker.setModus(zielModus());
       overlay(''); render(); toast('Alle Daten gelöscht'); break;
     }
     case 'csv':
@@ -1646,6 +1649,7 @@ document.addEventListener('change', e => {
     if (oeffentlich && !$('lPunkt')) feld.querySelector('label').insertAdjacentHTML('afterend', ladepunktAuswahl());
   }
   if (e.target.id === 'privatRadius') { eigen.privatRadius = Number(e.target.value); sichern(); toast(eigen.privatRadius ? `Unschärfe ${eigen.privatRadius} m` : 'Unschärfe aus'); }
+  if (e.target.id === 'reserve') { eigen.reserve = Number(e.target.value); sichern(); toast(`Wohlfühlreserve ${eigen.reserve} %`); }
   if (e.target.id === 'ladekarte') { eigen.ladekarte = e.target.value.trim() || 'Electroverse'; sichern(); }
   if (e.target.id === 'ladestrom') {
     const a = Number(e.target.value);

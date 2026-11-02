@@ -3,6 +3,10 @@
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
 ## Unveröffentlicht
+- **Wohlfühlreserve** (02.11.2026): Einstellungen → „Wohlfühlreserve bei Ankunft“ (10–40 %, Standard 15 %). Ziel-Check,
+  Ampel der gemerkten Ziele und Ladehinweise rechnen damit statt mit festen 15 %: darüber grün, darunter gelb, unter
+  5 % rot. Anlass: Ankunft mit 18 % ist technisch genug, Spaß macht es erst ab 30 %. Im Browser geprüft (30 %
+  eingestellt, Texte ziehen mit, bleibt nach Neuladen). Bleibt beim Löschen aller Daten erhalten.
 - **Ladesäulen auch für die Schweiz** (02.11.2026): `tools/ladepunkte-ch.mjs` mischt die BFE-Daten von
   ich-tanke-strom.ch (Open Data, 6963 Standorte mit Typ 2 oder Haushaltssteckdose, nur Punkte in CH/LI) in die Kacheln.
   Zusammen 80 Kacheln, 64 761 Standorte, 8,6 MB. Im Browser mit einem Zuhause in Zürich geprüft: 7167 Standorte.
