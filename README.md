@@ -30,7 +30,8 @@ Ich baue Bubble Log für meinen eigenen Microlino. Wer etwas anderes braucht, ni
 Version: forken, ändern, veröffentlichen, alles erlaubt. Naheliegende Ideen: echte Fahrzeugdaten (CAN-Bus, z. B.
 [Microlino Open Telemetry](https://www.microlino-open-telemetry.ch)), iPhone, weitere Sprachen.
 
-Es gibt keinen Support, keine Wunschliste und keine Zusage, Issues oder Pull Requests zu bearbeiten.
+Zuschauen ist ausdrücklich erwünscht: Jede Änderung steht im [CHANGELOG](CHANGELOG.md) und in der Git-Historie.
+Ich schaue gelegentlich in Issues und Pull Requests, aber ohne Support, ohne Wunschliste und ohne Zusage.
 Nutzung auf eigenes Risiko; die App ersetzt keinen Blick auf die Akkuanzeige des Fahrzeugs.
 
 ## Lizenz
