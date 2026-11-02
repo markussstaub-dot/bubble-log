@@ -26,7 +26,7 @@ async function json(url) {
 export async function herunterladen(zuhause, fortschritt = () => {}) {
   const index = await json(BASIS + 'index.json');
   const keys = kachelnUm(zuhause).filter(k => index.kacheln[k]);
-  if (!keys.length) throw new Error('Für diesen Ort gibt es keine Ladesäulen-Daten (nur Deutschland).');
+  if (!keys.length) throw new Error('Für diesen Ort gibt es keine Ladesäulen-Daten (nur Deutschland und Schweiz).');
   const standorte = [];
   for (const [i, k] of keys.entries()) {
     fortschritt(i, keys.length);

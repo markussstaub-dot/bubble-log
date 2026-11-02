@@ -1404,7 +1404,7 @@ function settingsSheet() {
       <p class="small" style="margin:0">${eigen.zuhause ? `<b>${esc(eigen.zuhause.name)}</b> (${eigen.zuhause.p.map(v => v.toFixed(3)).join(', ')}). Wege ab hier zu gemerkten Zielen speichert die App, sie gehen dann auch ohne Netz.` : 'Nicht festgelegt.'}</p>
       <div class="grid2"><button class="btn" data-act="zuhauseHier">Hier ist Zuhause</button>${eigen.zuhause ? `<button class="btn" data-act="zuhauseWeg">Entfernen</button>` : ''}</div>
       <div class="label" style="margin-top:6px">Ladesäulen</div>
-      <p class="small" style="margin:0">${esc(lade.BEREICH)} · Stand ${esc(lade.STAND)}. Aus dem Register der Bundesnetzagentur, nur AC Typ 2 und Schuko.</p>
+      <p class="small" style="margin:0">${esc(lade.BEREICH)} · Stand ${esc(lade.STAND)}. Quelle: ${esc(lade.QUELLE)}; nur AC Typ 2 und Haushaltssteckdose, Deutschland und Schweiz.</p>
       ${eigen.zuhause ? `<button class="btn block" data-act="ladeLaden"${V.ladeLaeuft ? ' disabled' : ''}>${V.ladeLaeuft ? `Lade Ladesäulen … ${V.ladeLaeuft}` : `Ladesäulen für dein Zuhause laden (${ladecache.RADIUS_KM} km, etwa 1–2 MB)`}</button>` : '<p class="small muted" style="margin:0">Für Ladesäulen um dein eigenes Zuhause zuerst „Hier ist Zuhause“ tippen.</p>'}
     </section>
     <div class="field"><label for="privatRadius">Unschärfe im Logbuch</label><select id="privatRadius">${[0, 200, 400, 800].map(m => `<option value="${m}" ${m === privatRadius() ? 'selected' : ''}>${m ? `${m} m um Zuhause und eigene Ladeorte` : 'Aus'}</option>`).join('')}</select>

@@ -3,6 +3,9 @@
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
 ## Unveröffentlicht
+- **Ladesäulen auch für die Schweiz** (02.11.2026): `tools/ladepunkte-ch.mjs` mischt die BFE-Daten von
+  ich-tanke-strom.ch (Open Data, 6963 Standorte mit Typ 2 oder Haushaltssteckdose, nur Punkte in CH/LI) in die Kacheln.
+  Zusammen 80 Kacheln, 64 761 Standorte, 8,6 MB. Im Browser mit einem Zuhause in Zürich geprüft: 7167 Standorte.
 - **Ladesäulen für jede Homebase** (`SPEC-ladepunkte.md`): `tools/ladepunkte.mjs --kacheln` schneidet das
   BNetzA-Register (Stand 01.09.2026, 57 797 Standorte mit Typ 2 oder Schuko) in 71 Kacheln zu 1° nach
   `docs/ladepunkte/` (GitHub Pages, 7,7 MB). Einstellungen → Zuhause → „Ladesäulen für dein Zuhause laden“ holt die
