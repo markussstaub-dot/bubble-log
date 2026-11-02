@@ -24,7 +24,18 @@ einem Galaxy Z Fold6. Eine fertige APK zum Herunterladen gibt es noch nicht.
 Bauen und Technik: [ANLEITUNG.md](ANLEITUNG.md), Arbeitsweise: [ENTWICKLUNG.md](ENTWICKLUNG.md),
 Änderungen: [CHANGELOG.md](CHANGELOG.md).
 
-## Rechte
+## Mitmachen
 
-Der Code ist zum Ansehen öffentlich. Alle Rechte liegen bei Markus Staub; eine Lizenz zur Weiterverwendung gibt es nicht.
+Bubble Log ist kostenlos und darf gern weitergebaut werden: forken, ändern, eigene Versionen veröffentlichen.
+Pull Requests und Ideen sind willkommen, besonders echte Fahrzeugdaten (CAN-Bus, z. B.
+[Microlino Open Telemetry](https://www.microlino-open-telemetry.ch)), iPhone und weitere Sprachen.
+
+Bitte beachten: Das ist ein Hobbyprojekt ohne Support und ohne Zusage, wann oder ob Beiträge übernommen werden.
+Nutzung auf eigenes Risiko; die App ersetzt keinen Blick auf die Akkuanzeige des Fahrzeugs.
+
+## Lizenz
+
+Der Code steht unter der [MIT-Lizenz](LICENSE). Die Ladesäulendaten behalten ihre eigenen Lizenzen
+(Bundesnetzagentur: CC BY 4.0, BFE/ich-tanke-strom.ch: Open Data mit Quellenangabe) und sind beim Weitergeben
+mit Quelle zu nennen.
 Microlino ist eine Marke der Microlino AG; Bubble Log ist ein unabhängiges Projekt.
