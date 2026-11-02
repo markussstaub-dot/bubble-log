@@ -24,13 +24,13 @@ einem Galaxy Z Fold6. Eine fertige APK zum Herunterladen gibt es noch nicht.
 Bauen und Technik: [ANLEITUNG.md](ANLEITUNG.md), Arbeitsweise: [ENTWICKLUNG.md](ENTWICKLUNG.md),
 Änderungen: [CHANGELOG.md](CHANGELOG.md).
 
-## Mitmachen
+## Selbst weiterbauen
 
-Bubble Log ist kostenlos und darf gern weitergebaut werden: forken, ändern, eigene Versionen veröffentlichen.
-Pull Requests und Ideen sind willkommen, besonders echte Fahrzeugdaten (CAN-Bus, z. B.
-[Microlino Open Telemetry](https://www.microlino-open-telemetry.ch)), iPhone und weitere Sprachen.
+Ich baue Bubble Log für meinen eigenen Microlino. Wer etwas anderes braucht, nimmt den Code und baut seine eigene
+Version: forken, ändern, veröffentlichen, alles erlaubt. Naheliegende Ideen: echte Fahrzeugdaten (CAN-Bus, z. B.
+[Microlino Open Telemetry](https://www.microlino-open-telemetry.ch)), iPhone, weitere Sprachen.
 
-Bitte beachten: Das ist ein Hobbyprojekt ohne Support und ohne Zusage, wann oder ob Beiträge übernommen werden.
+Es gibt keinen Support, keine Wunschliste und keine Zusage, Issues oder Pull Requests zu bearbeiten.
 Nutzung auf eigenes Risiko; die App ersetzt keinen Blick auf die Akkuanzeige des Fahrzeugs.
 
 ## Lizenz
