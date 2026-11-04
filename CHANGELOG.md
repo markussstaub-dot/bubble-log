@@ -3,6 +3,17 @@
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
 ## Unveröffentlicht
+- **Weniger Akku im Wartemodus** (04.11.2026, `SPEC-akku.md`): Anlass war die Akkustatistik vom Fold6. Bubble Log
+  hielt das Handy beim Warten ≈ 9,5 h am Tag wach (9054 `NetworkLocationScanner`-Wakelocks in 27 h), weil das
+  GPS-Plugin fest jede Sekunde ortet. Neu: `patches/` (patch-package, läuft per `postinstall`) gibt
+  `addWatcher` ein `interval`. Beim Warten in Ruhe ortet die App nur alle 30 s; sobald ein Punkt mit ≥ 3 m/s auffällt
+  (Kandidat), sofort jede Sekunde, und nach dem Verwerfen des Kandidaten wieder alle 30 s. Der Fahrtmodus bleibt
+  unverändert. Im Entwicklermodus gibt es den Schalter „Warten: volle GPS-Rate“ (das bisherige Verhalten) und die
+  Auswahl „Ortung in Ruhe alle 15/30/60 s“; ohne Entwicklermodus gelten immer 30 s. Das Replay kann den Sparmodus
+  nachstellen (`node tools/replay.mjs DATEI RUHE_TAKT=30000`). Alle Logs vom 27.10. bis 03.11. erkennen damit
+  dieselben Fahrten (`tests/akku.test.js`). Befund: Bei Stop-and-go gleich nach dem Losfahren kann der Start mehr als
+  30 s später kommen (29.10.: 90 s); er steht als `todo` im Test. Im Browser in Handygröße geprüft (Schalter und
+  Auswahl bleiben nach Neuladen, ohne Entwicklermodus ausgeblendet). Das native GPS lässt sich nur auf dem Handy prüfen.
 - **Wohlfühlreserve** (02.11.2026): Einstellungen → „Wohlfühlreserve bei Ankunft“ (10–40 %, Standard 15 %). Ziel-Check,
   Ampel der gemerkten Ziele und Ladehinweise rechnen damit statt mit festen 15 %: darüber grün, darunter gelb, unter
   5 % rot. Anlass: Ankunft mit 18 % ist technisch genug, Spaß macht es erst ab 30 %. Im Browser geprüft (30 %

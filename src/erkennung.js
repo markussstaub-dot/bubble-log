@@ -17,6 +17,17 @@ export const SCHWELLEN = {
   SPRUNG_NEU: 3,           // so viele Sprünge in Folge: dann gilt die neue Position
 };
 
+// GPS-Takt (SPEC-akku.md, patches/ für interval): Fahrt und „wach“ (Kandidat beim Warten) jede Sekunde, Warten in Ruhe
+// nur alle RUHE_TAKT. Entwicklermodus: Ruhe-Takt 15/30/60 s oder volle Rate (main.js).
+export const VOLL_TAKT = 1000;
+export const RUHE_TAKT = 30000;
+export const RUHE_TAKTE = [15000, 30000, 60000];
+// { abstand: distanceFilter in m, takt: interval in ms } je Zustand
+export function gpsWahl(modus, wach, ruheTakt = RUHE_TAKT) {
+  if (modus === 'fahrt') return { abstand: 0, takt: VOLL_TAKT };
+  return { abstand: 30, takt: wach ? VOLL_TAKT : Math.max(VOLL_TAKT, ruheTakt) };
+}
+
 export function distanz(a, b) {        // Meter zwischen zwei [lat, lon]
   const R = 6371000, r = Math.PI / 180, dLat = (b[0] - a[0]) * r, dLon = (b[1] - a[1]) * r;
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(a[0] * r) * Math.cos(b[0] * r) * Math.sin(dLon / 2) ** 2;
@@ -24,7 +35,9 @@ export function distanz(a, b) {        // Meter zwischen zwei [lat, lon]
 }
 
 // schwellen: einzelne Werte aus SCHWELLEN überschreiben (Tests, Replay); jetzt: Uhr für Punkte ohne Zeit
-export function createErkennung({ onStart = () => {}, onPunkt = () => {}, onStopp = () => {}, onLog = () => {}, schwellen = {}, jetzt = Date.now } = {}) {
+// onKandidat(an) (SPEC-akku.md): true, sobald beim Warten ein schneller Punkt auffällt (tracker.js weckt dann das GPS
+// auf 1 s), false, wenn der Kandidat verworfen wird. Beim Start (wenn er den Modus wechselt) und bei Moduswechseln kommt nichts, die setzen den Takt selbst.
+export function createErkennung({ onStart = () => {}, onPunkt = () => {}, onStopp = () => {}, onLog = () => {}, onKandidat = () => {}, schwellen = {}, jetzt = Date.now } = {}) {
   const S = { ...SCHWELLEN, ...schwellen };
   let modus = 'aus';
   let kandidat = null, letzter = null, ruhe = null, bewegt = null;   // bewegt: letzter Punkt mit echtem Tempo = Fahrtende
@@ -55,7 +68,8 @@ export function createErkennung({ onStart = () => {}, onPunkt = () => {}, onStop
     if (letzter && distanz(letzter.p, p) / Math.max(1, (t - letzter.t) / 1000) > S.MAX_TEMPO) {
       if (++spruenge < S.SPRUNG_NEU) { onLog('gps', { ...roh, verworfen: 'sprung' }); return; }
       onLog('erkennung', { schritt: 'neu aufgesetzt nach Sprüngen', spruenge });
-      letzter = null; kandidat = null; tempo = loc.speed; neuAufgesetzt = true;
+      letzter = null; tempo = loc.speed; neuAufgesetzt = true;
+      if (kandidat) { kandidat = null; onKandidat(false); }
     }
     spruenge = 0;
     const punkt = { p, t, tempo: tempo ?? 0, hoehe: loc.altitude ?? null };
@@ -63,14 +77,15 @@ export function createErkennung({ onStart = () => {}, onPunkt = () => {}, onStop
 
     if (modus === 'warten') {
       if (punkt.tempo >= S.START_TEMPO) {
-        if (!kandidat) { kandidat = punkt; onLog('erkennung', { schritt: 'kandidat' }); }
+        if (!kandidat) { kandidat = punkt; onLog('erkennung', { schritt: 'kandidat' }); onKandidat(true); }
         else if (t - kandidat.t >= S.START_DAUER && distanz(kandidat.p, p) >= S.START_WEG) {
           const start = kandidat; kandidat = null; letzter = punkt; ruhe = { p, t };
           onLog('erkennung', { schritt: 'start', seit: start.t, weg: Math.round(distanz(start.p, p)) });
           onStart(start, punkt);
+          if (modus === 'warten') onKandidat(false);   // Start ignoriert (main.js): GPS nicht auf voller Rate hängen lassen
           return;
         }
-      } else if (kandidat && t - kandidat.t > S.KANDIDAT_MAX) { kandidat = null; onLog('erkennung', { schritt: 'kandidat verworfen' }); }
+      } else if (kandidat && t - kandidat.t > S.KANDIDAT_MAX) { kandidat = null; onLog('erkennung', { schritt: 'kandidat verworfen' }); onKandidat(false); }
     } else if (modus === 'fahrt') {
       // Start per Hand nach langer Pause (29.10.2026): der alte Punkt aus dem Warten ist kein Bezug, sonst endet die
       // Fahrt mit dem ersten Punkt gleich wieder als „stopp nach Lücke“
@@ -106,6 +121,7 @@ export function createErkennung({ onStart = () => {}, onPunkt = () => {}, onStop
 
   return {
     get modus() { return modus; },
+    get kandidat() { return !!kandidat; },
     schwellen: S,
     verarbeite,
     // false, wenn der Modus schon so war; sonst beginnen Kandidat und Stillstand frisch

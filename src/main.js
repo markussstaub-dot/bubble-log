@@ -3,7 +3,7 @@
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { laden, speichern, speichernSpaeter, LEER } from './store.js';
-import { createTracker, distanz, fahrtEnde, gpsStand } from './tracker.js';
+import { createTracker, distanz, fahrtEnde, gpsStand, RUHE_TAKT, RUHE_TAKTE, VOLL_TAKT } from './tracker.js';
 import { temperatur, tiefstwert } from './wetter.js';
 import { verteilen } from './tagesabschluss.js';
 import { unscharf, kreisMitte, beruehrt, tagestour } from './logbuch.js';
@@ -1282,8 +1282,14 @@ function tagSpeichern() {
   sichern(); tracker.setModus(zielModus()); overlay(''); render(); toast(`${l.length} Fahrten gespeichert`);
 }
 
+// GPS-Takt beim Warten ohne Kandidat (SPEC-akku.md): im Normalbetrieb immer der Sparmodus, nur im Entwicklermodus
+// einstellbar (volle Rate wie bis 11/2026 für dichte Logs, oder 15/30/60 s), wie sensoren.auchBeimWarten()
+const ruheTakt = () => !devlog.aktiv() ? RUHE_TAKT : eigen.gpsVoll ? VOLL_TAKT : (eigen.ruheTakt ?? RUHE_TAKT);
+const gpsNeuBeimWarten = () => { if (tracker.modus === 'warten' && !V.sandbox) tracker.neuStarten(); };
+
 // Fahrterkennung: Rückmeldungen vom GPS
 const tracker = createTracker({
+  ruheTakt,
   onLog(typ, daten) { devlog.log(typ, daten); if (typ === 'gps') V.devGps = daten; },
   onStart(start, punkt) {
     // Testfahrt 01.11.2026: Fahrt 1 wartete nach dem Ende im Hintergrund noch auf den Akkustand, und alle Starts
@@ -1423,7 +1429,11 @@ function settingsSheet() {
         <input type="checkbox" id="entwickler" ${devlog.aktiv() ? 'checked' : ''}></label>
       ${devlog.aktiv() ? `<p class="small mono muted" id="devInfo" style="margin:0">Logs werden gezählt …</p>
         <div class="grid2"><button class="btn" data-act="devTeilen">Logs teilen</button>${V.devLoeschen
-          ? `<button class="btn danger" data-act="devLoeschenJa">Wirklich löschen</button>` : `<button class="btn" data-act="devLoeschen">Logs löschen</button>`}</div>` : ''}
+          ? `<button class="btn danger" data-act="devLoeschenJa">Wirklich löschen</button>` : `<button class="btn" data-act="devLoeschen">Logs löschen</button>`}</div>
+        <label class="switch" for="gpsVoll"><span><b>Warten: volle GPS-Rate</b><br><span class="small muted">Ortet beim Warten jede Sekunde wie früher, für dichte Logs. Kostet viel Handy-Akku (bis 9 h Wachhalten am Tag). Aus: Sparmodus, schaltet erst bei Tempo auf 1 s.</span></span>
+          <input type="checkbox" id="gpsVoll" ${eigen.gpsVoll ? 'checked' : ''}></label>
+        <div class="field"><label for="ruheTakt">Warten: Ortung in Ruhe alle</label><select id="ruheTakt"${eigen.gpsVoll ? ' disabled' : ''}>${RUHE_TAKTE.map(ms => `<option value="${ms}" ${ms === (eigen.ruheTakt ?? RUHE_TAKT) ? 'selected' : ''}>${ms / 1000} s${ms === RUHE_TAKT ? ' (Standard)' : ''}</option>`).join('')}</select>
+          <span class="small muted">Kürzer bemerkt den Fahrtbeginn früher, länger spart Akku. Ohne Entwicklermodus gilt immer ${RUHE_TAKT / 1000} s.</span></div>` : ''}
     </section>
     ${V.loeschen ? `<p class="small bad" style="margin:0">Alle ${fahrten().length} Fahrten und ${ladungen().length} Ladevorgänge werden gelöscht. Das lässt sich nicht rückgängig machen.</p>
       <div class="grid2"><button class="btn" data-act="loeschenNein">Abbrechen</button><button class="btn danger" data-act="loeschenJa">Endgültig löschen</button></div>`
@@ -1613,8 +1623,8 @@ document.addEventListener('click', e => {
     case 'loeschen': V.loeschen = true; settingsSheet(); break;
     case 'loeschenNein': V.loeschen = false; settingsSheet(); break;
     case 'loeschenJa': {
-      const { erfassung, parkplatzMerken, entwickler, zuhause, favoriten: fav, startlisteGesetzt, ladestrom: a, reserve: rs, ladekarte: lk, ladeErfahrung, fotoExport, bm6: g6, ladeorte } = eigen;   // Einstellungen, Ziele, Ladeorte und Lade-Erfahrung bleiben
-      eigen = { ...LEER, akku: eigen.akku, erfassung, parkplatzMerken, entwickler, zuhause, favoriten: fav, startlisteGesetzt, ladestrom: a, reserve: rs, ladekarte: lk, ladeErfahrung, fotoExport, bm6: g6, ladeorte }; foto.alleLoeschen(); V.loeschen = false; sichern(); tracker.setModus(zielModus());
+      const { erfassung, parkplatzMerken, entwickler, zuhause, favoriten: fav, startlisteGesetzt, ladestrom: a, reserve: rs, ladekarte: lk, ladeErfahrung, fotoExport, bm6: g6, ladeorte, gpsVoll, ruheTakt: rt } = eigen;   // Einstellungen, Ziele, Ladeorte und Lade-Erfahrung bleiben
+      eigen = { ...LEER, akku: eigen.akku, erfassung, parkplatzMerken, entwickler, zuhause, favoriten: fav, startlisteGesetzt, ladestrom: a, reserve: rs, ladekarte: lk, ladeErfahrung, fotoExport, bm6: g6, ladeorte, gpsVoll, ruheTakt: rt }; foto.alleLoeschen(); V.loeschen = false; sichern(); tracker.setModus(zielModus());
       overlay(''); render(); toast('Alle Daten gelöscht'); break;
     }
     case 'csv':
@@ -1657,11 +1667,15 @@ document.addEventListener('change', e => {
   }
   if (e.target.id === 'entwickler') {
     eigen.entwickler = e.target.checked; V.devLoeschen = false; sichern();
+    const taktVorher = ruheTakt();
     devlog.setAktiv(eigen.entwickler).then(() => {
       if (tracker.modus === 'warten' && !V.sandbox) { if (eigen.entwickler) sensoren.start('warten'); else sensoren.stopp(); }   // Messfenster beim Warten
+      if (ruheTakt() !== taktVorher) gpsNeuBeimWarten();   // GPS-Takt der Einstellungen gilt nur im Entwicklermodus
       settingsSheet(); toast(eigen.entwickler ? 'Entwicklermodus an: Logs werden geschrieben' : 'Entwicklermodus aus'); });
   }
   if (e.target.id === 'fotoExport') { eigen.fotoExport = e.target.checked; sichern(); }
+  if (e.target.id === 'gpsVoll') { eigen.gpsVoll = e.target.checked; sichern(); gpsNeuBeimWarten(); settingsSheet(); toast(eigen.gpsVoll ? 'Warten: GPS jede Sekunde' : `Warten: Sparmodus, alle ${ruheTakt() / 1000} s`); }
+  if (e.target.id === 'ruheTakt') { eigen.ruheTakt = Number(e.target.value); sichern(); gpsNeuBeimWarten(); toast(`Warten: Ortung in Ruhe alle ${eigen.ruheTakt / 1000} s`); }
   if (e.target.id === 'bm6an') {
     eigen.bm6 = { ...eigen.bm6, an: e.target.checked }; sichern(); render();
     if (!e.target.checked) bordnetz.abbrechen();

@@ -188,6 +188,12 @@ Hintergrund-GPS, Benachrichtigungen, Sensor-Plugin und Teilen/Speichern gehen nu
   Entwicklermodus schreibt Messfenster: alle 5 s eine Zeile `vibration` (`rau`/`waag` = Effektivwert senkrecht/waagrecht
   in m/s², `waagMax` = stärkster geglätteter Ausschlag in g, `stoss`, `modus`, `ruhig` = unter `RUHE_VIBRATION`), auch im
   Stand; die Sensoren laufen dann auch beim Warten (etwas mehr Akku). Entscheidet noch nichts, nur zum Abstimmen.
+- **GPS-Takt beim Warten** (04.11.2026, `SPEC-akku.md`): Das Plugin ist per `patch-package` geändert
+  (`patches/`, wird bei `npm install` über `postinstall` eingespielt; ohne Patch ortet es fest jede Sekunde).
+  Beim Warten in Ruhe ortet die App alle 30 s, ab einem Kandidaten (≥ 3 m/s) jede Sekunde. Entwicklermodus: „Warten: volle GPS-Rate“
+  und „Ortung in Ruhe alle 15/30/60 s“. Im Log stehen `modus`-Zeilen mit `gpsTakt: wach/ruhe` und `takt` beim Dienststart.
+  Nach einem Plugin-Update muss der Patch neu gebaut werden (`npx patch-package @capacitor-community/background-geolocation`,
+  vorher `node_modules/@capacitor-community/background-geolocation/android/build` löschen, sonst scheitert es an langen Pfaden).
 - 3D-Sim: Leistung auf dem Fold6 prüfen (erst mit APK). Ideen: Straßenlaternen, echte
   Verkehrsampeln (bräuchten Overpass oder eine eigene Liste).
 - **Replay und Tests der Fahrterkennung** (`SPEC-replay.md`): Meilenstein 1 fertig (Kern `erkennung.js`, `replay.js`,

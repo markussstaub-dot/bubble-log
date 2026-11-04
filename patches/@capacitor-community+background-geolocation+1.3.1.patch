@@ -1,0 +1,57 @@
+diff --git a/node_modules/@capacitor-community/background-geolocation/android/src/main/java/com/equimaps/capacitor_background_geolocation/BackgroundGeolocation.java b/node_modules/@capacitor-community/background-geolocation/android/src/main/java/com/equimaps/capacitor_background_geolocation/BackgroundGeolocation.java
+index a92fcf9..84489e0 100644
+--- a/node_modules/@capacitor-community/background-geolocation/android/src/main/java/com/equimaps/capacitor_background_geolocation/BackgroundGeolocation.java
++++ b/node_modules/@capacitor-community/background-geolocation/android/src/main/java/com/equimaps/capacitor_background_geolocation/BackgroundGeolocation.java
+@@ -159,7 +159,9 @@ public class BackgroundGeolocation extends Plugin {
+         service.addWatcher(
+                 call.getCallbackId(),
+                 backgroundNotification,
+-                call.getFloat("distanceFilter", 0f)
++                call.getFloat("distanceFilter", 0f),
++                // Bubble Log (patch-package): Ortungstakt in ms, ohne Angabe wie bisher 1000
++                call.getInt("interval", 1000)
+         );
+     }
+ 
+diff --git a/node_modules/@capacitor-community/background-geolocation/android/src/main/java/com/equimaps/capacitor_background_geolocation/BackgroundGeolocationService.java b/node_modules/@capacitor-community/background-geolocation/android/src/main/java/com/equimaps/capacitor_background_geolocation/BackgroundGeolocationService.java
+index 2c5de94..1c77ea6 100644
+--- a/node_modules/@capacitor-community/background-geolocation/android/src/main/java/com/equimaps/capacitor_background_geolocation/BackgroundGeolocationService.java
++++ b/node_modules/@capacitor-community/background-geolocation/android/src/main/java/com/equimaps/capacitor_background_geolocation/BackgroundGeolocationService.java
+@@ -86,14 +86,19 @@ public class BackgroundGeolocationService extends Service {
+         void addWatcher(
+                 final String id,
+                 Notification backgroundNotification,
+-                float distanceFilter
++                float distanceFilter,
++                int interval
+         ) {
+             FusedLocationProviderClient client = LocationServices.getFusedLocationProviderClient(
+                     BackgroundGeolocationService.this
+             );
+             LocationRequest locationRequest = new LocationRequest();
+-            locationRequest.setMaxWaitTime(1000);
+-            locationRequest.setInterval(1000);
++            // Bubble Log (patch-package): Takt einstellbar, damit der Wartemodus das Handy nicht jede Sekunde weckt
++            long takt = Math.max(1000, interval);
++            locationRequest.setMaxWaitTime(takt);
++            locationRequest.setInterval(takt);
++            // Fastest nur bei längerem Takt, sonst ruft FLP passiv öfter an; bei 1000 bleibt alles wie im Original
++            if (takt > 1000) locationRequest.setFastestInterval(takt);
+             locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+             locationRequest.setSmallestDisplacement(distanceFilter);
+ 
+diff --git a/node_modules/@capacitor-community/background-geolocation/definitions.d.ts b/node_modules/@capacitor-community/background-geolocation/definitions.d.ts
+index 5ae4202..47dda00 100644
+--- a/node_modules/@capacitor-community/background-geolocation/definitions.d.ts
++++ b/node_modules/@capacitor-community/background-geolocation/definitions.d.ts
+@@ -37,6 +37,10 @@ export interface WatcherOptions {
+      * @default 0
+      */
+     distanceFilter?: number;
++    /**
++     * Bubble Log (patch-package): milliseconds between location updates on Android. Defaults to 1000.
++     */
++    interval?: number;
+ }
+ 
+ /**

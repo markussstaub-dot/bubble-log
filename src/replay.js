@@ -26,14 +26,18 @@ export const gpsZuLoc = z => ({ latitude: z.lat, longitude: z.lon, accuracy: z.g
 // Bei einer sim-Zeile (Simulator an/aus) beginnt die Erkennung frisch wie in der App, der Modus kommt aus der nächsten gps-Zeile.
 // Bei einer app-Zeile (Start oder sichtbar) läuft der Wächter wie in der App (SPEC-gps-abbruch.md). geoeffnet: ms, zu denen
 // die App danach noch geöffnet wurde, ohne dass es im Log steht (GPS-Dienst tot, Log-Ende); dort läuft der Wächter auch.
-export function spieleAb(eingabe, { schwellen, startModus, geoeffnet = [] } = {}) {
+// ruheTakt: ms, Sparmodus beim Warten nachstellen (SPEC-akku.md): ohne Kandidat zählt höchstens ein Punkt je ruheTakt,
+// nach einem Kandidaten wieder jeder (das GPS ist dann wach). Ergebnis zählt die weggelassenen Punkte (ausgeduennt).
+export function spieleAb(eingabe, { schwellen, startModus, geoeffnet = [], ruheTakt = 0 } = {}) {
   const zeilen = typeof eingabe === 'string' ? leseLog(eingabe) : eingabe;
   const ereignisse = [], fahrten = [], damals = [];
   let jetzt = null, offen = null, punkte = 0, verworfen = { ungenau: 0, sprung: 0 }, ausfall = null;
+  let wach = false, wachModus = null, zuletzt = null, ausgeduennt = 0;   // Sparmodus (ruheTakt)
 
   const ereignis = (typ, zeit, ort, mehr = {}) => ereignisse.push({ typ, zeit, uhr: uhr(zeit), ort, ...mehr });
   const erkennung = createErkennung({
     schwellen, jetzt: () => jetzt.t,
+    onKandidat(an) { wach = an; },
     onLog(typ, d) {
       if (typ === 'gps' && d.verworfen) verworfen[d.verworfen]++;
       if (typ !== 'erkennung') return;
@@ -86,6 +90,12 @@ export function spieleAb(eingabe, { schwellen, startModus, geoeffnet = [] } = {}
         erkennung.setModus(m); modusOffen = false;
         if (m === 'fahrt' && !offen) offen = { start: null, erkannt: null, ende: null, gestoppt: null, km: 0, von: null, nach: null, letzter: [z.lat, z.lon], fortgesetzt: true };
       }
+      if (ruheTakt) {
+        const zt = z.zeit ?? z.t;
+        if (erkennung.modus !== wachModus) { wach = false; wachModus = erkennung.modus; }   // Start/Stopp setzen den Takt neu
+        if (erkennung.modus === 'warten' && !wach && zuletzt != null && zt >= zuletzt && zt - zuletzt < ruheTakt) { ausgeduennt++; continue; }
+        zuletzt = zt;
+      }
       jetzt = z; punkte++;
       erkennung.verarbeite(gpsZuLoc(z));
     } else if (z.typ === 'erkennung' || z.typ === 'fahrt' || z.typ === 'modus' || z.typ === 'sim') {
@@ -93,13 +103,13 @@ export function spieleAb(eingabe, { schwellen, startModus, geoeffnet = [] } = {}
       damals.push({ t, uhr: uhr(t), typ, ...rest });
       if (typ === 'sim') {
         if (offen) { offen.abgebrochen = true; abschliessen(); }
-        erkennung.zuruecksetzen(); modusOffen = true;
+        erkennung.zuruecksetzen(); modusOffen = true; wach = false;
       }
     } else if (z.typ === 'app' && (z.start || z.sichtbar)) waechter(z.t);
   }
   for (const t of [].concat(geoeffnet)) waechter(t);
   if (offen) abschliessen();   // Fahrt läuft am Log-Ende noch (ende: null)
-  return { ereignisse, fahrten, damals, punkte, verworfen };
+  return { ereignisse, fahrten, damals, punkte, verworfen, ausgeduennt };
 }
 
 const runde = km => Math.round(km * 100) / 100;
