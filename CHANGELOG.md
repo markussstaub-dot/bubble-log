@@ -4,6 +4,11 @@ Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten
 
 ## Unveröffentlicht
 
+## Bubble-Log-1710 (05.11.2026, Version 2026.11.05-1710)
+- **12-V-Wächter misst nicht mehr 0 V:** Gleich nach dem Verbinden schickt der Wächter einen Platzhalter
+  (`d15507ff…`, sonst Nullen). Bubble Log nahm ihn als Messung (0 V). Jetzt wartet die App auf die echte Antwort
+  (Laborprobe mit Fnirsi-Netzteil: 6 Platzhalter, 1 echte Antwort 11,95 V / 26 °C). Test in `tests/bordspannung.test.js`.
+
 ## Bubble-Log-1632 (05.11.2026, Version 2026.11.05-1632)
 - **12-V-Wächter: Ancel BM200** wird gefunden. Die Suche nahm bisher nur Namen mit „BM6…“; der BM200 (Hersteller-App
   `com.dc.bm6_ancel`, also baugleich) meldet sich anders. Jetzt auch BM2, Namen mit „Ancel“/„Battery Monitor“ und jedes
