@@ -42,9 +42,10 @@ test('Minutenwerte: kleinster, Mittel, größter je Minute, auch über mehrere A
 
 test('Ruhewert: ok, beobachten, verdächtig', () => {
   assert.equal(ruheStufe(12.7), 'ok');
-  assert.equal(ruheStufe(12.6), 'ok');
-  assert.equal(ruheStufe(12.5), 'beobachten');
-  assert.equal(ruheStufe(12.39), 'verdaechtig');
+  assert.equal(ruheStufe(12.4), 'ok');
+  assert.equal(ruheStufe(12.2), 'beobachten');
+  assert.equal(ruheStufe(12.0), 'beobachten');
+  assert.equal(ruheStufe(11.99), 'verdaechtig');
 });
 
 const fahrt = mittel => mittel.map((v, i) => [i * 60000, v - 0.1, v, v + 0.1]);

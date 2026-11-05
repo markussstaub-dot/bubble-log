@@ -8,8 +8,8 @@ export const BEFEHL = 'd1550700000000000000000000000000';            // „Messw
 export const BEFEHL_VERSCHLUESSELT = '697ea0b5d54cf024e794772355554114';
 
 // Schwellen aus microlino-12v-problem.md; ändern nur nach Zustimmung
-export const RUHE_OK = 12.6;          // V, Auto aus: ab hier ok
-export const RUHE_VERDACHT = 12.4;    // V, Auto aus: darunter verdächtig
+export const RUHE_OK = 12.4;          // V, Auto aus: ab hier ok (Laborprobe 05.11.2026, vorher 12,6)
+export const RUHE_VERDACHT = 12.0;    // V, Auto aus: darunter verdächtig (vorher 12,4)
 export const FAHRT_OK = [13.4, 14.4]; // V, Mittelwert beim Fahren: ok
 export const FAHRT_VERDACHT = 13.2;   // V, Mittelwert beim Fahren: darunter verdächtig
 export const SCHWANKUNG_MAX = 0.5;    // V, größter − kleinster Minutenwert einer Fahrt

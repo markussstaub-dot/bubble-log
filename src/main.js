@@ -761,7 +761,7 @@ function v12Sheet(id) {
       <div class="between"><span>Schwankung</span><b>${de(b.schwankung, 2)} V</b></div>` : ''}
       <div class="between"><span>Ruhe nach dem Abstellen</span><b>${f.v12.ruhe != null ? `${de(f.v12.ruhe, 2)} V` : 'nicht gemessen'}</b></div>
     </section>
-    <p class="small muted" style="margin:0">Verdächtig: beim Fahren unter 13,2 V oder mehr als 0,5 V Schwankung, nach dem Abstellen unter 12,4 V. Gestrichelt: 13,4 V (grün) und 13,2 V (rot).</p>
+    <p class="small muted" style="margin:0">Verdächtig: beim Fahren unter 13,2 V oder mehr als 0,5 V Schwankung, nach dem Abstellen unter 12,0 V. Gestrichelt: 13,4 V (grün) und 13,2 V (rot).</p>
     <button class="btn primary block" data-act="close">Schließen</button>`);
 }
 // Knopf „Springt nicht an“: sofort festhalten, die Spannung kommt nach

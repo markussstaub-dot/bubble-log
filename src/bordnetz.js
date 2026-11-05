@@ -73,7 +73,7 @@ async function ruheMessen(id, frischAb) {
   messen({ t: w.t, v: w.v, temp: w.temp, anlass: 'ruhe', fahrt: id, stufe });
   const e = app.eigen(), f = e.fahrten.find(x => x.id === id) || (e.offen && 'f' + e.offen.t0 === id ? e.offen : null);
   if (f?.v12) { f.v12.ruhe = w.v; app.sichern(); }
-  if (stufe === 'verdaechtig') app.melde(6, '12-V-Batterie schwach', `${vText(w.v)} nach dem Abstellen (verdächtig unter 12,4 V). Bitte im Blick behalten.`);
+  if (stufe === 'verdaechtig') app.melde(6, '12-V-Batterie schwach', `${vText(w.v)} nach dem Abstellen (verdächtig unter 12,0 V). Bitte im Blick behalten.`);
 }
 // Fahrt verworfen oder zu kurz: Aufzeichnung beenden
 export async function abbrechen() {

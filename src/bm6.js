@@ -9,9 +9,9 @@ const Batteriewaechter = registerPlugin('Batteriewaechter');
 const NATIV = Capacitor.isNativePlatform();
 
 // Simulierter BM6. Verhalten: normal, schwacher DC/DC-Wandler (lädt beim Fahren nur ~13 V und schwankt),
-// Batterie sackt ab (Ruhespannung fällt unter 12,4 V)
+// Batterie sackt ab (Ruhespannung fällt unter 12,0 V)
 export const SIM_PROFILE = { normal: 'normal', dcdc: 'schwacher DC/DC', absacken: 'Batterie sackt ab' };
-const SIM_ZIEL = { normal: [12.7, 13.7, 0.03], dcdc: [12.65, 13.0, 0.25], absacken: [12.25, 13.6, 0.03] };   // Ruhe, Fahren, Streuung
+const SIM_ZIEL = { normal: [12.7, 13.7, 0.03], dcdc: [12.65, 13.0, 0.25], absacken: [11.85, 13.6, 0.03] };   // Ruhe, Fahren, Streuung
 const SIM_TAKT = 1000, SIM_TRAEGHEIT = 0.08;   // je Sekunde rückt die Spannung so viel Anteil zum Ziel
 let sim = !NATIV, simProfil = 'normal', simMotor = false, simV = 12.7, simTimer = 0;
 

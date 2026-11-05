@@ -44,7 +44,8 @@ Bluetooth reicht etwa 10 m. Bubble Log misst also nur, wenn das Handy beim Auto 
 
 ## Bewertung und Warnung
 Schwellen aus der Hintergrundnotiz, zum Start so übernommen, Anpassung nur nach Zustimmung:
-- [Vorschlag] Auto aus (Ruhewert): ab 12,6 V **ok**, 12,4–12,6 V **beobachten**, unter 12,4 V **verdächtig**.
+- Auto aus (Ruhewert): ab 12,4 V **ok**, 12,0–12,4 V **beobachten**, unter 12,0 V **verdächtig** (05.11.2026 nach der Laborprobe
+  mit Markus festgelegt; vorher 12,6/12,4). Gilt für Blei/AGM; Batterietyp im Micro noch klären.
 - [Vorschlag] Beim Fahren: Mittelwert 13,4–14,4 V und Schwankung (größter − kleinster Minutenwert) höchstens 0,5 V **ok**;
   Mittelwert unter 13,2 V oder Schwankung über 0,5 V **verdächtig**; dazwischen **beobachten**.
 - [Vorschlag] Warnung als Benachrichtigung bei einem verdächtigen Ruhewert („12-V-Batterie 12,3 V, bitte im Blick behalten“)
