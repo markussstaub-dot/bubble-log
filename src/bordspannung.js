@@ -19,6 +19,8 @@ export const SCHWANKUNG_MAX = 0.5;    // V, größter − kleinster Minutenwert 
 export function antwortLesen(hex) {
   const h = String(hex || '').toLowerCase();
   if (h.length < 18 || !h.startsWith('d15507')) return null;
+  // Gleich nach dem Verbinden schickt der Wächter „d15507ff“ und sonst Nullen: noch kein Messwert (Ancel BM200, 05.11.2026)
+  if (h.slice(6, 8) === 'ff') return null;
   const v = parseInt(h.slice(15, 18), 16) / 100, t = parseInt(h.slice(8, 10), 16), soc = parseInt(h.slice(12, 14), 16);
   if (!Number.isFinite(v)) return null;
   return { v, temp: h.slice(6, 8) === '01' ? -t : t, soc };

@@ -28,6 +28,11 @@ test('negative Temperatur und fremde Antworten', () => {
   assert.equal(antwortLesen(''), null);
 });
 
+test('Ancel BM200 (05.11.2026): Platzhalter nach dem Verbinden ist kein Messwert, die echte Antwort schon', () => {
+  assert.equal(antwortLesen('d15507ff000000000000000000000000'), null);
+  assert.deepEqual(antwortLesen('d15507001a010004ab00000000020000'), { v: 11.95, temp: 26, soc: 0 });
+});
+
 test('Minutenwerte: kleinster, Mittel, größter je Minute, auch über mehrere Abholungen', () => {
   const m = [], s = {}, t0 = Date.UTC(2026, 9, 30, 10, 0, 0);
   einrechnen(m, s, [[t0, 13.6], [t0 + 20000, 13.8]]);
