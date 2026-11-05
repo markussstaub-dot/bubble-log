@@ -65,6 +65,17 @@ public class Batteriewaechter extends Plugin {
     private String letzterHex;
 
     private static UUID uuid16(String k) { return UUID.fromString("0000" + k + "-0000-1000-8000-00805f9b34fb"); }
+    // BM6 und Baugleiche: Ancel BM200 (Hersteller-App „com.dc.bm6_ancel“, 05.11.2026), BM2; sonst jedes Gerät mit
+    // Namen, das den Dienst FFF0 anbietet. Welches es ist, wählt man in der Liste nach Name und Signal.
+    private static boolean istWaechter(String name, ScanResult r) {
+        if (name == null) return false;
+        String n = name.toUpperCase();
+        if (n.startsWith("BM6") || n.startsWith("BM2") || n.contains("ANCEL") || n.contains("BATTERY MONITOR")) return true;
+        java.util.List<android.os.ParcelUuid> dienste = r.getScanRecord() != null ? r.getScanRecord().getServiceUuids() : null;
+        if (dienste == null) return false;
+        for (android.os.ParcelUuid d : dienste) if (DIENST.equals(d.getUuid())) return true;
+        return false;
+    }
 
     @Override
     public void load() {
@@ -106,7 +117,7 @@ public class Batteriewaechter extends Plugin {
             public void onScanResult(int typ, ScanResult r) {
                 String name = r.getScanRecord() != null ? r.getScanRecord().getDeviceName() : null;
                 if (name == null) name = r.getDevice().getName();
-                if (name == null || !name.toUpperCase().startsWith("BM6")) return;
+                if (!istWaechter(name, r)) return;
                 JSObject g = new JSObject();
                 g.put("name", name); g.put("adresse", r.getDevice().getAddress()); g.put("rssi", r.getRssi());
                 synchronized (gefunden) { gefunden.put(r.getDevice().getAddress(), g); }
