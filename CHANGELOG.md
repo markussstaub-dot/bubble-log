@@ -4,6 +4,11 @@ Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten
 
 ## Unveröffentlicht
 
+## Bubble-Log-1632 (05.11.2026, Version 2026.11.05-1632)
+- **12-V-Wächter: Ancel BM200** wird gefunden. Die Suche nahm bisher nur Namen mit „BM6…“; der BM200 (Hersteller-App
+  `com.dc.bm6_ancel`, also baugleich) meldet sich anders. Jetzt auch BM2, Namen mit „Ancel“/„Battery Monitor“ und jedes
+  Gerät, das den Dienst FFF0 anbietet. Per adb installiert, Daten bleiben.
+
 ## Bubble-Log-1356 (05.11.2026, Version 2026.11.05-1356)
 Derselbe Code wie 1146, nur neu gebaut und per adb über 1146 installiert (App-Daten bleiben). Bauen mit Log-Datei:
 `cmd /c "powershell -File apk.ps1 -OhneKopieren > LOG 2>&1"`, weil `*>` in PowerShell 5.1 die Vite-Warnung zum Abbruch macht.
