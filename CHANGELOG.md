@@ -4,6 +4,11 @@ Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten
 
 ## Unveröffentlicht
 
+## Bubble-Log-1716 (05.11.2026, Version 2026.11.05-1716)
+- **12-V-Schwellen nach der Laborprobe:** Ruhewert ok ab 12,4 V (vorher 12,6), beobachten 12,0–12,4 V, verdächtig unter
+  12,0 V (vorher 12,4). Texte, Warnmeldung und Simulator („Batterie sackt ab“ jetzt 11,85 V) ziehen mit. Gilt für
+  Blei/AGM; der Batterietyp im Micro ist noch zu klären.
+
 ## Bubble-Log-1710 (05.11.2026, Version 2026.11.05-1710)
 - **12-V-Wächter misst nicht mehr 0 V:** Gleich nach dem Verbinden schickt der Wächter einen Platzhalter
   (`d15507ff…`, sonst Nullen). Bubble Log nahm ihn als Messung (0 V). Jetzt wartet die App auf die echte Antwort
