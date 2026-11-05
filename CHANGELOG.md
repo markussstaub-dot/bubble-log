@@ -4,6 +4,10 @@ Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten
 
 ## Unveröffentlicht
 
+## Bubble-Log-1356 (05.11.2026, Version 2026.11.05-1356)
+Derselbe Code wie 1146, nur neu gebaut und per adb über 1146 installiert (App-Daten bleiben). Bauen mit Log-Datei:
+`cmd /c "powershell -File apk.ps1 -OhneKopieren > LOG 2>&1"`, weil `*>` in PowerShell 5.1 die Vite-Warnung zum Abbruch macht.
+
 ## Bubble-Log-1146 (05.11.2026, Version 2026.11.05-1146)
 Per adb installiert, danach App-Daten gelöscht (`pm clear`): Neustart wie ein neuer Nutzer. Alter Stand gesichert in
 `logs/CapacitorStorage-2026-11-05.xml`.
