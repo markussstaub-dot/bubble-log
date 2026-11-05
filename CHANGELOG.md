@@ -3,6 +3,10 @@
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
 ## Unveröffentlicht
+
+## Bubble-Log-1146 (05.11.2026, Version 2026.11.05-1146)
+Per adb installiert, danach App-Daten gelöscht (`pm clear`): Neustart wie ein neuer Nutzer. Alter Stand gesichert in
+`logs/CapacitorStorage-2026-11-05.xml`.
 - **Weniger Akku im Wartemodus** (04.11.2026, `SPEC-akku.md`): Anlass war die Akkustatistik vom Fold6. Bubble Log
   hielt das Handy beim Warten ≈ 9,5 h am Tag wach (9054 `NetworkLocationScanner`-Wakelocks in 27 h), weil das
   GPS-Plugin fest jede Sekunde ortet. Neu: `patches/` (patch-package, läuft per `postinstall`) gibt
