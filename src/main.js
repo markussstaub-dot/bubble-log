@@ -50,7 +50,18 @@ const sichern = () => V.sandbox ? Promise.resolve() : speichern(eigen);
 // ---------- Modell ----------
 const fahrten = () => eigen.fahrten;
 const ladungen = () => eigen.laden;
-const socJetzt = () => eigen.soc ?? 80;
+// Akku jetzt (geschätzt): letzter bekannter Stand, auch ein Startwert einer zurückgestellten Fahrt, minus der geschätzte
+// Verbrauch der zurückgestellten Fahrten seitdem. 06.11.2026: Nach dem Neustart gab es nur den Startwert 88 % der ersten
+// Fahrt, der Vorschlag stand auf dem Standard 80 %; nach 17 km waren es real ≈ 56 %.
+function socSchaetzen() {
+  const warten = eigen.ohneAkku || [];
+  let a = eigen.soc != null ? { t: eigen.socT ?? 0, soc: eigen.soc } : null;
+  for (const o of warten) if (o.startSoc != null && (!a || o.t0 >= a.t)) a = { t: o.t0, soc: o.startSoc };
+  if (!a) return null;
+  const km = warten.filter(o => o.t0 >= a.t).reduce((s, o) => s + (o.km || 0), 0);
+  return Math.max(0, Math.round(a.soc - km * avg()));
+}
+const socJetzt = () => socSchaetzen() ?? 80;
 const tempJetzt = () => eigen.temp ?? 10;
 // Nur Fahrten ab 1 km mit glaubhaftem Verbrauch gehen in den Schnitt; ein Tippfehler am Drehrad verdirbt sonst die Reichweite
 // Ebenso nicht, wenn der Endwert nur die unverändert bestätigte Schätzung ist (src/herkunft.js)
@@ -1252,7 +1263,7 @@ function tagSheet() {
   const l = tagFahrten(); if (!l.length) return;
   sheet(`<div class="label">Tag abschließen · ${l.length} Fahrten</div>
     <p class="small muted" style="margin:0">Akku <b>jetzt</b> eintragen. Kennst du zwischendurch einen Wert, etwa nach dem Laden, trag ihn bei der Fahrt ein. Der Rest wird nach Strecke, Höhe und Kaltstart (❄️) verteilt und zählt nicht in deinen Verbrauch.</p>
-    <div class="field"><label for="taJetzt">Akku jetzt %</label><input id="taJetzt" type="number" inputmode="numeric" min="0" max="100" value="${socJetzt()}"></div>
+    <div class="field"><label for="taJetzt">Akku jetzt % (vom Display)</label><input id="taJetzt" type="number" inputmode="numeric" min="0" max="100" placeholder="geschätzt ${socJetzt()}"></div>
     <div class="list">${l.map((o, i) => `<section class="card">
       <div class="between"><b>${datum(o.t0)} ${uhrzeit(o.t0)} · ${km(o.km)}${o.kalt ? ' ❄️' : ''}</b><span class="small mono" id="taR${i}"></span></div>
       <div class="grid2" style="margin-top:6px"><div class="field"><label for="taS${i}">Start % (wenn bekannt)</label><input id="taS${i}" type="number" inputmode="numeric" min="0" max="100" value="${o.startSoc ?? ''}"></div>
@@ -1277,8 +1288,11 @@ function tagSpeichern() {
     f.tagesabschluss = true; fahrtEinsortieren(f);
   });
   eigen.ohneAkku = []; if (eigen.offen?.status === 'beendet') eigen.offen = null;
-  const jetzt = tagWert('taJetzt'); if (jetzt != null) { eigen.soc = jetzt; eigen.socT = Date.now(); }
-  devlog.log('fahrt', { schritt: 'tagesabschluss', anzahl: l.length, jetzt });
+  // Ohne „Akku jetzt“ gilt das Ende der letzten Fahrt (06.11.2026: Feld war mit veralteten 75 % vorbelegt, Ende 41 %)
+  const jetzt = tagWert('taJetzt');
+  if (jetzt != null) { eigen.soc = jetzt; eigen.socT = Date.now(); }
+  else { eigen.soc = Math.min(r.at(-1).start, r.at(-1).ende); eigen.socT = l.at(-1).t1 ?? l.at(-1).t0; }
+  devlog.log('fahrt', { schritt: 'tagesabschluss', anzahl: l.length, jetzt, soc: eigen.soc });
   sichern(); tracker.setModus(zielModus()); overlay(''); render(); toast(`${l.length} Fahrten gespeichert`);
 }
 

@@ -40,14 +40,17 @@ export function log(typ, daten = {}) {
 const p2 = n => String(n).padStart(2, '0');
 const tagesDatei = (d = new Date()) => `${ORDNER}/bubble-log-${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}.jsonl`;
 
-export async function flush() {
+// Schreibvorgänge strikt nacheinander: Zwei appendFile gleichzeitig (voller Puffer + Timer) liefen im nativen Plugin
+// ineinander, 06.11.2026 sechs zerrissene Zeilen.
+let schreiben = Promise.resolve();
+export function flush() {
   clearTimeout(timer); timer = 0;
-  if (!puffer.length) return;
+  if (!puffer.length) return schreiben;
   const zeilen = puffer; puffer = [];
-  if (!NATIV) { web.push(...zeilen); if (web.length > WEB_MAX) web = web.slice(-WEB_MAX); return; }
-  try {
-    await Filesystem.appendFile({ path: tagesDatei(), data: zeilen.join('\n') + '\n', directory: Directory.Data, encoding: Encoding.UTF8 });
-  } catch (e) { console.warn('Entwickler-Log nicht geschrieben', e); }
+  if (!NATIV) { web.push(...zeilen); if (web.length > WEB_MAX) web = web.slice(-WEB_MAX); return schreiben; }
+  const pfad = tagesDatei();
+  return schreiben = schreiben.then(() => Filesystem.appendFile({ path: pfad, data: zeilen.join('\n') + '\n', directory: Directory.Data, encoding: Encoding.UTF8 }))
+    .catch(e => console.warn('Entwickler-Log nicht geschrieben', e));
 }
 
 // [{ name, groesse (Byte), geaendert (ms) }], neueste zuerst

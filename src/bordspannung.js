@@ -47,9 +47,12 @@ export const ruheStufe = v => v >= RUHE_OK ? 'ok' : v >= RUHE_VERDACHT ? 'beobac
 // Minutenwerte einer Fahrt → { mittel, min, max, schwankung, stufe } oder null (keine Werte).
 // Die erste und letzte Minute zählen nicht, solange es mehr als drei gibt: Beim Einschalten und Abstellen
 // springt die Spannung, das sagt nichts über den Laderegler.
-export function fahrtBewerten(minuten) {
-  if (!minuten?.length) return null;
-  const kern = minuten.length > 3 ? minuten.slice(1, -1) : minuten;
+// bis = Abstellzeit: Minuten danach zählen nicht. Das Fahrtende wird erst ≈ 3 Min. nach dem Abstellen erkannt, in der
+// Zeit fällt die Spannung ohne Laderegler auf den Ruhewert (06.11.2026: 13,6 → 12,35 V, dreimal Fehlalarm).
+export function fahrtBewerten(minuten, bis = Infinity) {
+  const drin = (minuten || []).filter(m => m[0] <= bis);
+  if (!drin.length) return null;
+  const kern = drin.length > 3 ? drin.slice(1, -1) : drin;
   const mittel = r2(kern.reduce((s, m) => s + m[2], 0) / kern.length);
   const min = Math.min(...kern.map(m => m[1])), max = Math.max(...kern.map(m => m[3]));
   const schwankung = r2(max - min);

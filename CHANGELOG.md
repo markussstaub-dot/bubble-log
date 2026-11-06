@@ -3,6 +3,15 @@
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
 ## Unveröffentlicht
+- **Kein 12-V-Fehlalarm mehr nach dem Parken:** Die Bewertung einer Fahrt nimmt nur noch Werte bis zum Abstellen.
+  Das Fahrtende wird erst ≈ 3 Min. später erkannt; in der Zeit fiel die Spannung auf den Ruhewert (06.11.: dreimal
+  „12 V beim Fahren auffällig“ bei sauberen 13,6 V). Test in `tests/bordspannung.test.js`.
+- **Akkustand-Vorschlag geschätzt statt pauschal 80 %:** Gibt es keinen gespeicherten Stand, zählt auch der Startwert
+  einer zurückgestellten Fahrt; abgezogen wird der geschätzte Verbrauch der Fahrten seitdem (06.11.: 80 % vorgeschlagen,
+  real ≈ 56 %).
+- **Tagesabschluss:** „Akku jetzt“ ist nicht mehr vorbelegt (nur als Schätzung im Platzhalter). Bleibt es leer, gilt
+  das Ende der letzten Fahrt als aktueller Stand (06.11.: veraltete 75 % übernommen statt 41 %).
+- **Entwickler-Log:** Schreibvorgänge laufen nacheinander, keine zerrissenen Zeilen mehr (06.11.: 6 Stück).
 
 ## Bubble-Log-1716 (05.11.2026, Version 2026.11.05-1716)
 - **12-V-Schwellen nach der Laborprobe:** Ruhewert ok ab 12,4 V (vorher 12,6), beobachten 12,0–12,4 V, verdächtig unter

@@ -63,6 +63,16 @@ test('Fahrt um 13 V oder stark schwankend ist verdächtig', () => {
   assert.equal(fahrtBewerten([]), null);
 });
 
+test('Minuten nach dem Abstellen zählen nicht (Fehlalarm vom 06.11.2026)', () => {
+  // Fahrt 14:16–14:21 bei ≈ 13,6 V, abgestellt 14:21:13, Fahrtende erst 14:24 erkannt: Spannung fällt auf 12,35 V
+  const m = fahrt([13.58, 13.6, 13.61, 13.53, 13.54, 13.6, 12.7, 12.45, 12.36]);
+  assert.equal(fahrtBewerten(m).stufe, 'verdaechtig');          // so war es bisher
+  const b = fahrtBewerten(m, 5 * 60000 + 13000);
+  assert.equal(b.stufe, 'ok');
+  assert.ok(b.min > 13.3, `min ${b.min}`);
+  assert.equal(fahrtBewerten(m, -1), null);                      // keine Minute vor dem Abstellen
+});
+
 test('Beleg: Zusammenfassung mit Startproblem und Wert davor, Zeilen nach Zeit', () => {
   const t = Date.UTC(2026, 9, 30, 9, 0, 0);
   const messungen = [

@@ -57,7 +57,7 @@ export async function fahrtEnde(o, { ruheNach = RUHE_NACH, sichtbar = true } = {
   if (!o?.v12?.summen) return o?.v12?.bewertung ?? null;
   await beiPunkt(o, true);
   bm6.motor(false);
-  const b = o.v12.bewertung = fahrtBewerten(o.v12.minuten);
+  const b = o.v12.bewertung = fahrtBewerten(o.v12.minuten, o.t1);
   delete o.v12.summen; app.sichern();
   devlog.log('bordnetz', { fahrt: 'ende', ...b });
   clearTimeout(ruheTimer); ruheTimer = setTimeout(ruheMessen, ruheNach, 'f' + o.t0, Date.now() + ruheNach / 2);
