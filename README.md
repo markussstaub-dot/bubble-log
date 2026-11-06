@@ -19,7 +19,14 @@ Fahrten bleiben auf dem Handy, es gibt kein Konto und keinen Server.
 ## Stand
 
 Privates Experiment, entstanden im Oktober 2026 zusammen mit Claude (KI). Android-App mit Capacitor, getestet auf
-einem Galaxy Z Fold6. Eine fertige APK zum Herunterladen gibt es noch nicht.
+einem Galaxy Z Fold6.
+
+## Ausprobieren
+
+Die neueste APK liegt unter [Releases](https://github.com/markussstaub-dot/bubble-log/releases) (Vorabversion,
+Android 7 oder neuer). Auf dem Handy die `.apk` herunterladen und öffnen; Android fragt einmal, ob der Browser bzw.
+„Eigene Dateien“ Apps installieren darf. Das erlauben, installieren, fertig. Updates installiert man genauso drüber,
+die Fahrten bleiben erhalten.
 
 Bauen und Technik: [ANLEITUNG.md](ANLEITUNG.md), Arbeitsweise: [ENTWICKLUNG.md](ENTWICKLUNG.md),
 Änderungen: [CHANGELOG.md](CHANGELOG.md).
