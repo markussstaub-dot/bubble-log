@@ -3,6 +3,9 @@
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
 ## Unveröffentlicht
+
+## Bubble-Log-1541 (06.11.2026, Version 2026.11.06-1541)
+Per adb über 1716 installiert, Daten bleiben.
 - **Kein 12-V-Fehlalarm mehr nach dem Parken:** Die Bewertung einer Fahrt nimmt nur noch Werte bis zum Abstellen.
   Das Fahrtende wird erst ≈ 3 Min. später erkannt; in der Zeit fiel die Spannung auf den Ruhewert (06.11.: dreimal
   „12 V beim Fahren auffällig“ bei sauberen 13,6 V). Test in `tests/bordspannung.test.js`.
