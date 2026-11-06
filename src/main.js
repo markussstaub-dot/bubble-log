@@ -609,12 +609,14 @@ function viewLaden() {
   hierHolen();
   const l = ladungen().slice().reverse(), kwh = x => (x.bis - x.von) / 100 * eigen.akku;
   const ort = ortVorschlag();
+  // Akku vorher/nachher übers Drehrad (06.11.2026: Markus wollte nicht tippen); gewählte Werte überstehen das Neuzeichnen
+  const lv = V.lVon ?? socJetzt(), lb = V.lBis ?? 100;
   return `
     <section class="card">
       <div class="label">Neuer Ladevorgang</div>
       <form id="ladeForm" class="list" style="margin-top:8px">
-        <div class="grid2"><div class="field"><label for="lVon">Akku vorher %</label><input id="lVon" type="number" inputmode="numeric" min="0" max="100" value="${socJetzt()}"></div>
-        <div class="field"><label for="lBis">Akku nachher %</label><input id="lBis" type="number" inputmode="numeric" min="0" max="100" value="100"></div></div>
+        <div class="grid2"><div class="field"><label>Akku vorher</label><button type="button" class="btn block mono" data-act="lVonRad" aria-label="Akku vorher ${lv} Prozent, zum Ändern tippen">${lv} %</button><input id="lVon" type="hidden" value="${lv}"></div>
+        <div class="field"><label>Akku nachher</label><button type="button" class="btn block mono" data-act="lBisRad" aria-label="Akku nachher ${lb} Prozent, zum Ändern tippen">${lb} %</button><input id="lBis" type="hidden" value="${lb}"></div></div>
         <div class="grid2"><div class="field"><label for="lOrt">Ort</label><select id="lOrt">${ortListe().map(o => `<option${o === ort ? ' selected' : ''}>${o}</option>`).join('')}</select></div>
         <div class="field"><label for="lPreis">€ pro kWh</label><input id="lPreis" type="number" inputmode="decimal" min="0" step="0.01" value="${preisFuer(ort)}"></div></div>
         <div class="field" id="lPunktFeld"${ort === 'Öffentlich' ? '' : ' hidden'}><label for="lPunkt">Ladepunkt</label>${ort === 'Öffentlich' ? ladepunktAuswahl() : ''}
@@ -626,7 +628,8 @@ function viewLaden() {
     ${ladeorteKarte()}
     <div class="list">${l.map(x => `
       <section class="card between"${x.ladepunkt ? ` data-act="ladepunkt" data-key="${x.ladepunkt}" role="button" style="cursor:pointer"` : ''}><div style="min-width:0"><b>${esc(x.ort)}${x.ladepunktName ? ` · ${esc(x.ladepunktName)}` : ''}</b><div class="muted small">${esc(x.tag)} · ${x.von} → ${x.bis} %${x.ladepunkt ? ` · ${esc(lade.adresse(lade.finde(x.ladepunkt) || { a: '', o: '' }))}` : ''}</div></div>
-        <div style="text-align:right"><div class="mono">${de(kwh(x), 1)} kWh</div><div class="muted small mono">${x.preis ? `${de(kwh(x) * x.preis, 2)} €` : 'gratis'}</div></div></section>`).join('')}</div>`;
+        <div style="text-align:right"><div class="mono">${de(kwh(x), 1)} kWh</div><div class="muted small mono">${x.preis ? `${de(kwh(x) * x.preis, 2)} €` : 'gratis'}</div>
+          <button class="btn small" data-act="ladenLoeschen" data-id="${x.id}" aria-label="Ladevorgang ${esc(x.tag)} ${x.von} bis ${x.bis} Prozent löschen" style="margin-top:4px">Löschen</button></div></section>`).join('')}</div>`;
 }
 
 // ---------- Sim-Tab: Fahrsimulator im Sandkasten (nur mit Entwicklermodus) ----------
@@ -690,14 +693,14 @@ function wheelInit(v) {
     onChange: i => { wheelWert = 100 - i; $('wheel')?.setAttribute('aria-valuenow', wheelWert); if ($('lueckeSoc')) $('lueckeSoc').textContent = wheelWert; } });
 }
 function wheelSetze(v) { if (rad && $('wheel')) rad.setze(100 - v); }
-function socSheet(ueberschrift, v, knopf, text, extra = '') {
+function socSheet(ueberschrift, v, knopf, text, extra = '', art = null) {
   V.fotoZiel = knopf[0] === 'save' ? 'ende' : 'start'; V.fotoErkannt = null;
   sheet(`<h2>${ueberschrift}</h2><p class="small muted" style="margin:0">${text}</p>
     ${wheelHtml()}
     <button class="btn block foto-knopf" data-act="foto">📷 Display fotografieren</button>
     <div class="foto-info small" id="fotoInfo" hidden></div>${extra}
     <button class="btn primary block" data-act="${knopf[0]}">${knopf[1]}</button>
-    ${knopf[2] ? `<button class="btn block danger" data-act="${knopf[2][0]}">${knopf[2][1]}</button>` : ''}`, knopf[0] === 'go' ? 'losfahren' : '');
+    ${knopf[2] ? `<button class="btn block danger" data-act="${knopf[2][0]}">${knopf[2][1]}</button>` : ''}`, art ?? (knopf[0] === 'go' ? 'losfahren' : ''));
   wheelInit(v);
 }
 
@@ -1564,7 +1567,20 @@ document.addEventListener('click', e => {
     case 'ntSpeichern': ntSpeichern(); break;
     case 'ntLoeschen': if (V.nt.loeschen) ntLoeschen(); else { V.nt.loeschen = true; ntSheet(); } break;
     case 'rueckgaengig': { const f = V.rueckgaengig; V.rueckgaengig = null; $('toast').hidden = true; f?.(); break; }
-    case 'charge': V.tab = 'laden'; render(); $('lVon')?.focus(); break;
+    case 'lVonRad': socSheet('Akku vor dem Laden', Number($('lVon').value), ['lRadOk', 'Übernehmen'], 'Wert vom Microlino-Display, bevor du einsteckst.', '', 'laden'); V.lRad = 'lVon'; break;
+    case 'lBisRad': socSheet('Akku nach dem Laden', Number($('lBis').value), ['lRadOk', 'Übernehmen'], 'Wert vom Microlino-Display nach dem Laden.', '', 'laden'); V.lRad = 'lBis'; break;
+    case 'lRadOk': {
+      const w = leseWheel(); V[V.lRad] = w; fotoBestaetigt(w); foto.loeschen(V.fotoNeu); V.fotoNeu = null;
+      overlay(''); render(); break;
+    }
+    case 'ladenLoeschen': {
+      const i = eigen.laden.findIndex(x => x.id === d.id); if (i < 0) break;
+      const [weg] = eigen.laden.splice(i, 1); sichern(); render();
+      devlog.log('laden', { geloescht: weg.id, von: weg.von, bis: weg.bis });
+      toast(`Ladevorgang ${weg.von} → ${weg.bis} % gelöscht`, () => { eigen.laden.splice(i, 0, weg); sichern(); render(); devlog.log('laden', { zurueck: weg.id }); });
+      break;
+    }
+    case 'charge': V.tab = 'laden'; render(); break;
     case 'settings': settingsSheet(); break;
     case 'standort': tracker.oeffneEinstellungen(); break;
     case 'appInfosAkku': case 'appInfosStandort': devlog.log('app', { appInfos: d.act }); sensoren.appInfos(); break;
@@ -1731,7 +1747,7 @@ document.addEventListener('submit', e => {
   if (s) Object.assign(eintrag, { ladepunkt: punkt, ladepunktName: s.b });
   eigen.laden.push(eintrag); eigen.soc = bis; eigen.socT = Date.now(); sichern();
   devlog.log('laden', { ort, von, bis, preis: eintrag.preis, ladepunkt: punkt });
-  V.lOrt = ort; render(); toast(`Geladen: ${de((bis - von) / 100 * eigen.akku, 1)} kWh`);
+  V.lOrt = ort; V.lVon = V.lBis = null; render(); toast(`Geladen: ${de((bis - von) / 100 * eigen.akku, 1)} kWh`);
   if (s) ladepunktSheet(punkt);   // gleich festhalten, ob die Ladekarte dort ging
 });
 document.addEventListener('visibilitychange', () => {

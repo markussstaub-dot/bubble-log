@@ -3,6 +3,10 @@
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
 ## Unveröffentlicht
+- **Laden mit Drehrad:** „Akku vorher“ und „Akku nachher“ stellt man jetzt wie bei den Fahrten am Drehrad ein (mit
+  Foto vom Display), statt zu tippen.
+- **Ladevorgänge löschen:** Jeder Eintrag in der Liste hat „Löschen“, mit „Rückgängig“ in der Meldung (06.11.: Laden
+  versehentlich doppelt gespeichert, ließ sich nicht entfernen).
 
 ## Bubble-Log-1541 (06.11.2026, Version 2026.11.06-1541)
 Per adb über 1716 installiert, Daten bleiben.

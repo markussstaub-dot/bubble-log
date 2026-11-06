@@ -2,8 +2,8 @@
 // Fahrt erkannt und beendet. Beim Zurückkommen gilt der alte Dialog nicht mehr und darf nicht gegen die neue Lage handeln.
 
 // Dialoge, die nur ohne offene Fahrt Sinn haben: „Akkustand jetzt“, „Akkustand beim Start“ vor „Losfahren“ und das
-// Ergebnis einer schon gespeicherten Fahrt. Sie weichen, sobald eine Fahrt offen ist.
-export const OHNE_FAHRT = ['warten', 'losfahren', 'ergebnis'];
+// Ergebnis einer schon gespeicherten Fahrt, Akku vor/nach dem Laden. Sie weichen, sobald eine Fahrt offen ist.
+export const OHNE_FAHRT = ['warten', 'losfahren', 'ergebnis', 'laden'];
 // Knöpfe aus diesen Dialogen, die eine offene Fahrt überschreiben, doppelt zählen oder ihren Akkustand verfälschen würden
 export const AKTIONEN_OHNE_FAHRT = ['go', 'socMerken', 'ntAusAkku'];
 
