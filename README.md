@@ -10,6 +10,10 @@ daraus deinen Verbrauch.
 - **Ziel-Check „Komm ich hin?“:** Route, Höhenmeter, eigener Verbrauch und Kälte ergeben, ob hin und zurück reicht.
 - **Laden:** Ladepunkte im Umkreis (Ladesäulenregister der Bundesnetzagentur, CC BY 4.0), Ladevorgänge protokollieren.
 - **12-V-Bordspannung:** mit einem BM6-Batteriewächter, inklusive Beleg für die Werkstatt.
+- **Tempolimit-Schild:** zeigt während der Fahrt das Limit der Straße groß an, offline aus OpenStreetMap
+  (© OpenStreetMap-Mitwirkende, ODbL; bisher Saarland und Rheinland-Pfalz).
+  **Nur zur Orientierung: Es gelten immer die Schilder an der Straße.** Die Daten können veraltet oder falsch sein,
+  Baustellen, Wechselschilder und zeitliche Limits fehlen. Korrekturen gehören in OpenStreetMap.
 
 Fahrten bleiben auf dem Handy, es gibt kein Konto und keinen Server.
 

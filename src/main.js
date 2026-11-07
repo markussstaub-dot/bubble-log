@@ -1446,7 +1446,8 @@ async function erfassungSetzen(an) {
 // Einstellungen → Tempolimit: laden, Stand, Namensnennung (ODbL)
 function tlEinstellung() {
   const t = tempolimit.info(), weit = t && eigen.zuhause && distanz(t.zuhause, eigen.zuhause.p) > 5000;
-  return `<p class="small" style="margin:0">Zeigt während der Fahrt das Tempolimit der Straße als großes Schild. Nur Anzeige, keine Warnung und kein Ton; das Display bleibt dabei an. Daten: ${tempolimit.QUELLE} (OpenStreetMap, ODbL), Saarland und Rheinland-Pfalz. Baustellen und Wechselschilder fehlen, ohne Eintrag zeigt das Schild „?“.</p>
+  return `<p class="small" style="margin:0">Zeigt während der Fahrt das Tempolimit der Straße als großes Schild. Nur Anzeige, keine Warnung und kein Ton; das Display bleibt dabei an. Daten: ${tempolimit.QUELLE} (OpenStreetMap, ODbL), Saarland und Rheinland-Pfalz. Ohne Eintrag zeigt das Schild „?“.</p>
+    <p class="small warn" style="margin:0"><b>Nur zur Orientierung.</b> Es gelten immer die Schilder an der Straße. Die Daten können veraltet oder falsch sein; Baustellen, Wechselschilder und zeitliche Limits fehlen ganz.</p>
     ${t ? `<p class="small muted" style="margin:0">${t.stuecke} Straßenstücke im Umkreis von ${t.radiusKm} km · Stand ${esc(t.stand.split('-').reverse().join('.'))} · geladen ${datum(t.geladen)}${weit ? ' · <span class="warn">gilt für das alte Zuhause</span>' : ''}</p>` : ''}
     ${eigen.zuhause ? `<div class="grid2"><button class="btn${t ? '' : ' block'}" data-act="tlLaden"${V.tlLaeuft ? ' disabled' : ''}>${V.tlLaeuft ? `Lade … ${V.tlLaeuft}` : t ? 'Neu laden' : `Tempolimits laden (${tempolimit.RADIUS_KM} km, etwa 4 MB)`}</button>${t ? `<button class="btn" data-act="tlWeg">Entfernen</button>` : ''}</div>`
       : '<p class="small muted" style="margin:0">Dafür zuerst „Hier ist Zuhause“ tippen.</p>'}`;
