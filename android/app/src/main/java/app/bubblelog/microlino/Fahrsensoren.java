@@ -199,7 +199,11 @@ public class Fahrsensoren extends Plugin implements SensorEventListener {
         getActivity().runOnUiThread(() -> {
             if (an) getActivity().getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
             else getActivity().getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-            call.resolve();
+            getBridge().getWebView().setKeepScreenOn(an);   // zweiter Weg, falls das Fenster-Flag verloren geht
+            JSObject r = new JSObject();
+            r.put("flag", (getActivity().getWindow().getAttributes().flags & WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) != 0);
+            r.put("view", getBridge().getWebView().getKeepScreenOn());
+            call.resolve(r);
         });
     }
 

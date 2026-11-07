@@ -27,3 +27,30 @@ test('nur der Endwert entscheidet, ob eine Fahrt bloß die Schätzung bestätigt
   assert.equal(nurSchaetzung({ startQuelle: 'foto', endeQuelle: 'foto' }), false);
   assert.equal(nurSchaetzung({ start: 80, ende: 70 }), false, 'alte Fahrten ohne Herkunft zählen weiter');
 });
+
+// SPEC-usability.md, US1: Startwert ohne Frage, Verbrauch lernt nur aus belastbaren Startwerten
+import { startQuelleAuto, startAutomatisch, startGeschaetzt, belastbar } from '../src/herkunft.js';
+
+test('US1: letzter Stand direkt (Ladeende, Fahrtende, Tagesabschluss) ist belastbar', () => {
+  assert.equal(startQuelleAuto({ stand: 84 }), 'stand');
+});
+
+test('US1: dazwischen Fahrten ohne Akkustand, Stand nur geschätzt oder gar keiner → geschätzt', () => {
+  assert.equal(startQuelleAuto({ stand: 84, wartendDanach: true }), 'schaetzung');
+  assert.equal(startQuelleAuto({ stand: 84, standGeschaetzt: true }), 'schaetzung');
+  assert.equal(startQuelleAuto({ stand: null }), 'schaetzung');
+});
+
+test('US1: nur belastbare Fahrten lernen den Verbrauch', () => {
+  assert.equal(belastbar({ startQuelle: 'stand', endeQuelle: 'drehrad' }), true);
+  assert.equal(belastbar({ startQuelle: 'schaetzung', endeQuelle: 'drehrad' }), false);
+  assert.equal(belastbar({ startQuelle: 'stand', endeQuelle: 'vorschlag' }), false);
+  assert.equal(belastbar({ startQuelle: 'drehrad', endeQuelle: 'foto' }), true, 'am Ende korrigierter Start');
+  assert.equal(belastbar({ start: 80, ende: 70 }), true, 'alte Fahrten ohne Herkunft');
+  assert.equal(startGeschaetzt({ startQuelle: 'schaetzung' }), true);
+});
+
+test('US1: automatisch gesetzte Startwerte gelten im Tagesabschluss nicht als bekannt', () => {
+  assert.ok(startAutomatisch('stand') && startAutomatisch('schaetzung'));
+  for (const q of ['drehrad', 'vorschlag', 'foto', 'tagesabschluss', undefined]) assert.ok(!startAutomatisch(q), q);
+});

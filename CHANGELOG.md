@@ -4,6 +4,24 @@ Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten
 
 ## Unveröffentlicht
 
+## Bubble-Log-1052 (07.11.2026, Version 2026.11.07-1052)
+Per adb über 1001 installiert, Daten bleiben. Enthält auch alles aus 1034 (1034 kam nie aufs Handy). Kaffeefahrt
+07.11.: Display blieb auf beiden Strecken an, Start-Akku kam ohne Frage.
+- **Losfahren ohne Zutun** (`SPEC-usability.md`, US1): Bei einer erkannten Fahrt fragt die App nicht mehr nach dem
+  Start-Akku. Sie nimmt den letzten bekannten Stand und fragt erst am Fahrtende den End-Akku ab; dort steht der
+  Startwert klein mit „Start korrigieren“. Der Verbrauch lernt nur, wenn der Start belastbar war (letzter Stand direkt
+  aus Ladeende, Fahrtende oder Tagesabschluss) oder am Ende korrigiert wurde. Im Fahrt-Bildschirm gibt es keinen
+  „Start eintragen“-Knopf mehr.
+- **Nicht aus Versehen beenden** (US4): „Fahrt beenden“ ist jetzt ein kleiner Ring („Ende halten“) neben
+  „Ausblenden“ und löst erst nach 1 s Halten aus; Loslassen oder Abrutschen bricht ab. Die Fahrt endet weiterhin
+  selbst nach 3 min Stand.
+
+## Bubble-Log-1034 (07.11.2026, Version 2026.11.07-1034), nur gebaut, steckt in 1052
+- **Display bleibt an:** schon ab Bewegung (vor der Fahrterkennung) und auch ohne Tempolimit-Daten; zusätzlich
+  `setKeepScreenOn` am WebView und Wake Lock (Befund 07.11.: Display ging trotz Schild aus).
+- **Entwickler-Log:** Zeilen `display` (wach an/aus, Flag gesetzt?, Fehler) und `fehler` mit `quelle: 'js'` für
+  unerwartete Fehler.
+
 ## Bubble-Log-1001 (07.11.2026, Version 2026.11.07-1001)
 Per adb über 1821 installiert, Daten bleiben.
 - **Tempolimit-Schild:** Während der Fahrt zeigt ein großes rundes Schild das Limit der Straße (OpenStreetMap). Ohne

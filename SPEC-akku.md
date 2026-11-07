@@ -60,3 +60,78 @@ zuverlässig wie heute.
 ## Nebenbefund (nicht Bubble Log)
 - „Link zu Windows“ (`com.microsoft.appmanager`): 433 mAh, Dienst ≈ 43 h aktiv. Markus kann die App in den
   Akku-Einstellungen auf „Optimiert“ stellen.
+
+---
+
+# Teil 2: Handy-Akku unterwegs, Normal- und Entwicklermodus (Entwurf 07.11.2026)
+
+Anlass: Seit dem Tempolimit-Schild bleibt das Display während der Fahrt an (`SPEC-usability.md`). Damit ist das
+Display der größte Verbraucher, nicht mehr das GPS. Außerdem zeigte der Display-Befund vom 07.11., dass man ohne
+Entwicklermodus bei Fehlern nichts sieht und mit Entwicklermodus ein anderes Verhalten misst als im Alltag.
+
+Markierung wie in `SPEC-usability.md`: **[fest]** = Markus, **[entschieden]** = Claude mit freier Hand
+(Leitprinzip Grundfaulheit: die App regelt das selbst, nichts muss eingestellt werden), **[offen]**.
+
+## Befunde
+1. Im Entwicklermodus **ändert sich das Verhalten**: Die Sensoren laufen auch beim Warten (`sensoren.auchBeimWarten`
+   = Entwicklermodus), dazu die Schalter „Warten: volle GPS-Rate“ und „Ortung in Ruhe alle 15/30/60 s“. Testlogs
+   messen dadurch nicht den Alltag, und der Handy-Akku leidet gerade in der Testphase.
+2. Ohne Entwicklermodus schreibt die App **gar kein Log**. Fehler wie „Display ging aus“ lassen sich dann nicht klären.
+3. Wie viel Handy-Akku Bubble Log kostet, wissen wir nur aus der Android-Akkustatistik, nicht pro Fahrt.
+
+## Use Cases
+| Use Case | Heute | Ziel |
+|---|---|---|
+| UC-A Fahrt mit Display an, Handy ohne Kabel | ❓ Verbrauch unbekannt | Verbrauch pro Fahrt im Log, nachts dunkler |
+| UC-B Fahrt mit Ladekabel in der Halterung | ✅ egal | egal, nichts drosseln |
+| UC-C Handy-Akku wird knapp (< 20 %) | ❌ nichts | Halterung dimmt stärker, sonst alles gleich |
+| UC-D Fehler im Alltag (ohne Entwicklermodus) | ❌ kein Log | kleines Ereignis-Log immer an |
+| UC-E Testphase mit dichten Logs | ⚠️ ändert das Verhalten | nur mehr protokollieren |
+| UC-F Messung mit voller GPS-Rate | ⚠️ bleibt an, bis man es merkt | schaltet sich nach 24 h selbst ab |
+
+## User Stories
+
+### US-A Verbrauch messen statt raten (UC-A, UC-B)
+- **[entschieden]** Die App liest den Handy-Akku nativ (`BatteryManager` in `Fahrsensoren.java`: Prozent, lädt ja/nein,
+  Temperatur) bei Fahrtbeginn, Fahrtende und stündlich. Log-Zeile `handyakku`.
+- **[entschieden]** An der gespeicherten Fahrt stehen `handyStart`, `handyEnde`, `laedt`; in der Fahrtenliste nichts
+  Neues (nur für die Auswertung).
+- Akzeptanz: Nach einer Fahrt ohne Kabel steht im Log, wie viele Prozent sie gekostet hat und wie lange das Display
+  an war (aus den `display`-Zeilen).
+
+### US-B Nachts dunkler, knapp dunkler (UC-A, UC-C)
+- **[entschieden]** Die Halterungs-Ansicht setzt die Helligkeit des eigenen Fensters
+  (`WindowManager.LayoutParams.screenBrightness`, keine Berechtigung nötig): tagsüber die Systemhelligkeit, in der
+  Dämmerung und nachts gedimmt (Sonnenstand wie in `src/sim3d/licht.js`, Grenzen −6°/+6°).
+- **[entschieden]** Handy-Akku unter 20 % und kein Kabel: stärker gedimmt. Kein Hinweis, keine Frage.
+- **[entschieden]** Mit Ladekabel wird nie gedrosselt.
+- Akzeptanz: nachts im Log `display` mit `hell`-Wert; keine Einstellung nötig.
+
+### US-C Kleines Ereignis-Log immer an (UC-D)
+- **[entschieden]** Auch ohne Entwicklermodus schreibt die App Ereignisse: `fahrt`, `erkennung` (Start/Stopp),
+  `display`, `tempolimit`, `fehler`, `handyakku`, `app`, `modus`. **Keine** rohen GPS-Punkte, keine Sensorwerte.
+  Erwartet: wenige KB am Tag. Gleiche Datei, gleiche 14 Tage Aufbewahrung, gleicher Weg zum Teilen.
+- **[entschieden]** Privat wie bisher: bleibt auf dem Handy, geht nur raus, wenn Markus teilt (bzw. per adb).
+- Akzeptanz: Ohne Entwicklermodus steht nach einer Fahrt die Folge Start → Tempolimit-Wechsel → Display → Ende im Log.
+
+### US-D Entwicklermodus protokolliert nur mehr (UC-E)
+- **[entschieden]** Entwicklermodus = zusätzlich `gps` (roh), `sensor`, `vibration`, DEV-Zeile, Sim-Tab. Er ändert
+  **nicht** mehr, wie oft geortet wird oder ob die Sensoren beim Warten laufen.
+- **[entschieden]** Die Sensoren beim Warten (Messfenster für die Stillstandserkennung) wandern in den Messmodus (US-E).
+
+### US-E Messmodus schaltet sich selbst ab (UC-F)
+- **[entschieden]** Ein Schalter „Messmodus (24 h)“ im Entwicklerbereich bündelt alles Teure: volle GPS-Rate beim
+  Warten, Sensoren beim Warten. Nach 24 h ist er von selbst aus (Zeitpunkt gespeichert, Log `modus`
+  `messmodus: 'abgelaufen'`). Die heutigen Einzelschalter (volle GPS-Rate, 15/30/60 s) entfallen; der Ruhetakt bleibt
+  fest bei 30 s.
+- Akzeptanz: Messmodus an, App 25 h später öffnen → aus, Ruhetakt 30 s, Log-Zeile vorhanden.
+
+## Offen
+- **[offen]** Wie hell ist „gedimmt“ in der Halterung noch lesbar? Klärt sich bei einer Nachtfahrt; Startwert 25 %.
+- Sonst nichts für Markus.
+
+## Bau (nach der Halterungs-Reihe aus `SPEC-usability.md`, damit nicht zwei Sessions in `main.js` arbeiten)
+1. US-C + US-D: Ereignis-Log immer an, Entwicklermodus ohne Verhaltensänderung (≈ ½ Session, `devlog.js`, `sensoren.js`, `main.js`)
+2. US-E: Messmodus mit Ablauf (≈ ½ Session)
+3. US-A: Handy-Akku messen (≈ ½ Session, Java)
+4. US-B: Helligkeit nach Sonnenstand und Akku (≈ ½ Session, Java, braucht die Halterungs-Ansicht)

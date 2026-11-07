@@ -191,15 +191,28 @@ export function schildSetzen(el, code) {
 }
 
 // ---------- Display wach halten ----------
-// App: FLAG_KEEP_SCREEN_ON über das eigene Plugin (Fahrsensoren.bildschirmWach), Browser: Screen Wake Lock API.
+// App: FLAG_KEEP_SCREEN_ON und setKeepScreenOn über das eigene Plugin (Fahrsensoren.bildschirmWach), zusätzlich die
+// Screen Wake Lock API, falls der WebView sie kann (Befund 07.11.: Display ging trotz Schild aus). Browser: nur Wake Lock.
+// onLog(an, details) bei jedem Wechsel und Fehler, für das Devlog.
 const Fahrsensoren = registerPlugin('Fahrsensoren');
-let wach = false, sperre = null;
-export async function wachHalten(an) {
+let wach = false, sperre = null, fehlerGemeldet = false;
+export async function wachHalten(an, onLog = () => {}) {
   if (an === wach) return;
   wach = an;
+  const d = {};
+  if (NATIV) {
+    try { Object.assign(d, await Fahrsensoren.bildschirmWach({ an })); }
+    catch (e) { d.nativ = e.message; }
+  }
   try {
-    if (NATIV) await Fahrsensoren.bildschirmWach({ an });
-    else if (an && navigator.wakeLock) { sperre = await navigator.wakeLock.request('screen'); sperre.addEventListener('release', () => { sperre = null; wach = false; }); }
-    else if (!an && sperre) { await sperre.release(); sperre = null; }
-  } catch (e) { wach = false; console.warn('Display wach halten nicht möglich', e); }
+    if (an && navigator.wakeLock && !sperre) {
+      sperre = await navigator.wakeLock.request('screen'); d.wakeLock = true;
+      sperre.addEventListener('release', () => { sperre = null; if (!NATIV) wach = false; });   // Browser gibt die Sperre beim Wegwechseln frei
+    } else if (!an && sperre) { await sperre.release(); sperre = null; }
+    else if (an && !navigator.wakeLock) d.wakeLock = 'fehlt';
+  } catch (e) { d.wakeLock = e.message; }
+  const ok = !an || d.flag === true || d.wakeLock === true;
+  if (!ok) wach = false;   // nächste Sekunde neu versuchen, aber nur einmal ins Log
+  if (ok || !fehlerGemeldet) onLog(an, ok ? d : { ...d, fehlgeschlagen: true });
+  fehlerGemeldet = !ok;
 }

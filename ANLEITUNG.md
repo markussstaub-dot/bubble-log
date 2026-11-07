@@ -15,9 +15,20 @@ Die Oberfläche kommt aus dem Prototyp (`knopf-display/handy-prototyp.html`), da
 | Strecke | alle 25 m ein Punkt; kleinere Sprünge (GPS-Zittern) zählen nicht |
 | Fahrt endet | 3 Minuten innerhalb von 40 m stehen; als Endzeit zählt die letzte echte Bewegung |
 
-Bei Beginn und Ende kommt eine Benachrichtigung. Ein Tipp darauf öffnet die App mit dem Drehrad
-für den Akkustand. Wurde der Start-Akku nicht eingetragen, fragt die App ihn beim Ende zuerst ab.
-Fahrten mit Velo, Bus oder Zug lassen sich beim Ende mit **Fahrt verwerfen** löschen.
+Bei Beginn und Ende kommt eine Benachrichtigung. **Während der Fahrt fragt die App nichts** (`SPEC-usability.md`, US1):
+Als Start-Akku gilt der letzte bekannte Stand. Erst beim Ende öffnet ein Tipp die App mit dem Drehrad für den
+End-Akku; darunter steht klein der Startwert mit „Start korrigieren“. Fahrten mit Velo, Bus oder Zug lassen sich beim
+Ende mit **Fahrt verwerfen** löschen.
+
+**Startwert und Verbrauch** (`src/herkunft.js`): `startQuelle` ist `stand` (letzter Stand direkt aus Ladeende,
+Fahrtende, Tagesabschluss oder „Akkustand merken“), `schaetzung` (dazwischen Fahrten ohne Akkustand, der Stand war
+selbst nur das Schätz-Ende einer Fahrt, oder es gibt gar keinen) oder nach „Start korrigieren“ `drehrad`/`vorschlag`/
+`foto`. Fahrten mit `schaetzung` am Start zählen nicht in den Verbrauch, ebenso wie bisher ein unverändert
+bestätigtes Schätz-Ende. Im Tagesabschluss gelten automatische Startwerte nicht als bekannt (nur als Platzhalter).
+
+**Fahrt beenden** geht im Fahrt-Bildschirm nur mit langem Druck auf den kleinen Ring „Ende halten“ (1 s, Ring füllt
+sich, `src/halten.js`); Loslassen oder Abrutschen bricht ab, ein Tipp beendet nichts (US4). Devlog `fahrt`:
+`beenden gehalten`. Den automatischen Startwert schreibt das Devlog als `eingabe` mit `automatisch: true`.
 
 Mit einer simulierten Fahrt geprüft: Gehen löst nichts aus, eine Ampel mit 60 s Halt beendet die
 Fahrt nicht, und die Endzeit stimmt auf die Sekunde. **Auf einem echten Handy noch nicht getestet.**
@@ -63,7 +74,9 @@ Akku: grün hin und zurück, gelb nur hin, rot laden, jeweils mit 15 % Reserve.
 
 Während einer Fahrt steht oben rechts im Fahrt-Bildschirm ein großes rundes Verkehrsschild mit dem Limit der Straße.
 Es ist nur eine Anzeige: keine Warnung, kein Ton, kein Tempovergleich, nichts zum Antippen. Solange eine Fahrt läuft
-und die App vorn ist, bleibt das Display an (`Fahrsensoren.bildschirmWach`, im Browser Screen Wake Lock).
+oder das GPS schon Bewegung meldet (Kandidat) und die App vorn ist, bleibt das Display an, auch ohne Tempolimit-Daten
+(`Fahrsensoren.bildschirmWach`: Fenster-Flag und `setKeepScreenOn`, dazu Screen Wake Lock). Devlog `display`: `wach`,
+`flag`/`view` (vom Plugin bestätigt), `wakeLock`, bei Fehlschlag `fehlgeschlagen`.
 
 - **Daten:** OSM `maxspeed` (bzw. `maxspeed:forward/backward`, `zone:maxspeed`, verkehrsberuhigt = Schritt), ODbL,
   „© OpenStreetMap-Mitwirkende“. Einstellungen → Tempolimit lädt die Kacheln im Umkreis von 40 km um Zuhause

@@ -11,7 +11,8 @@ import { csvText, fotosVon, teilen, dateiname, speichern as csvSpeichern } from 
 import * as foto from './foto.js';
 import { socPlausibel } from './fototext.js';
 import { scrollrad } from './scrollrad.js';
-import { herkunft, nurSchaetzung } from './herkunft.js';
+import { herkunft, nurSchaetzung, startQuelleAuto, startAutomatisch, startGeschaetzt, belastbar } from './herkunft.js';
+import { langerDruck } from './halten.js';
 import * as sensoren from './sensoren.js';
 import * as devlog from './devlog.js';
 import { suchen, route as routeBerechnen, wege as wegeBerechnen } from './route.js';
@@ -63,10 +64,19 @@ function socSchaetzen() {
   return Math.max(0, Math.round(a.soc - km * avg()));
 }
 const socJetzt = () => socSchaetzen() ?? 80;
+// Startwert ohne Frage (SPEC-usability.md, US1): letzter bekannter Stand; belastbar nur, wenn er selbst gemessen ist
+// und seitdem keine Fahrt ohne Akkustand dazwischen liegt. Am Fahrtende steht er klein zum Korrigieren da.
+function startSetzen(o) {
+  const t = eigen.socT ?? 0, quelleFahrt = fahrten().findLast(f => f.t1 === eigen.socT);
+  o.startSoc = socJetzt();
+  o.startQuelle = startQuelleAuto({ stand: eigen.soc, wartendDanach: ohneAkku().some(w => w !== o && w.t0 >= t),
+    standGeschaetzt: !!quelleFahrt && nurSchaetzung(quelleFahrt) });
+  devlog.log('eingabe', { startSoc: o.startSoc, quelle: o.startQuelle, automatisch: true });
+}
 const tempJetzt = () => eigen.temp ?? 10;
 // Nur Fahrten ab 1 km mit glaubhaftem Verbrauch gehen in den Schnitt; ein Tippfehler am Drehrad verdirbt sonst die Reichweite
-// Ebenso nicht, wenn der Endwert nur die unverändert bestätigte Schätzung ist (src/herkunft.js)
-const zaehlt = x => !nurSchaetzung(x) && x.km >= 1 && x.start >= x.ende && (x.start - x.ende) / x.km <= MAX_VERBRAUCH;
+// Ebenso nicht, wenn der Endwert nur die unverändert bestätigte Schätzung ist oder der Start geschätzt war (src/herkunft.js)
+const zaehlt = x => belastbar(x) && x.km >= 1 && x.start >= x.ende && (x.start - x.ende) / x.km <= MAX_VERBRAUCH;
 const gelernt = (liste = fahrten()) => liste.filter(x => zaehlt(x) && x.start - x.ende >= 3).length >= 3;
 const avg = (liste = fahrten()) => {
   if (!gelernt(liste)) return STARTWERT;
@@ -880,23 +890,26 @@ function tlSchildZeigen(el, id = 'tlSchild') {
   if (!s) { el.insertAdjacentHTML('beforeend', tempolimit.schildHtml(tlZuordnung.limit ?? null, id)); return; }
   tempolimit.schildSetzen(s, tlZuordnung.limit ?? null);
 }
-// Display während der Fahrt wach halten, solange das Schild etwas zu zeigen hat
-const tlWach = () => tempolimit.wachHalten(tempolimit.bereit() && eigen.offen?.status === 'faehrt' && document.visibilityState === 'visible');
+// Display während der Fahrt wach halten, auch ohne Tempolimit-Daten (Handy steckt in der Halterung). Schon ab dem
+// Kandidaten (GPS meldet Bewegung), denn bis die Fahrt erkannt ist (≥ 20 s), war das Display am 07.11. schon aus.
+const tlWach = () => tempolimit.wachHalten((eigen.offen?.status === 'faehrt' || tracker.wach) && document.visibilityState === 'visible',
+  (an, d) => devlog.log('display', { wach: an, ...d, fahrt: eigen.offen?.status ?? null, kandidat: tracker.wach }));
 function fahrtAnsicht() {
   const o = eigen.offen; if (!o || o.status !== 'faehrt') return;
-  const g = schaetzung(o);
+  const g = schaetzung(o); o.gesehen = true;
   overlay(`<div class="drive" role="dialog" aria-label="Fahrt läuft">
     <div class="map" id="map">${karte(o.punkte)}</div>
     ${tempolimit.bereit() ? tempolimit.schildHtml(tlZuordnung.limit ?? null) : ''}
     <div class="panel">
-      <div class="between"><div><div class="label">Fahrt läuft seit ${uhrzeit(o.t0)}</div><div class="big" id="dKm">${km(o.km)}</div></div><button class="btn" data-act="close">Ausblenden</button></div>
+      <div class="between"><div><div class="label">Fahrt läuft seit ${uhrzeit(o.t0)}</div><div class="big" id="dKm">${km(o.km)}</div></div>
+        <div class="drive-knoepfe"><button class="btn" data-act="close">Ausblenden</button>
+        <button class="halten" id="dStop" aria-label="Fahrt beenden: 1 Sekunde gedrückt halten"><svg viewBox="0 0 48 48" aria-hidden="true"><circle class="spur" cx="24" cy="24" r="21"/><circle class="fort" cx="24" cy="24" r="21" pathLength="100"/></svg><span class="halten-text">Ende<br>halten</span></button></div></div>
       <div class="stat3"><div><div class="num" id="dZeit">0:00</div><div class="muted small">Fahrzeit</div></div><div><div class="num" id="dSoc">${g}</div><div class="muted small">% geschätzt</div></div><div><div class="num" id="dRw">${reichweite(g)}</div><div class="muted small">km Reichweite</div></div></div>
       <div class="stat3"><div><div class="num" id="dHm">–</div><div class="muted small">Höhenmeter ↑/↓</div></div><div><div class="num" id="dStr" style="font-size:18px;line-height:30px">–</div><div class="muted small">Straße</div></div><div><div class="num" id="dBrems">–</div><div class="muted small">stark gebremst</div></div></div>
-      ${o.startSoc == null ? `<button class="btn block" data-act="startsoc">Akkustand beim Start eintragen</button>` : ''}
       ${o.v12 ? `<div class="small muted" id="dV12">12-V-Batterie: wird gemessen …</div>` : ''}
       ${devlog.aktiv() ? `<div class="small mono muted" id="dDev">DEV · warte auf GPS</div>` : ''}
-      <button class="btn primary block" data-act="stop">Fahrt beenden</button>
     </div></div>`);
+  langerDruck($('dStop'), () => { devlog.log('fahrt', { schritt: 'beenden gehalten' }); fahrtBeenden(); });
   fahrtAnzeigeAktualisieren();
 }
 function fahrtAnzeigeAktualisieren() {
@@ -917,8 +930,9 @@ function fahrtAnzeigeAktualisieren() {
     if (w && $('dV12')) $('dV12').textContent = `12-V-Batterie: ${de(w.v, 2)} V${m.length ? ` · Ø ${de(m.reduce((s, x) => s + x[2], 0) / m.length, 2)} V` : ''}`;
   });
 }
+// Startwert korrigieren, nur aus der Abfrage am Fahrtende (während der Fahrt fragt die App nichts)
 function startSocSheet() {
-  socSheet('Akkustand beim Start', socJetzt(), ['startok', 'Übernehmen'], 'Wert vom Microlino-Display übernehmen. Vorgeschlagen ist der letzte bekannte Stand.');
+  socSheet('Akkustand beim Start', eigen.offen?.startSoc ?? socJetzt(), ['startok', 'Weiter'], 'Wert beim Losfahren, falls du ihn kennst. Vorgeschlagen ist, womit die App gerechnet hat.');
 }
 
 // ---------- Fahrt nachtragen (SPEC-gps-abbruch.md, src/nachtragen.js) ----------
@@ -1062,14 +1076,12 @@ function endeSheet() {
     V.fotoZiel = 'ende';
     return;
   }
-  if (o.startSoc == null) {   // erst den Start nachtragen, dann das Ende
-    socSheet(`Fahrt beendet · ${km(o.km)}`, socJetzt(), ['startok', 'Weiter'], 'Zuerst den Akkustand beim <b>Start</b> nachtragen. Vorgeschlagen ist der letzte bekannte Stand.');
-    return;
-  }
+  if (o.startSoc == null) { startSetzen(o); sichern(); }   // Fahrt aus einer älteren Version ohne Startwert
+  const startZeile = `<div class="between small start-zeile"><span class="muted">Start ${o.startSoc} %${startAutomatisch(o.startQuelle) ? ` · ${o.startQuelle === 'stand' ? 'letzter Stand' : 'geschätzt'}` : ''}</span><button class="btn-link" data-act="startsoc">Start korrigieren</button></div>`;
   socSheet(`Fahrt beendet · ${km(o.km)}`, schaetzung(o), ['save', 'Fahrt speichern', ['discard', 'Fahrt verwerfen']],
     o.zurueckgestellt ? `Akkustand <b>am Ende dieser Fahrt</b> (${uhrzeit(o.t1 ?? o.t0)}), nicht von jetzt: danach bist du schon weitergefahren. Weißt du ihn nicht mehr, nimm die Schätzung.`
       : 'Akkustand <b>jetzt</b> vom Microlino-Display übernehmen. Vorgeschlagen ist die Schätzung aus deinem Verbrauch.',
-    `<div class="label">Zweck</div><div class="chips" id="zweck">${ZWECKE.map((z, i) => `<button class="chip" data-zweck="${z}" aria-pressed="${i === 0}">${z}</button>`).join('')}</div>
+    startZeile + `<div class="label">Zweck</div><div class="chips" id="zweck">${ZWECKE.map((z, i) => `<button class="chip" data-zweck="${z}" aria-pressed="${i === 0}">${z}</button>`).join('')}</div>
      <p class="small warn" id="plausi" style="margin:0" hidden></p>`);
   V.plausiGefragt = false;
 }
@@ -1131,6 +1143,7 @@ function fahrtSpeichern() {
   sheet(`<div class="label">${km(f.km)} · ${f.start} → ${f.ende} % · ${esc(zweck)}</div>
     ${kurz ? `<h2 class="warn">Kurze Fahrt</h2><p class="small" style="margin:0">${f.km < 1 ? 'Unter 1 km zählt sie nicht in den Schnitt, die Fahrt bleibt aber im Fahrtenbuch.' : 'Zu wenig Prozent für einen genauen Einzelwert. Die Fahrt zählt trotzdem im Schnitt mit.'}</p>`
       : nurSchaetzung(f) ? `<h2>Schätzung übernommen</h2><p class="small" style="margin:0">Der Akkustand am Ende war die unveränderte Schätzung. Damit der Verbrauch nicht sich selbst bestätigt, zählt die Fahrt nicht in den Schnitt. Beim nächsten Mal den Wert vom Display einstellen oder fotografieren.</p>`
+      : startGeschaetzt(f) ? `<h2>Start geschätzt</h2><p class="small" style="margin:0">Der Akkustand beim Losfahren war nur aus früheren Fahrten geschätzt. Damit der Verbrauch stimmt, zählt die Fahrt nicht in den Schnitt. Kennst du den Start, am Fahrtende „Start korrigieren“ tippen.</p>`
       : !zaehlt(f) ? `<h2 class="warn">${de(v, 1)} %/km</h2><p class="small" style="margin:0">Das ist mehr, als der Microlino verbrauchen kann (über ${MAX_VERBRAUCH} %/km). Vermutlich stimmt ein Akkuwert nicht; die Fahrt zählt nicht in den Schnitt.</p>`
       : `<div class="big">${de(v, 2)} %/km</div><div class="muted">${de(v * eigen.akku, 1)} kWh/100 km</div>
          <p style="margin:0" class="${d > 5 ? 'warn' : d < -5 ? 'good' : 'muted'}">${d > 5 ? `${d} % mehr als ${gelernt(eigen.fahrten.slice(0, -1)) ? 'üblich' : 'der Startwert'}` : d < -5 ? `${-d} % sparsamer als ${gelernt(eigen.fahrten.slice(0, -1)) ? 'üblich' : 'der Startwert'}` : 'Verbrauch wie üblich'}</p>
@@ -1287,7 +1300,7 @@ function tagSheet() {
     <div class="field"><label for="taJetzt">Akku jetzt % (vom Display)</label><input id="taJetzt" type="number" inputmode="numeric" min="0" max="100" placeholder="geschätzt ${socJetzt()}"></div>
     <div class="list">${l.map((o, i) => `<section class="card">
       <div class="between"><b>${datum(o.t0)} ${uhrzeit(o.t0)} · ${km(o.km)}${o.kalt ? ' ❄️' : ''}</b><span class="small mono" id="taR${i}"></span></div>
-      <div class="grid2" style="margin-top:6px"><div class="field"><label for="taS${i}">Start % (wenn bekannt)</label><input id="taS${i}" type="number" inputmode="numeric" min="0" max="100" value="${o.startSoc ?? ''}"></div>
+      <div class="grid2" style="margin-top:6px"><div class="field"><label for="taS${i}">Start % (wenn bekannt)</label><input id="taS${i}" type="number" inputmode="numeric" min="0" max="100" value="${startAutomatisch(o.startQuelle) ? '' : o.startSoc ?? ''}"${o.startSoc != null && startAutomatisch(o.startQuelle) ? ` placeholder="≈ ${o.startSoc}"` : ''}></div>
       <div class="field"><label for="taE${i}">Ende % (wenn bekannt)</label><input id="taE${i}" type="number" inputmode="numeric" min="0" max="100"></div></div></section>`).join('')}</div>
     <p class="small bad" id="taFehler" hidden></p>
     <button class="btn primary block" data-act="tagSpeichern">Alle speichern</button>`, 'tag');
@@ -1332,14 +1345,13 @@ const tracker = createTracker({
     if (eigen.offen?.status === 'beendet') zurueckstellen();
     if (eigen.offen) { devlog.log('fahrt', { schritt: 'start ignoriert', offen: eigen.offen.status }); return; }
     const seit = standSeit();
-    fahrtBeginnen({ startSoc: null, punkte: [start.p, punkt.p], km: distanz(start.p, punkt.p) / 1000, manuell: false });
+    const o = { km: 0 }; startSetzen(o);   // Startwert ohne Frage (US1)
+    fahrtBeginnen({ startSoc: o.startSoc, startQuelle: o.startQuelle, punkte: [start.p, punkt.p], km: distanz(start.p, punkt.p) / 1000, manuell: false });
     eigen.offen.gps = gpsStand(null, punkt);
     if (!V.sandbox) nachtHolen(eigen.offen, start.p, seit);
-    if (V.sandbox) {   // im Simulator nicht unterbrechen: Start-Akku = aktueller Stand, Anzeige oben im Sim-Tab
-      eigen.offen.startSoc = socJetzt(); eigen.offen.startQuelle = 'vorschlag'; toast('Fahrt erkannt (Simulation)'); simHud(); return;
-    }
-    melde(1, 'Fahrt erkannt', 'Tippen, um den Akkustand beim Start einzutragen.');
-    if (document.visibilityState === 'visible') { fahrtAnsicht(); startSocSheet(); } else render();
+    if (V.sandbox) { toast('Fahrt erkannt (Simulation)'); simHud(); return; }   // im Simulator: Anzeige oben im Sim-Tab
+    melde(1, 'Fahrt erkannt', `Gute Fahrt. Start ${eigen.offen.startSoc} %, den Akkustand fragt die App erst am Ende.`);
+    if (document.visibilityState === 'visible') pruefeOffen(); else render();   // Dialog von vor der Fahrt weicht (src/dialoge.js)
   },
   onPunkt(punkt) {
     const o = eigen.offen; if (!o || o.status !== 'faehrt') return;
@@ -1412,13 +1424,13 @@ sensoren.aufEreignisse((name, d) => {
 // Beim Öffnen der App: offene Fahrt fortsetzen oder nachfragen. Ein Dialog von vor der Fahrt („Akkustand jetzt“,
 // „Losfahren“, Ergebnis der vorigen Fahrt) gilt dann nicht mehr und weicht (src/dialoge.js).
 function pruefeOffen() {
+  if (eigen.offen?.status === 'faehrt' && eigen.offen.startSoc == null) { startSetzen(eigen.offen); sichern(); }   // ältere Version
   const art = sheetArt(), was = dialoge.beimOeffnen(eigen.offen, art); if (!was) return;
   if (art) {
     devlog.log('fahrt', { schritt: 'dialog ersetzt', dialog: art, offen: eigen.offen.status, km: eigen.offen.km });
     foto.loeschen(V.fotoNeu); V.fotoNeu = null; V.fotoErkannt = null;
   }
   if (was === 'ende') endeSheet();
-  else if (was === 'start') { fahrtAnsicht(); startSocSheet(); }
   else fahrtAnsicht();
 }
 
@@ -1534,10 +1546,10 @@ document.addEventListener('click', e => {
       const o = eigen.offen; if (!o) break;
       o.startSoc = wheelWert; o.startQuelle = wheelHerkunft(); sichern();
       devlog.log('eingabe', { startSoc: wheelWert, quelle: o.startQuelle }); fotoBestaetigt(wheelWert);
-      if (o.status === 'beendet') endeSheet(); else fahrtAnsicht();
+      if (o.status === 'beendet') endeSheet(); else fahrtAnsicht();   // während der Fahrt fragt die App nicht mehr
       break;
     }
-    case 'stop': fahrtBeenden(); break;
+    case 'stop': break;   // nur noch mit langem Druck (src/halten.js), ein Tipp beendet nichts
     case 'startproblem': vorfallBeginnen(); break;
     case 'spNachher': V.nachher = bordnetz.vorfall('nachher', { p: V.vorfall?.p, temp: eigen.temp }, () => { if (sheetArt() === 'vorfall') vorfallSheet(); }); vorfallSheet(); break;
     case 'spFoto': vorfallFoto(); break;
@@ -1797,7 +1809,10 @@ document.addEventListener('visibilitychange', () => {
   pruefeOffen();
   systemPruefen().then(neu => { if (neu && V.tab === 'heute' && !sheetOffen() && !V.fahrtAnsicht) render(); });
 });
-setInterval(() => { fahrtAnzeigeAktualisieren(); tlWach(); }, 1000);
+setInterval(() => { try { fahrtAnzeigeAktualisieren(); } finally { tlWach(); } }, 1000);   // ein Fehler in der Anzeige darf das Wachhalten nicht verhindern
+// Unerwartete Fehler ins Entwickler-Log, sonst sieht man sie am Handy nie
+window.addEventListener('error', e => devlog.log('fehler', { quelle: 'js', text: e.message, ort: `${e.filename?.split('/').pop()}:${e.lineno}` }));
+window.addEventListener('unhandledrejection', e => devlog.log('fehler', { quelle: 'js', text: String(e.reason?.message ?? e.reason) }));
 
 // ---------- Start ----------
 (async () => {
