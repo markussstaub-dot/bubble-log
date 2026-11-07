@@ -7,7 +7,7 @@ import * as bm6 from './bm6.js';
 const $ = id => document.getElementById(id);
 const LICHT_TEXT = { echt: '🕒 Echtzeit', tag: '☀️ Tag', nacht: '🌙 Nacht' };
 
-// app: { eigen(), tracker(), start(), ziele(), schaetzung(o), socJetzt(), km(x), toast(text) }
+// app: { eigen(), tracker(), start(), ziele(), schaetzung(o), socJetzt(), km(x), toast(text), tempolimit(el) }
 let app = null, sim3d = null, drei = false, tasten = false, hudTakt = 0;
 export function simTabVerbinden(a) { app = a; }
 
@@ -38,6 +38,7 @@ export function simHud() {
     <div><div class="num">${o?.startSoc != null ? app.schaetzung(o) : app.socJetzt()} %</div><div class="muted small">Akku geschätzt</div></div>`;
   $('simTurbo')?.classList.toggle('an', z.turbo);
   bm6Chips();
+  app.tempolimit?.($('simKarte'));   // Tempolimit-Schild oben rechts auf der Karte (SPEC-tempolimit.md)
 }
 // 12-V-Batterie (simulierter BM6, SPEC-12v.md): Verhalten wählen, aktueller Wert
 function bm6Chips() {

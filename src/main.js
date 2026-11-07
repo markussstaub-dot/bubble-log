@@ -17,6 +17,7 @@ import * as devlog from './devlog.js';
 import { suchen, route as routeBerechnen, wege as wegeBerechnen } from './route.js';
 import * as lade from './laden.js';
 import * as ladecache from './ladecache.js';
+import * as tempolimit from './tempolimit.js';
 import * as nt from './nachtragen.js';
 import * as dialoge from './dialoge.js';
 import * as bm6 from './bm6.js';
@@ -638,19 +639,20 @@ function simStarten() {
   eigen.erfassung = true;   // im Simulator erkennt die App Fahrten immer selbst
   eigen.offen = null;       // eine echte offene Fahrt bleibt in den echten Daten, die Simulation beginnt frei
   eigen.bm6 = { an: true, adresse: 'SIM', name: 'BM6 (simuliert)' }; bm6.setSim(true);   // 12 V immer simuliert
-  tracker.setSim(true).then(() => tracker.setModus(zielModus()));
+  tracker.setSim(true).then(() => tracker.setModus(zielModus())); tlZuordnung.zuruecksetzen();
   devlog.log('sim', { an: true });
 }
 function simBeenden() {
   simTabStoppen(); bordnetz.abbrechen().then(() => bm6.setSim(false));
   eigen = V.echt; V.echt = null; V.sandbox = false;
-  tracker.setSim(false).then(() => tracker.setModus(zielModus()));
+  tracker.setSim(false).then(() => tracker.setModus(zielModus())); tlZuordnung.zuruecksetzen();
   devlog.log('sim', { an: false });
   toast('Simulation beendet, deine echten Daten sind unverändert');
 }
 bordnetz.verbinden({ eigen: () => eigen, sichern: () => sichern(), melde: (...a) => melde(...a) });
 simTabVerbinden({
   eigen: () => eigen, tracker: () => tracker, schaetzung, socJetzt, km, toast: t => toast(t),
+  tempolimit: el => tlSchildZeigen(el, 'simTempo'),
   start: () => eigen.parkplatz?.p || V.hier || eigen.zuhause?.p || BEXBACH.p,
   // gemerkte Ziele mit ihrer Ampel, für die Leuchtsäulen in 3D
   ziele: () => favoriten().map(f => { const a = ampel(f); return { p: f.p, name: f.kurz, klasse: a.klasse, text: a.text }; }),
@@ -859,18 +861,33 @@ function zielModus() { return eigen.offen?.status === 'faehrt' ? 'fahrt' : eigen
 function fahrtBeginnen({ startSoc, startQuelle, punkte = [], km: strecke = 0, manuell }) {
   if (eigen.offen) { devlog.log('fahrt', { schritt: 'beginn abgelehnt', manuell, startSoc, offen: eigen.offen.status, km: eigen.offen.km }); return false; }
   eigen.offen = { t0: Date.now(), km: strecke, punkte, startSoc, startQuelle, status: 'faehrt', manuell, temp: null, brems: 0, beschl: 0, ausschlaege: [] };
-  verlauf = []; wartend = [];
+  verlauf = []; wartend = []; tlZuordnung.zuruecksetzen();
   devlog.log('fahrt', { schritt: 'beginn', manuell, startSoc, startQuelle, km: strecke });
   sichern(); tracker.setModus('fahrt');
   bordnetz.fahrtBeginn(eigen.offen).then(() => { if (V.fahrtAnsicht && !sheetOffen()) fahrtAnsicht(); });
   if (punkte[0]) temperaturHolen(punkte[0]);
   return true;
 }
+// Tempolimit-Schild (SPEC-tempolimit.md): nur Anzeige, keine Warnung, kein Ton, kein Antippen
+const tlZuordnung = tempolimit.createZuordnung({
+  onWechsel: (limit, vorher, d) => devlog.log('tempolimit', { limit, vorher, ...d, sim: !!V.sandbox }),
+});
+// Schild im Behälter el anzeigen bzw. aktualisieren (Fahrt-Bildschirm, Sim-Karte); ohne Daten kein Schild
+function tlSchildZeigen(el, id = 'tlSchild') {
+  if (!el) return;
+  let s = document.getElementById(id);
+  if (!tempolimit.bereit()) { s?.remove(); return; }
+  if (!s) { el.insertAdjacentHTML('beforeend', tempolimit.schildHtml(tlZuordnung.limit ?? null, id)); return; }
+  tempolimit.schildSetzen(s, tlZuordnung.limit ?? null);
+}
+// Display während der Fahrt wach halten, solange das Schild etwas zu zeigen hat
+const tlWach = () => tempolimit.wachHalten(tempolimit.bereit() && eigen.offen?.status === 'faehrt' && document.visibilityState === 'visible');
 function fahrtAnsicht() {
   const o = eigen.offen; if (!o || o.status !== 'faehrt') return;
   const g = schaetzung(o);
   overlay(`<div class="drive" role="dialog" aria-label="Fahrt läuft">
     <div class="map" id="map">${karte(o.punkte)}</div>
+    ${tempolimit.bereit() ? tempolimit.schildHtml(tlZuordnung.limit ?? null) : ''}
     <div class="panel">
       <div class="between"><div><div class="label">Fahrt läuft seit ${uhrzeit(o.t0)}</div><div class="big" id="dKm">${km(o.km)}</div></div><button class="btn" data-act="close">Ausblenden</button></div>
       <div class="stat3"><div><div class="num" id="dZeit">0:00</div><div class="muted small">Fahrzeit</div></div><div><div class="num" id="dSoc">${g}</div><div class="muted small">% geschätzt</div></div><div><div class="num" id="dRw">${reichweite(g)}</div><div class="muted small">km Reichweite</div></div></div>
@@ -886,6 +903,7 @@ function fahrtAnzeigeAktualisieren() {
   const o = eigen.offen; if (!V.fahrtAnsicht || !o) return;
   const min = (Date.now() - o.t0) / 60000, g = schaetzung(o);
   $('map').innerHTML = karte(o.punkte, o.ausschlaege);
+  tempolimit.schildSetzen($('tlSchild'), tlZuordnung.limit ?? null);
   const dg = V.devGps;
   if ($('dDev') && dg) $('dDev').textContent = `DEV · GPS ±${Math.round(dg.gen)} m · ${de((dg.tempoBerechnet ?? dg.tempo ?? 0) * 3.6, 0)} km/h · vor ${Math.max(0, Math.round((Date.now() - (dg.zeit || Date.now())) / 1000))} s · ${o.punkte.length} Punkte · ${tracker.modus}`;
   const hm = sensoren.hoehenmeter(o.punkte), letzterRau = o.punkte.findLast(p => p[3] != null)?.[3];
@@ -1331,6 +1349,7 @@ const tracker = createTracker({
       const d = distanz(letzter, punkt.p);
       if (d >= PUNKT_ABSTAND) { o.km += d / 1000; const neu = [+punkt.p[0].toFixed(5), +punkt.p[1].toFixed(5)]; o.punkte.push(neu); sensorenAnhaengen(neu); }
     }
+    tlZuordnung.punkt(punkt.p);
     o.gps = gpsStand(o.gps, punkt);   // für den Wächter, auch nach einem Neustart der App
     verlauf.push([punkt.t, punkt.tempo]); while (verlauf[0][0] < punkt.t - 60000) verlauf.shift();
     ausschlaegeEinordnen(o, punkt.t);
@@ -1412,6 +1431,14 @@ async function erfassungSetzen(an) {
   await tracker.setModus(zielModus());
 }
 
+// Einstellungen → Tempolimit: laden, Stand, Namensnennung (ODbL)
+function tlEinstellung() {
+  const t = tempolimit.info(), weit = t && eigen.zuhause && distanz(t.zuhause, eigen.zuhause.p) > 5000;
+  return `<p class="small" style="margin:0">Zeigt während der Fahrt das Tempolimit der Straße als großes Schild. Nur Anzeige, keine Warnung und kein Ton; das Display bleibt dabei an. Daten: ${tempolimit.QUELLE} (OpenStreetMap, ODbL), Saarland und Rheinland-Pfalz. Baustellen und Wechselschilder fehlen, ohne Eintrag zeigt das Schild „?“.</p>
+    ${t ? `<p class="small muted" style="margin:0">${t.stuecke} Straßenstücke im Umkreis von ${t.radiusKm} km · Stand ${esc(t.stand.split('-').reverse().join('.'))} · geladen ${datum(t.geladen)}${weit ? ' · <span class="warn">gilt für das alte Zuhause</span>' : ''}</p>` : ''}
+    ${eigen.zuhause ? `<div class="grid2"><button class="btn${t ? '' : ' block'}" data-act="tlLaden"${V.tlLaeuft ? ' disabled' : ''}>${V.tlLaeuft ? `Lade … ${V.tlLaeuft}` : t ? 'Neu laden' : `Tempolimits laden (${tempolimit.RADIUS_KM} km, etwa 4 MB)`}</button>${t ? `<button class="btn" data-act="tlWeg">Entfernen</button>` : ''}</div>`
+      : '<p class="small muted" style="margin:0">Dafür zuerst „Hier ist Zuhause“ tippen.</p>'}`;
+}
 function settingsSheet() {
   sheet(`<h2>Einstellungen</h2>
     <div class="field"><label for="akku">Akku deines Microlino</label><select id="akku">${[5.5, 10.5, 15].map(k => `<option value="${k}" ${k === eigen.akku ? 'selected' : ''}>${k === 5.5 ? 'Short Range' : k === 10.5 ? 'Mid Range' : 'Long Range'} · ${de(k, 1)} kWh</option>`).join('')}</select></div>
@@ -1432,6 +1459,8 @@ function settingsSheet() {
       <div class="label" style="margin-top:6px">Ladesäulen</div>
       <p class="small" style="margin:0">${esc(lade.BEREICH)} · Stand ${esc(lade.STAND)}. Quelle: ${esc(lade.QUELLE)}; nur AC Typ 2 und Haushaltssteckdose, Deutschland und Schweiz.</p>
       ${eigen.zuhause ? `<button class="btn block" data-act="ladeLaden"${V.ladeLaeuft ? ' disabled' : ''}>${V.ladeLaeuft ? `Lade Ladesäulen … ${V.ladeLaeuft}` : `Ladesäulen für dein Zuhause laden (${ladecache.RADIUS_KM} km, etwa 1–2 MB)`}</button>` : '<p class="small muted" style="margin:0">Für Ladesäulen um dein eigenes Zuhause zuerst „Hier ist Zuhause“ tippen.</p>'}
+      <div class="label" style="margin-top:6px">Tempolimit</div>
+      ${tlEinstellung()}
     </section>
     <div class="field"><label for="privatRadius">Unschärfe im Logbuch</label><select id="privatRadius">${[0, 200, 400, 800].map(m => `<option value="${m}" ${m === privatRadius() ? 'selected' : ''}>${m ? `${m} m um Zuhause und eigene Ladeorte` : 'Aus'}</option>`).join('')}</select>
       <span class="small muted">Die Tagestour zeichnet Zuhause und eigene Ladeorte (z. B. Mami) nicht, sondern als gestrichelten Kreis mit leicht versetzter Mitte. So kannst du Bildschirmfotos zeigen, ohne Adressen preiszugeben.</span></div>
@@ -1640,6 +1669,16 @@ document.addEventListener('click', e => {
         .finally(() => { V.ladeLaeuft = null; if ($('ladekarte')) settingsSheet(); render(); });
       break;
     }
+    case 'tlLaden': {
+      if (!eigen.zuhause || V.tlLaeuft) break;
+      V.tlLaeuft = 'startet'; settingsSheet();
+      tempolimit.herunterladen(eigen.zuhause.p, (i, n) => { V.tlLaeuft = `${i + 1} von ${n}`; if ($('ladekarte')) settingsSheet(); })
+        .then(d => { devlog.log('tempolimit', { geladen: d.stuecke, bytes: d.bytes, stand: d.stand }); toast(`Tempolimits geladen (${de(d.bytes / 1e6, 1)} MB), gehen jetzt offline`); })
+        .catch(e => { toast(`Tempolimits nicht geladen: ${e.message}`); devlog.log('fehler', { quelle: 'tempolimit', text: e.message }); })
+        .finally(() => { V.tlLaeuft = null; if ($('ladekarte')) settingsSheet(); });
+      break;
+    }
+    case 'tlWeg': tempolimit.loeschen().then(() => { if ($('ladekarte')) settingsSheet(); toast('Tempolimits gelöscht'); }); break;
     case 'zuhauseWeg': eigen.zuhause = null; favoriten().forEach(f => { f.cache = null; }); sichern(); settingsSheet(); toast('Zuhause entfernt'); break;
     case 'zielTreffer': zielPruefen(V.treffer[Number(d.i)]); break;
     case 'zielZuletzt': zielPruefen(eigen.ziele[Number(d.i)]); break;
@@ -1758,12 +1797,13 @@ document.addEventListener('visibilitychange', () => {
   pruefeOffen();
   systemPruefen().then(neu => { if (neu && V.tab === 'heute' && !sheetOffen() && !V.fahrtAnsicht) render(); });
 });
-setInterval(fahrtAnzeigeAktualisieren, 1000);
+setInterval(() => { fahrtAnzeigeAktualisieren(); tlWach(); }, 1000);
 
 // ---------- Start ----------
 (async () => {
   eigen = await laden();
   { const lc = await ladecache.gespeichert(); if (lc?.standorte?.length) lade.setzeDaten(lc); }   // heruntergeladene Ladesäulen statt des eingebauten Auszugs
+  tempolimit.laden().then(t => { if (t && V.fahrtAnsicht && !sheetOffen()) fahrtAnsicht(); });   // ≈ 4 MB, nicht auf den ersten Bildschirm warten
   // Früher bekam jeder beim ersten Start Bexbach als Zuhause und 18 Ziele aus dem Saarland (02.11.2026 entfernt):
   // Zuhause legt jeder selbst fest, sonst läge auch die Unschärfe im Logbuch um Bexbach statt um das eigene Haus.
   // Wer die Liste schon hat (startlisteGesetzt), behält sie.

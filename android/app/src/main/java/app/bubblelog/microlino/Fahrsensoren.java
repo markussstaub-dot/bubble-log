@@ -21,6 +21,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.SystemClock;
 import android.provider.Settings;
+import android.view.WindowManager;
 
 import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
@@ -190,6 +191,18 @@ public class Fahrsensoren extends Plugin implements SensorEventListener {
     }
 
     // Für die Einstellungen: { akkuEingeschraenkt, energiesparen, standort: "immer" | "nutzung" | "nein" }
+    // Tempolimit-Schild (SPEC-tempolimit.md): Display während der Fahrt anlassen. Das Flag gilt nur, solange die App
+    // sichtbar ist; im Hintergrund schaltet Android das Display wie gewohnt ab.
+    @PluginMethod
+    public void bildschirmWach(PluginCall call) {
+        final boolean an = Boolean.TRUE.equals(call.getBoolean("an", false));
+        getActivity().runOnUiThread(() -> {
+            if (an) getActivity().getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            else getActivity().getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            call.resolve();
+        });
+    }
+
     @PluginMethod
     public void status(PluginCall call) {
         Context c = getContext();

@@ -59,6 +59,29 @@ Der Rückweg gilt als dieselbe Strecke rückwärts. Fehlende Wege holt die App i
 sonst alle 90 Tage. Ohne gewähltes Ziel zeigt „Reichweite“ alle gemerkten Ziele als Ampel mit dem aktuellen
 Akku: grün hin und zurück, gelb nur hin, rot laden, jeweils mit 15 % Reserve.
 
+## Tempolimit-Schild (`SPEC-tempolimit.md`)
+
+Während einer Fahrt steht oben rechts im Fahrt-Bildschirm ein großes rundes Verkehrsschild mit dem Limit der Straße.
+Es ist nur eine Anzeige: keine Warnung, kein Ton, kein Tempovergleich, nichts zum Antippen. Solange eine Fahrt läuft
+und die App vorn ist, bleibt das Display an (`Fahrsensoren.bildschirmWach`, im Browser Screen Wake Lock).
+
+- **Daten:** OSM `maxspeed` (bzw. `maxspeed:forward/backward`, `zone:maxspeed`, verkehrsberuhigt = Schritt), ODbL,
+  „© OpenStreetMap-Mitwirkende“. Einstellungen → Tempolimit lädt die Kacheln im Umkreis von 40 km um Zuhause
+  (≈ 3,8 MB) und speichert sie als Datei `tempolimit.json` (`Directory.Data`, nicht Preferences).
+- **Kacheln erzeugen:** Extrakte von https://download.geofabrik.de/europe/germany/ (Saarland, Rheinland-Pfalz) laden,
+  dann `node tools/tempolimit.mjs saarland-latest.osm.pbf rheinland-pfalz-latest.osm.pbf` (≈ 15 s). Ergebnis:
+  0,1°-Kacheln in `docs/tempolimit/` (≈ 15 MB) mit `index.json`; nach dem Push liegen sie auf GitHub Pages.
+  Straßen ohne Limit sind mit dabei, damit die App dort „?“ zeigt und nicht die Nachbarstraße nimmt; Einbahnstraßen
+  sperren die Gegenrichtung (sonst nähme die Autobahn die Gegenfahrbahn).
+- **Zuordnung** (`src/tempolimit.js`, Werte in `ZUORDNUNG`): nächster Abschnitt bis 20 m, Fahrtrichtung höchstens 45°
+  von der Straße entfernt (vorwärts oder rückwärts entscheidet `forward`/`backward`), Richtung erst nach 8 m
+  Bewegung (an der Ampel bleibt das Schild), neues Limit nach 2 gleichen Fixes, „?“ nach 3.
+- **Devlog** `tempolimit`: bei jedem Wechsel `limit`, `vorher`, `weg` (OSM-Weg-ID), `abstand`, `winkel`, `richtung`,
+  Position; beim Laden `geladen`, `bytes`, `stand`. Codes: Zahl = km/h, 0 = keine Begrenzung, -1 = Schritt, null = „?“.
+- **Im Sim-Tab** zeigt ein kleineres Schild oben rechts auf der Karte dasselbe.
+- Fehlt: Baustellen, Wechselverkehrszeichen, zeitliche Limits (`maxspeed:conditional`), Gebiete außerhalb von
+  Saarland und Rheinland-Pfalz.
+
 ## Sensoren während einer Fahrt
 
 Ein eigenes kleines Plugin (`android/app/src/main/java/app/bubblelog/microlino/Fahrsensoren.java`, angemeldet in
@@ -300,6 +323,8 @@ die Fahrt dort und die App fragt den Akkustand ab.
 | `src/route.js` | Ziel-Check: Ortssuche, Straßenroute, Höhenmeter entlang der Route |
 | `src/laden.js`, `src/ladepunkte.json` | Ladepunkte offline: Umkreis, entlang der Route, Ladezeit |
 | `tools/ladepunkte.mjs` | erzeugt `ladepunkte.json` aus dem Ladesäulenregister |
+| `src/tempolimit.js` | Tempolimit: Kacheln laden/speichern, Zuordnung GPS → Straße, Schild, Display wach (Tests: `tests/tempolimit.test.js`) |
+| `tools/tempolimit.mjs`, `docs/tempolimit/` | erzeugt die Tempolimit-Kacheln aus Geofabrik-Extrakten (eigener kleiner PBF-Leser) |
 | `src/fahrsim.js` | Sim-Tab: Fahrphysik (auch Joystick), 2D-Karte, Mini-Microlino |
 | `src/simtab.js` | Sim-Tab: Oberfläche, Anzeige, Joystick/Tasten, Umschalten auf 3D |
 | `src/sim3d/` | 3D-Ansicht: `index.js` (Bild, Kameras), `microlino.js`, `welt.js` (Sim-Welt, Kollision), `licht.js`, `ziele.js`, `geo.js` |

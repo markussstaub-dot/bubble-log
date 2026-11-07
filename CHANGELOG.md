@@ -3,6 +3,9 @@
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
 ## Unveröffentlicht
+- **Tempolimit-Schild:** Während der Fahrt zeigt ein großes rundes Schild das Limit der Straße (OpenStreetMap). Ohne
+  Eintrag zeigt es „?“. Keine Warnung, kein Ton, das Display bleibt an. Einmal in den Einstellungen laden (40 km um
+  Zuhause, etwa 4 MB).
 
 ## Bubble-Log-1821 (06.11.2026, Version 2026.11.06-1821)
 Per adb über 1541 installiert, Daten bleiben.

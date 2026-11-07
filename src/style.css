@@ -122,6 +122,20 @@ input[type=number], input[type=datetime-local], select { font: inherit; color: v
 .drive { position: absolute; inset: 0; z-index: 20; background: var(--bg); display: flex; flex-direction: column; padding-top: env(safe-area-inset-top, 0px); }
 .drive .map { flex: 1; min-height: 0; }
 .drive .map svg { width: 100%; height: 100%; display: block; }
+/* Tempolimit-Schild (SPEC-tempolimit.md): rund wie ein Verkehrszeichen, groß über der Karte, ohne Bedienung.
+   Weißer Innenkreis und Schrift wachsen mit dem Schild (% bzw. cqw), damit es in jeder Größe gleich aussieht. */
+.tl-schild { position: absolute; right: 14px; top: calc(14px + env(safe-area-inset-top, 0px)); z-index: 2; width: min(60vw, 34vh); aspect-ratio: 1;
+  container-type: inline-size; display: grid; place-items: center; border-radius: 50%; background: #d6001c; pointer-events: none;
+  box-shadow: 0 0 0 3px #fff, 0 3px 12px rgba(0,0,0,.4); }
+.tl-schild > span { display: grid; place-items: center; width: 78%; aspect-ratio: 1; border-radius: 50%; background: #fff; color: #111;
+  font: 700 40cqw/1 var(--f-body, sans-serif); letter-spacing: -.03em; }
+.tl-schild.tl-drei > span { font-size: 31cqw; }
+.tl-schild.tl-unbekannt { background: #9aa3a1; }
+.tl-schild.tl-unbekannt > span { color: #6b7472; }
+.tl-schild.tl-schritt > span { font-size: 15cqw; letter-spacing: 0; }
+.tl-schild.tl-ende { background: #444; }
+.tl-schild.tl-ende > span { width: 94%; background: #fff linear-gradient(135deg, transparent 37%, #222 37%, #222 41%, transparent 41%, transparent 45%, #222 45%, #222 49%, transparent 49%, transparent 53%, #222 53%, #222 57%, transparent 57%, transparent 61%, #222 61%, #222 65%, transparent 65%); }
+#simTempo { width: 30%; max-width: 150px; top: 10px; right: 10px; z-index: 950; }
 .drive .panel { background: var(--surface); border-radius: 24px 24px 0 0; padding: 16px 18px calc(22px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 12px; border-top: 1px solid var(--line); }
 
 .wheel-wrap { position: relative; height: 220px; }
