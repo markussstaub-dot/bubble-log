@@ -49,10 +49,18 @@ export const ruheStufe = v => v >= RUHE_OK ? 'ok' : v >= RUHE_VERDACHT ? 'beobac
 // springt die Spannung, das sagt nichts über den Laderegler.
 // bis = Abstellzeit: Minuten danach zählen nicht. Das Fahrtende wird erst ≈ 3 Min. nach dem Abstellen erkannt, in der
 // Zeit fällt die Spannung ohne Laderegler auf den Ruhewert (06.11.2026: 13,6 → 12,35 V, dreimal Fehlalarm).
+// Ohne erkanntes Parken (Fahrt von Hand beendet) steckt der Abfall trotzdem im Schluss: bis zu ABFALL_MINUTEN am Ende,
+// deren kleinster Wert unter FAHRT_VERDACHT liegt, zählen nicht, solange davor eine gesunde Minute bleibt
+// (08.11.2026: Micro um 13:13:23 aus, Ende von Hand 13:14:07, 13,6 → 12,8 V, Fehlalarm). Ein Fehler über die ganze
+// Fahrt oder länger als zwei Minuten am Ende bleibt sichtbar.
+const ABFALL_MINUTEN = 2;
 export function fahrtBewerten(minuten, bis = Infinity) {
   const drin = (minuten || []).filter(m => m[0] <= bis);
   if (!drin.length) return null;
-  const kern = drin.length > 3 ? drin.slice(1, -1) : drin;
+  let ab = 0;   // abgeschnittene Minuten am Schluss; dann zählt die neue letzte Minute wieder mit
+  while (ab < ABFALL_MINUTEN && drin.length > 1 && drin.at(-1)[1] < FAHRT_VERDACHT
+    && drin.some(m => m[1] >= FAHRT_VERDACHT)) { drin.pop(); ab++; }
+  const kern = drin.length + ab > 3 ? drin.slice(1, ab ? undefined : -1) : drin;
   const mittel = r2(kern.reduce((s, m) => s + m[2], 0) / kern.length);
   const min = Math.min(...kern.map(m => m[1])), max = Math.max(...kern.map(m => m[3]));
   const schwankung = r2(max - min);

@@ -73,6 +73,15 @@ test('Minuten nach dem Abstellen zählen nicht (Fehlalarm vom 06.11.2026)', () =
   assert.equal(fahrtBewerten(m, -1), null);                      // keine Minute vor dem Abstellen
 });
 
+test('Fahrt von Hand beendet: Spannungsabfall nach dem Ausschalten zählt nicht (08.11.2026)', () => {
+  const m = fahrt([13.6, 13.6, 13.7, 13.6, 13.6]);
+  m.push([5 * 60000, 12.81, 13.3, 13.65], [6 * 60000, 12.8, 12.8, 12.81]);   // 13:13 aus, 13:14 Ende von Hand
+  assert.equal(fahrtBewerten(m).stufe, 'ok');
+  // drei schwache Minuten am Schluss sind kein Ausschalten mehr
+  m.push([7 * 60000, 12.7, 12.75, 12.8]);
+  assert.equal(fahrtBewerten(m).stufe, 'verdaechtig');
+});
+
 test('Beleg: Zusammenfassung mit Startproblem und Wert davor, Zeilen nach Zeit', () => {
   const t = Date.UTC(2026, 9, 30, 9, 0, 0);
   const messungen = [
