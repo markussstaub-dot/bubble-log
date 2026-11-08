@@ -2,7 +2,16 @@
 
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
-## Unveröffentlicht
+## Bubble-Log-2125 (08.11.2026, Version 2026.11.08-2125)
+Per adb über 1052 installiert, Daten bleiben.
+- **Akku-Schätzung mit Grund neben dem Schild** (Wunsch 08.11., `SPEC-usability.md` US2): In der Fahrt-Ansicht steht
+  oben links groß „≈ 72 %“, darunter „≈ 1,0 %/km · 3 °C · bergauf ↑ 87 Hm“, zum Vergleichen mit der Anzeige im Micro.
+  Die Schätzung (auch der Vorschlag am Fahrtende) rechnet jetzt wie der Ziel-Check mit Kältezuschlag und Steigung.
+- **Wartende Fahrten werden beim Fahrtende mit abgerechnet** (Befund 08.11., US6): Wartet vor der gerade beendeten
+  Fahrt noch eine, steht im Dialog „Gilt auch für 09:09–09:38 · 21 km“ (Haken, abwählbar). Der End-Akku gilt dann für
+  beide, der Verbrauch wird nach Strecke, Höhe und Kaltstart verteilt. Nicht über einen Ladevorgang hinweg.
+- **Späte Frage klarer:** Der Titel nennt die Fahrt („Fahrt 09:09–09:38 · 21 km“), der Text sagt, wenn seitdem geladen
+  wurde, und liegt der Wert über der Schätzung, fragt die App: „Ist das der Stand von jetzt?“
 - **Laden geht nicht mehr verloren** (Fund 07.11.: Ladevorgang in Bexbach fehlte, ohne Spur im Log):
   - „Akku nachher“ am Drehrad übernehmen speichert den Ladevorgang sofort, mit „Rückgängig“. Der Knopf
     „Ladevorgang speichern“ bleibt für Ort/Preis-Änderungen.
@@ -15,6 +24,7 @@ Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten
   End-Akku am Drehrad, Speichern mit „Rückgängig“. Ende über Start wird abgelehnt. Korrigierte Werte gelten als
   am Drehrad eingestellt und zählen für den Verbrauch; im Log `fahrt` / `korrigiert` mit alt und neu.
   Nachgetragene Fahrten öffnen wie bisher den Nachtragen-Dialog.
+- **Tempolimit-Hinweis:** „nur zur Orientierung, es gelten die Schilder an der Straße“ in App und README.
 - **Kein 12-V-Fehlalarm mehr beim Beenden von Hand** (Fund 08.11. 13:14): Ohne erkanntes Parken zählen bis zu zwei
   schwache Minuten am Schluss nicht mit (Spannungsabfall nach dem Ausschalten). Längere oder durchgehend schwache
   Werte bleiben „verdächtig“. Mit den echten Werten der Fahrt nachgerechnet: ok, Ø 13,62 V, Schwankung 0,16 V.
