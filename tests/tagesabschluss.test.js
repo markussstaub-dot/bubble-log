@@ -32,3 +32,15 @@ test('ohne Gewichte gleichmäßig verteilt', () => {
   const r = verteilen([{ t0: h(1), t1: h(2) }, { t0: h(3), t1: h(4) }], [0, 0], [{ t: 0, soc: 40 }, { t: h(5), soc: 30 }]);
   assert.deepEqual(r, [{ start: 40, ende: 35 }, { start: 35, ende: 30 }]);
 });
+
+test('Kette beim Fahrtende: Szenario 08.11.2026 (20,8 km wartet, dann 3,2 km, Ende 31 %)', async () => {
+  const { kette } = await import('../src/tagesabschluss.js');
+  const fahrten = [{ t0: 10, t1: 20, startSoc: 69, startFest: true }, { t0: 30, t1: 40, startSoc: 52, startFest: false }];
+  const r = kette({ fahrten, gewichte: [20.8, 3.2], stand: { t: 0, soc: 93 }, ende: 31 });
+  assert.deepEqual(r, [{ start: 69, ende: 36 }, { start: 36, ende: 31 }]);
+  // ohne festen Start der ersten Fahrt gilt der Stand davor
+  const r2 = kette({ fahrten: [{ ...fahrten[0], startFest: false }, fahrten[1]], gewichte: [1, 1], stand: { t: 0, soc: 60 }, ende: 40 });
+  assert.deepEqual(r2, [{ start: 60, ende: 50 }, { start: 50, ende: 40 }]);
+  // ganz ohne Anker davor: Fehler, dann speichert die App nur die eine Fahrt
+  assert.ok(kette({ fahrten: [{ t0: 10, t1: 20 }, { t0: 30, t1: 40 }], gewichte: [1, 1], ende: 40 })[0].fehler);
+});

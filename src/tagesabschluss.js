@@ -26,3 +26,15 @@ export function verteilen(fahrten, gewichte, anker) {
   }
   return out;
 }
+
+// Kette beim Fahrtende (SPEC-usability.md, US6, Befund 08.11.2026): Warten vor der gerade beendeten Fahrt noch
+// Fahrten ohne Akkustand, gilt der End-Akku für alle. Anker sind der letzte Stand davor, jeder von Hand
+// eingetragene Start und das Ende der letzten Fahrt; dazwischen wird nach Gewicht verteilt wie beim Tagesabschluss.
+// fahrten: chronologisch [{ t0, t1, startSoc, startFest }], letzte = gerade beendete; stand: { t, soc } oder null
+export function kette({ fahrten, gewichte, stand = null, ende }) {
+  const anker = [];
+  if (stand && stand.t <= fahrten[0].t0) anker.push(stand);
+  for (const f of fahrten) if (f.startFest && f.startSoc != null) anker.push({ t: f.t0, soc: f.startSoc });
+  anker.push({ t: fahrten.at(-1).t1, soc: ende });
+  return verteilen(fahrten, gewichte, anker);
+}

@@ -5,7 +5,7 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 import { laden, speichern, speichernSpaeter, LEER } from './store.js';
 import { createTracker, distanz, fahrtEnde, gpsStand, RUHE_TAKT, RUHE_TAKTE, VOLL_TAKT } from './tracker.js';
 import { temperatur, tiefstwert } from './wetter.js';
-import { verteilen } from './tagesabschluss.js';
+import { verteilen, kette } from './tagesabschluss.js';
 import { unscharf, kreisMitte, beruehrt, tagestour } from './logbuch.js';
 import { csvText, fotosVon, teilen, dateiname, speichern as csvSpeichern } from './export.js';
 import * as foto from './foto.js';
@@ -14,6 +14,7 @@ import { scrollrad } from './scrollrad.js';
 import { herkunft, nurSchaetzung, startQuelleAuto, startAutomatisch, startGeschaetzt, belastbar } from './herkunft.js';
 import { langerDruck } from './halten.js';
 import * as sensoren from './sensoren.js';
+import { fahrtSchaetzung, grundText } from './fahrtschaetzung.js';
 import * as devlog from './devlog.js';
 import { suchen, route as routeBerechnen, wege as wegeBerechnen } from './route.js';
 import * as lade from './laden.js';
@@ -98,7 +99,13 @@ const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const socKlasse = p => p > 50 ? 'good' : p > 20 ? 'warn' : 'bad';
 const datum = t => { const d = new Date(t); return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.`; };
 const uhrzeit = t => new Date(t).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-const schaetzung = o => Math.max(0, Math.round((o.startSoc ?? socJetzt()) - o.km * avg()));
+// Akku während bzw. am Ende einer Fahrt: wie der Ziel-Check mit Kälte und Steigung (src/fahrtschaetzung.js)
+const fahrtRechnung = o => {
+  const hm = sensoren.hoehenmeter(o.punkte || []);
+  return fahrtSchaetzung({ start: o.startSoc ?? socJetzt(), km: o.km, proKm: avg(), temp: o.temp ?? eigen.temp ?? null,
+    kaltZuschlag: kaltZuschlag(), steig: hm ? steigProzent(hm.auf - REKUP * hm.ab) : 0, hm });
+};
+const schaetzung = o => fahrtRechnung(o).soc;
 // Zeitpunkt des letzten bekannten Akkustands; ältere Daten ohne socT: Ende der letzten Fahrt bzw. letzter Ladevorgang
 const socZeit = () => eigen.socT ?? Math.max(0, fahrten().at(-1)?.t1 ?? 0, Number(ladungen().at(-1)?.id?.slice(1)) || 0);
 const zeitpunkt = t => datum(t) === datum(Date.now()) ? uhrzeit(t) : `${datum(t)} ${uhrzeit(t)}`;
@@ -899,9 +906,10 @@ const tlWach = () => tempolimit.wachHalten((eigen.offen?.status === 'faehrt' || 
   (an, d) => devlog.log('display', { wach: an, ...d, fahrt: eigen.offen?.status ?? null, kandidat: tracker.wach }));
 function fahrtAnsicht() {
   const o = eigen.offen; if (!o || o.status !== 'faehrt') return;
-  const g = schaetzung(o); o.gesehen = true;
+  const s = fahrtRechnung(o), g = s.soc; o.gesehen = true;
   overlay(`<div class="drive" role="dialog" aria-label="Fahrt läuft">
     <div class="map" id="map">${karte(o.punkte)}</div>
+    <div class="drive-akku"><div class="drive-akku-wert" id="dAkku">≈ ${g} %</div><div class="drive-akku-grund" id="dGrund">${grundText(s)}</div></div>
     ${tempolimit.bereit() ? tempolimit.schildHtml(tlZuordnung.limit ?? null) : ''}
     <div class="panel">
       <div class="between"><div><div class="label">Fahrt läuft seit ${uhrzeit(o.t0)}</div><div class="big" id="dKm">${km(o.km)}</div></div>
@@ -917,7 +925,8 @@ function fahrtAnsicht() {
 }
 function fahrtAnzeigeAktualisieren() {
   const o = eigen.offen; if (!V.fahrtAnsicht || !o) return;
-  const min = (Date.now() - o.t0) / 60000, g = schaetzung(o);
+  const min = (Date.now() - o.t0) / 60000, s = fahrtRechnung(o), g = s.soc;
+  $('dAkku').textContent = `≈ ${g} %`; $('dGrund').textContent = grundText(s);
   $('map').innerHTML = karte(o.punkte, o.ausschlaege);
   tempolimit.schildSetzen($('tlSchild'), tlZuordnung.limit ?? null);
   const dg = V.devGps;
@@ -1080,21 +1089,35 @@ function endeSheet() {
     return;
   }
   if (o.startSoc == null) { startSetzen(o); sichern(); }   // Fahrt aus einer älteren Version ohne Startwert
-  const startZeile = `<div class="between small start-zeile"><span class="muted">Start ${o.startSoc} %${startAutomatisch(o.startQuelle) ? ` · ${o.startQuelle === 'stand' ? 'letzter Stand' : 'geschätzt'}` : ''}</span><button class="btn-link" data-act="startsoc">Start korrigieren</button></div>`;
-  socSheet(`Fahrt beendet · ${km(o.km)}`, schaetzung(o), ['save', 'Fahrt speichern', ['discard', 'Fahrt verwerfen']],
-    o.zurueckgestellt ? `Akkustand <b>am Ende dieser Fahrt</b> (${uhrzeit(o.t1 ?? o.t0)}), nicht von jetzt: danach bist du schon weitergefahren. Weißt du ihn nicht mehr, nimm die Schätzung.`
+  const k = kettenFahrten(o), spaet = o.zurueckgestellt, t1 = o.t1 ?? o.t0;
+  const geladenSeit = spaet ? ladungen().filter(l => (Number(l.id.slice(1)) || 0) > t1) : [];
+  const ketteZeile = k.length ? `<label class="row small card" style="gap:8px;align-items:flex-start"><input type="checkbox" id="kette" checked>
+    <span>Gilt auch für ${k.map(w => `<b>${zeitpunkt(w.t0)}–${uhrzeit(w.t1 ?? w.t0)} · ${km(w.km)}</b>`).join(', ')} (wartet noch). Der Verbrauch wird nach Strecke verteilt.</span></label>` : '';
+  const startZeile = ketteZeile + `<div class="between small start-zeile"><span class="muted">Start ${o.startSoc} %${startAutomatisch(o.startQuelle) ? ` · ${o.startQuelle === 'stand' ? 'letzter Stand' : 'geschätzt'}` : ''}</span><button class="btn-link" data-act="startsoc">Start korrigieren</button></div>`;
+  // Späte Frage (US6): groß, um welche Fahrt es geht; vorgeschlagen ist der Wert von damals, nicht der von jetzt
+  socSheet(spaet ? `Fahrt ${zeitpunkt(o.t0)}–${uhrzeit(t1)} · ${km(o.km)}` : `Fahrt beendet · ${km(o.km)}`, endeVorschlag(o, k), ['save', 'Fahrt speichern', ['discard', 'Fahrt verwerfen']],
+    spaet ? `Akkustand <b>am Ende dieser Fahrt um ${uhrzeit(t1)}</b>, nicht von jetzt: danach bist du schon weitergefahren${geladenSeit.length ? ` und hast geladen (zuletzt auf ${geladenSeit.at(-1).bis} %)` : ''}. Vorgeschlagen ist die Schätzung für ${uhrzeit(t1)}; weißt du den Wert nicht mehr, nimm sie.`
       : 'Akkustand <b>jetzt</b> vom Microlino-Display übernehmen. Vorgeschlagen ist die Schätzung aus deinem Verbrauch.',
     startZeile + `<div class="label">Zweck</div><div class="chips" id="zweck">${ZWECKE.map((z, i) => `<button class="chip" data-zweck="${z}" aria-pressed="${i === 0}">${z}</button>`).join('')}</div>
      <p class="small warn" id="plausi" style="margin:0" hidden></p>`);
   V.plausiGefragt = false;
 }
+// Vorschlag fürs Ende: mit Kette ab dem Start der ersten wartenden Fahrt (der Start der letzten ist dann nur geschätzt)
+function endeVorschlag(o, k) {
+  const erste = k[0];
+  if (!k.length || erste.startSoc == null || startAutomatisch(erste.startQuelle)) return schaetzung(o);
+  return Math.max(0, Math.round(erste.startSoc - [...k, o].reduce((s, x) => s + (x.km || 0), 0) * avg()));
+}
 // Weicht der eingestellte Wert stark von der Schätzung ab, einmal nachfragen statt gleich zu speichern
 function plausibel() {
-  const o = eigen.offen, wert = leseWheel(), erwartet = schaetzung(o);
-  if (V.plausiGefragt || Math.abs(wert - erwartet) < Math.max(10, o.km * avg() * 0.5)) return true;
+  const o = eigen.offen, wert = leseWheel(), k = ketteAn(o);
+  const kmGes = [...k, o].reduce((s, x) => s + (x.km || 0), 0), erwartet = endeVorschlag(o, k);
+  if (V.plausiGefragt || Math.abs(wert - erwartet) < Math.max(10, kmGes * avg() * 0.5)) return true;
   V.plausiGefragt = true;
   const el = $('plausi'); el.hidden = false;
-  el.innerHTML = `Geschätzt waren etwa <b>${erwartet} %</b>, eingestellt sind <b>${wert} %</b>. Stimmt das? Zum Speichern noch einmal tippen.`;
+  el.innerHTML = o.zurueckgestellt && wert > erwartet
+    ? `Für ${uhrzeit(o.t1 ?? o.t0)} geschätzt waren etwa <b>${erwartet} %</b>, eingestellt sind <b>${wert} %</b>. Ist das der Stand von jetzt? Gefragt ist der Wert am Ende dieser Fahrt. Zum Speichern noch einmal tippen.`
+    : `Geschätzt waren etwa <b>${erwartet} %</b>, eingestellt sind <b>${wert} %</b>. Stimmt das? Zum Speichern noch einmal tippen.`;
   devlog.log('eingabe', { plausi: 'nachgefragt', wert, erwartet, km: o.km });
   return false;
 }
@@ -1134,8 +1157,26 @@ function fahrtEinsortieren(f) {
 function fahrtSpeichern() {
   const o = eigen.offen; if (!o) return;
   const zweck = $('overlay').querySelector('[data-zweck][aria-pressed="true"]')?.dataset.zweck || 'Privat';
-  const ende = Math.min(o.startSoc, wheelWert);
-  const f = fahrtAus(o, { start: o.startSoc, ende, startQuelle: o.startQuelle || 'drehrad', endeQuelle: wheelHerkunft(), zweck }), t1 = f.t1;
+  const k = ketteAn(o), t1o = o.t1 ?? Date.now();
+  let start = o.startSoc, startQuelle = o.startQuelle || 'drehrad';
+  if (k.length) {   // US6: wartende Fahrten davor mit demselben End-Akku abschließen
+    const l = [...k, o].map(x => ({ t0: x.t0, t1: x === o ? t1o : x.t1 ?? x.t0, startSoc: x.startSoc, startFest: !startAutomatisch(x.startQuelle) }));
+    const r = kette({ fahrten: l, gewichte: [...k, o].map(tagGewicht), ende: wheelWert,
+      stand: eigen.soc != null && eigen.socT != null ? { t: eigen.socT, soc: eigen.soc } : null });
+    if (r.some(x => x.fehler)) { devlog.log('fahrt', { schritt: 'kette', fehler: r.find(x => x.fehler).fehler }); toast('Wartende Fahrt bleibt offen: kein bekannter Akkustand davor'); }
+    else {
+      k.forEach((w, i) => {
+        const fw = fahrtAus(w, { start: r[i].start, ende: Math.min(r[i].start, r[i].ende), zweck: 'Privat',
+          startQuelle: l[i].startFest ? w.startQuelle : 'tagesabschluss', endeQuelle: 'vorschlag' });   // verteilt: zählt nicht in den Verbrauch
+        fw.kette = true; fahrtEinsortieren(fw);
+      });
+      eigen.ohneAkku = ohneAkku().filter(w => !k.includes(w));
+      if (!l.at(-1).startFest) { start = r.at(-1).start; startQuelle = 'tagesabschluss'; }
+      devlog.log('fahrt', { schritt: 'kette', anzahl: k.length, verteilt: r });
+    }
+  }
+  const ende = Math.min(start, wheelWert);
+  const f = fahrtAus(o, { start, ende, startQuelle, endeQuelle: wheelHerkunft(), zweck }), t1 = f.t1;
   fotoBestaetigt(wheelWert);
   const vorher = avg(); fahrtEinsortieren(f); eigen.offen = null;
   sichern();
@@ -1195,6 +1236,14 @@ function ausschlaegeEinordnen(o, jetzt) {
 
 // Beendete Fahrten, die noch auf den Akkustand warten, während schon die nächste läuft
 const ohneAkku = () => eigen.ohneAkku || [];
+// Wartende Fahrten vor o, die mit o zusammen abgeschlossen werden können (US6): nur seit dem letzten Laden davor
+function kettenFahrten(o) {
+  if (!o || o.gpsAusfall) return [];
+  const geladen = Math.max(0, ...ladungen().map(l => Number(l.id.slice(1)) || 0).filter(t => t < o.t0));
+  return ohneAkku().filter(w => w !== o && w.t0 < o.t0 && w.t0 > geladen && !w.gpsAusfall).sort((a, b) => a.t0 - b.t0);
+}
+// … und ob der Haken im Dialog dafür gesetzt ist
+const ketteAn = o => document.getElementById('kette')?.checked ? kettenFahrten(o) : [];
 function zurueckstellen() {
   const o = eigen.offen; o.zurueckgestellt = true;
   eigen.ohneAkku = [...ohneAkku(), o]; eigen.offen = null; sichern();
