@@ -186,6 +186,9 @@ function viewHeute() {
     ${o ? `<button class="card between" data-act="${o.status === 'faehrt' ? 'zeigen' : 'ende'}" style="text-align:left;border-color:var(--accent)">
       <div><div class="label">${o.status === 'faehrt' ? 'Fahrt läuft' : 'Fahrt beendet'}</div><b>${km(o.km)} seit ${uhrzeit(o.t0)}</b></div>
       <span class="pill good">${o.status === 'faehrt' ? 'Anzeigen' : 'Akku eintragen'}</span></button>` : ''}
+    ${ladeEntwurf() ? `<button class="card between" data-act="ladenWeiter" style="text-align:left;border-color:var(--accent)">
+      <div><div class="label">Ladevorgang nicht gespeichert</div><b>Vorher ${ladeEntwurf().von} %, nachher fehlt noch</b></div>
+      <span class="pill warn">Eintragen</span></button>` : ''}
     ${tagFahrten().length >= 2 ? `<button class="card between" data-act="tagAbschluss" style="text-align:left;border-color:var(--accent)">
       <div><div class="label">${tagFahrten().length} Fahrten warten auf den Akkustand</div><b>Mit einem Wert alle abschließen</b></div>
       <span class="pill good">Tag abschließen</span></button>` : ''}
@@ -247,7 +250,7 @@ function viewFahrten() {
       </div>
     </section>
     <div class="list">${liste.map((f, i) => `${i === 0 || liste[i - 1].tag !== f.tag ? `<button class="btn tagkopf" data-act="tagestour" data-tag="${esc(f.tag)}">🗺️ Tagestour ${esc(f.tag)} · ${liste.filter(x => x.tag === f.tag).length} Fahrten</button>` : ''}
-      <section class="card trip"${f.nachgetragen ? ` data-act="ntBearbeiten" data-id="${esc(f.id)}" role="button" style="cursor:pointer"` : ''}>${miniRoute(f)}
+      <section class="card trip" data-act="${f.nachgetragen ? 'ntBearbeiten' : 'fahrtKorr'}" data-id="${esc(f.id)}" role="button" style="cursor:pointer">${miniRoute(f)}
         <div style="min-width:0"><b>${titel(f)}</b>${f.nachgetragen ? '<span class="pill siegel">nachgetragen</span>' : ''}
           <div class="muted small">${esc(f.tag)} · ${f.nachgetragen ? '≈ ' : ''}${km(f.km)} · ${f.start} → ${f.ende} % · ${esc(f.zweck)}${f.temp != null ? ` · ${f.temp} °C` : ''}${f.hm != null ? ` · ↑ ${f.hm} Hm` : ''}${f.brems ? ` · ${f.brems}× stark gebremst` : ''}${f.nachgetragen ? ` · ${f.strecke?.quelle === 'ziel' ? `${esc(f.strecke.ziel)}${f.strecke.retour ? ', hin und zurück' : ''}` : 'km von Hand'}` : ''}</div>
           ${f.fotoStart || f.fotoEnde ? `<div class="fotos">${[f.fotoStart, f.fotoEnde].filter(Boolean).map(n => `<img class="foto-mini" data-foto="${esc(n)}" data-act="fotoGross" alt="Foto vom Display">`).join('')}</div>` : ''}</div>
@@ -621,7 +624,7 @@ function viewLaden() {
   const l = ladungen().slice().reverse(), kwh = x => (x.bis - x.von) / 100 * eigen.akku;
   const ort = ortVorschlag();
   // Akku vorher/nachher übers Drehrad (06.11.2026: Markus wollte nicht tippen); gewählte Werte überstehen das Neuzeichnen
-  const lv = V.lVon ?? socJetzt(), lb = V.lBis ?? 100;
+  const lv = V.lVon ?? ladeEntwurf()?.von ?? socJetzt(), lb = V.lBis ?? 100;
   return `
     <section class="card">
       <div class="label">Neuer Ladevorgang</div>
@@ -1350,7 +1353,10 @@ const tracker = createTracker({
     eigen.offen.gps = gpsStand(null, punkt);
     if (!V.sandbox) nachtHolen(eigen.offen, start.p, seit);
     if (V.sandbox) { toast('Fahrt erkannt (Simulation)'); simHud(); return; }   // im Simulator: Anzeige oben im Sim-Tab
-    melde(1, 'Fahrt erkannt', `Gute Fahrt. Start ${eigen.offen.startSoc} %, den Akkustand fragt die App erst am Ende.`);
+    const le = ladeEntwurf();
+    if (le) devlog.log('laden', { entwurfBeiFahrt: le.von });
+    melde(1, 'Fahrt erkannt', le ? `Gute Fahrt. Achtung: Der Ladevorgang (vorher ${le.von} %) ist nicht gespeichert, Start darum ${eigen.offen.startSoc} %. Am Ende korrigieren.`
+      : `Gute Fahrt. Start ${eigen.offen.startSoc} %, den Akkustand fragt die App erst am Ende.`);
     if (document.visibilityState === 'visible') pruefeOffen(); else render();   // Dialog von vor der Fahrt weicht (src/dialoge.js)
   },
   onPunkt(punkt) {
@@ -1453,6 +1459,9 @@ function tlEinstellung() {
       : '<p class="small muted" style="margin:0">Dafür zuerst „Hier ist Zuhause“ tippen.</p>'}`;
 }
 function settingsSheet() {
+  // Neu zeichnen (Schalter, BM6-Suche, Downloads, Systemprüfung) hat die Einstellungen nach oben springen lassen:
+  // Scrollposition behalten, wenn sie schon offen waren
+  const vorher = $('overlay').querySelector('.sheet'), scroll = vorher?.querySelector('h2')?.textContent === 'Einstellungen' ? vorher.scrollTop : 0;
   sheet(`<h2>Einstellungen</h2>
     <div class="field"><label for="akku">Akku deines Microlino</label><select id="akku">${[5.5, 10.5, 15].map(k => `<option value="${k}" ${k === eigen.akku ? 'selected' : ''}>${k === 5.5 ? 'Short Range' : k === 10.5 ? 'Mid Range' : 'Long Range'} · ${de(k, 1)} kWh</option>`).join('')}</select></div>
     <label class="switch card" for="erfassung"><span><b>Fahrterkennung</b><br><span class="small muted">Erkennt Fahrten ab etwa 11 km/h und beendet sie nach 3 Minuten Stillstand. Solange sie an ist, zeigt Android eine Dauer-Benachrichtigung und das GPS bleibt aktiv; das kostet etwas Akku am Handy. Nach einem Neustart des Handys die App einmal öffnen.</span></span>
@@ -1505,6 +1514,7 @@ function settingsSheet() {
     <p class="small muted" style="margin:0">Fahrten, Akkustände, Zuhause und eigene Ladeorte bleiben auf diesem Handy. Online abgefragt werden nur: Temperatur und Nachttemperatur am Standort (Open-Meteo), beim Ziel-Check und Mini-Navi Ziel, Start und Höhen (OpenStreetMap, OSRM, Open-Meteo) sowie die Kartenbilder in Reichweite und Tagestour (OpenStreetMap).</p>
     <p class="small muted mono" style="margin:0;text-align:center">Bubble Log ${__APP_VERSION__}</p>
     <button class="btn primary block" data-act="close">Fertig</button>`);
+  if (scroll) $('overlay').querySelector('.sheet').scrollTop = scroll;
   systemPruefen().then(neu => { if (neu && $('overlay').querySelector('.sheet h2')?.textContent === 'Einstellungen') settingsSheet(); });
   if (devlog.aktiv()) devlog.flush().then(devlog.dateien).then(liste => {
     const el = $('devInfo'); if (!el) return;
@@ -1603,6 +1613,17 @@ document.addEventListener('click', e => {
         handKm: s.quelle === 'hand' ? String(f.km) : '', startQuelle: f.startQuelle, endeQuelle: f.endeQuelle, fotoEnde: f.fotoEnde });
       break;
     }
+    case 'fahrtKorr': {
+      const f = fahrten().find(x => x.id === d.id); if (!f) break;
+      V.fk = { id: f.id, start: f.start, ende: f.ende, startQ: f.startQuelle, endeQ: f.endeQuelle }; fkSheet(); break;
+    }
+    case 'fkStart': V.fkRad = 'start'; socSheet('Akku beim Start', V.fk.start, ['fkRadOk', 'Übernehmen'], 'Wert vom Microlino-Display beim Losfahren.'); break;
+    case 'fkEnde': V.fkRad = 'ende'; socSheet('Akku am Ende', V.fk.ende, ['fkRadOk', 'Übernehmen'], 'Wert vom Microlino-Display beim Abstellen.'); break;
+    case 'fkRadOk': {
+      const w = leseWheel(); V.fk[V.fkRad] = w; V.fk[V.fkRad + 'Q'] = 'drehrad';
+      fotoBestaetigt(w); foto.loeschen(V.fotoNeu); V.fotoNeu = null; fkSheet(); break;
+    }
+    case 'fkSpeichern': fkSpeichern(); break;
     case 'ntQuelle': V.nt.quelle = d.wert; ntSheet(); break;
     case 'ntZiel': V.nt.ziel = d.ziel; ntSheet(); break;
     case 'ntAlleZiele': V.nt.alle = true; ntSheet(); break;
@@ -1613,8 +1634,15 @@ document.addEventListener('click', e => {
     case 'lBisRad': socSheet('Akku nach dem Laden', Number($('lBis').value), ['lRadOk', 'Übernehmen'], 'Wert vom Microlino-Display nach dem Laden.', '', 'laden'); V.lRad = 'lBis'; break;
     case 'lRadOk': {
       const w = leseWheel(); V[V.lRad] = w; fotoBestaetigt(w); foto.loeschen(V.fotoNeu); V.fotoNeu = null;
-      overlay(''); render(); break;
+      devlog.log('laden', { rad: V.lRad, wert: w });
+      // 07.11.2026: ein Ladevorgang ging verloren (Drehrad bestätigt, „speichern“ nie getippt). Darum: „vorher“ als
+      // Entwurf merken (übersteht App-Neustart), „nachher“ speichert sofort, mit Rückgängig.
+      if (V.lRad === 'lVon') { eigen.ladeEntwurf = { von: w, t: Date.now() }; sichern(); }
+      overlay(''); render();
+      if (V.lRad === 'lBis') ladenSpeichern('drehrad');
+      break;
     }
+    case 'ladenWeiter': V.tab = 'laden'; render(); document.querySelector('[data-act="lBisRad"]')?.click(); break;
     case 'ladenLoeschen': {
       const i = eigen.laden.findIndex(x => x.id === d.id); if (i < 0) break;
       const [weg] = eigen.laden.splice(i, 1); sichern(); render();
@@ -1792,16 +1820,54 @@ document.addEventListener('submit', e => {
     return;
   }
   if (e.target.id !== 'ladeForm') return; e.preventDefault();
+  ladenSpeichern('knopf');
+});
+// Ladevorgang aus dem Formular speichern (Knopf oder Drehrad „nachher“). Jeder Versuch landet im Log, auch abgelehnte.
+function ladenSpeichern(quelle) {
   const von = Number($('lVon').value), bis = Number($('lBis').value), preis = Number($('lPreis').value), fehler = $('lFehler');
-  if (!(von >= 0 && bis <= 100 && bis > von)) { fehler.hidden = false; fehler.textContent = 'Akku nachher muss größer sein als vorher (0 bis 100 %).'; fehler.className = 'small bad'; return; }
+  if (!(von >= 0 && bis <= 100 && bis > von)) {
+    fehler.hidden = false; fehler.textContent = 'Akku nachher muss größer sein als vorher (0 bis 100 %).'; fehler.className = 'small bad';
+    devlog.log('laden', { abgelehnt: 'nachher nicht größer als vorher', von, bis, quelle });
+    toast('Nicht gespeichert: Akku nachher muss größer sein als vorher'); return;
+  }
   const ort = $('lOrt').value, punkt = ort === 'Öffentlich' ? $('lPunkt')?.value || null : null, s = punkt && lade.finde(punkt);
   const eintrag = { id: 'l' + Date.now(), tag: datum(Date.now()), ort, von, bis, preis: preis >= 0 ? preis : 0 };
   if (s) Object.assign(eintrag, { ladepunkt: punkt, ladepunktName: s.b });
-  eigen.laden.push(eintrag); eigen.soc = bis; eigen.socT = Date.now(); sichern();
-  devlog.log('laden', { ort, von, bis, preis: eintrag.preis, ladepunkt: punkt });
-  V.lOrt = ort; V.lVon = V.lBis = null; render(); toast(`Geladen: ${de((bis - von) / 100 * eigen.akku, 1)} kWh`);
+  const alt = { soc: eigen.soc, socT: eigen.socT, entwurf: eigen.ladeEntwurf };
+  eigen.laden.push(eintrag); eigen.soc = bis; eigen.socT = Date.now(); eigen.ladeEntwurf = null; sichern();
+  devlog.log('laden', { ort, von, bis, preis: eintrag.preis, ladepunkt: punkt, quelle });
+  V.lOrt = ort; V.lVon = V.lBis = null; render();
+  toast(`Gespeichert: ${von} → ${bis} %, ${de((bis - von) / 100 * eigen.akku, 1)} kWh`, () => {
+    const i = eigen.laden.findIndex(x => x.id === eintrag.id); if (i >= 0) eigen.laden.splice(i, 1);
+    Object.assign(eigen, { soc: alt.soc, socT: alt.socT, ladeEntwurf: alt.entwurf }); V.lVon = von; V.lBis = bis;
+    sichern(); render(); devlog.log('laden', { zurueck: eintrag.id });
+  });
   if (s) ladepunktSheet(punkt);   // gleich festhalten, ob die Ladekarte dort ging
-});
+}
+// Erkannte Fahrt nachträglich korrigieren: nur Start- und End-Akku (Fund 07.11.: Fahrt zu Mami startete mit 55 statt
+// 93 %, weil der Ladevorgang davor fehlte). Korrigierte Werte gelten als am Drehrad eingestellt und zählen für den Verbrauch.
+function fkSheet() {
+  const k = V.fk, f = fahrten().find(x => x.id === k.id); if (!f) return;
+  sheet(`<h2>Fahrt korrigieren</h2>
+    <p class="small muted" style="margin:0">${esc(f.tag)} · ${uhrzeit(f.t0)}–${uhrzeit(f.t1)} · ${km(f.km)}</p>
+    <div class="grid2" style="margin-top:12px"><div class="field"><label>Akku Start</label><button class="btn block mono" data-act="fkStart" aria-label="Akku Start ${k.start} Prozent, zum Ändern tippen">${k.start} %</button></div>
+    <div class="field"><label>Akku Ende</label><button class="btn block mono" data-act="fkEnde" aria-label="Akku Ende ${k.ende} Prozent, zum Ändern tippen">${k.ende} %</button></div></div>
+    <p class="small bad" id="fkFehler" hidden></p>
+    <button class="btn primary block" data-act="fkSpeichern">Speichern</button>
+    <button class="btn block" data-act="close">Abbrechen</button>`);
+}
+function fkSpeichern() {
+  const k = V.fk, f = fahrten().find(x => x.id === k.id); if (!f) return overlay('');
+  if (k.ende > k.start) { const e = $('fkFehler'); e.hidden = false; e.textContent = 'Am Ende kann nicht mehr im Akku sein als am Start.'; return; }
+  const alt = { start: f.start, ende: f.ende, startQuelle: f.startQuelle, endeQuelle: f.endeQuelle, korrigiert: f.korrigiert };
+  if (k.start === alt.start && k.ende === alt.ende) return overlay('');
+  Object.assign(f, { start: k.start, ende: k.ende, startQuelle: k.startQ, endeQuelle: k.endeQ, korrigiert: true });
+  sichern(); overlay(''); render();
+  devlog.log('fahrt', { schritt: 'korrigiert', id: f.id, start: [alt.start, f.start], ende: [alt.ende, f.ende] });
+  toast(`Fahrt korrigiert: ${f.start} → ${f.ende} %`, () => { Object.assign(f, alt); sichern(); render(); devlog.log('fahrt', { schritt: 'korrektur zurück', id: f.id }); });
+}
+// Angefangener Ladevorgang („vorher“ gewählt, nicht gespeichert); nach 12 h gilt er als vergessen
+const ladeEntwurf = () => eigen.ladeEntwurf && Date.now() - eigen.ladeEntwurf.t < 12 * 3600e3 ? eigen.ladeEntwurf : null;
 document.addEventListener('visibilitychange', () => {
   devlog.log('app', { sichtbar: document.visibilityState === 'visible' });
   if (document.visibilityState !== 'visible') { sichern(); devlog.flush(); return; }   // beim Wegwechseln sofort sichern

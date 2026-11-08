@@ -3,6 +3,23 @@
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
 ## Unveröffentlicht
+- **Laden geht nicht mehr verloren** (Fund 07.11.: Ladevorgang in Bexbach fehlte, ohne Spur im Log):
+  - „Akku nachher“ am Drehrad übernehmen speichert den Ladevorgang sofort, mit „Rückgängig“. Der Knopf
+    „Ladevorgang speichern“ bleibt für Ort/Preis-Änderungen.
+  - „Akku vorher“ wird als Entwurf gemerkt und übersteht einen App-Neustart. Solange „nachher“ fehlt, zeigt „Heute“
+    die Karte „Ladevorgang nicht gespeichert“; startet in der Zeit eine Fahrt, sagt die Meldung das dazu. Nach 12 h
+    gilt der Entwurf als vergessen.
+  - Jeder Versuch steht im Log (`laden`: Drehrad-Werte, gespeichert mit `quelle`, `abgelehnt` mit Grund, `zurueck`).
+    Eine abgelehnte Eingabe zeigt zusätzlich eine Meldung unten.
+- **Erkannte Fahrten korrigieren:** Antippen einer Fahrt in der Liste öffnet „Fahrt korrigieren“ mit Start- und
+  End-Akku am Drehrad, Speichern mit „Rückgängig“. Ende über Start wird abgelehnt. Korrigierte Werte gelten als
+  am Drehrad eingestellt und zählen für den Verbrauch; im Log `fahrt` / `korrigiert` mit alt und neu.
+  Nachgetragene Fahrten öffnen wie bisher den Nachtragen-Dialog.
+- **Kein 12-V-Fehlalarm mehr beim Beenden von Hand** (Fund 08.11. 13:14): Ohne erkanntes Parken zählen bis zu zwei
+  schwache Minuten am Schluss nicht mit (Spannungsabfall nach dem Ausschalten). Längere oder durchgehend schwache
+  Werte bleiben „verdächtig“. Mit den echten Werten der Fahrt nachgerechnet: ok, Ø 13,62 V, Schwankung 0,16 V.
+- **Einstellungen springen nicht mehr nach oben:** Neu zeichnen (Schalter wie Entwicklermodus/GPS voll, BM6-Suche
+  und Koppeln, Downloads, Systemprüfung) behält die Scrollposition.
 
 ## Bubble-Log-1052 (07.11.2026, Version 2026.11.07-1052)
 Per adb über 1001 installiert, Daten bleiben. Enthält auch alles aus 1034 (1034 kam nie aufs Handy). Kaffeefahrt
