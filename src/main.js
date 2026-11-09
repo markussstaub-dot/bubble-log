@@ -690,11 +690,12 @@ function render() {
 
 // ---------- Overlays ----------
 let toastT;
-// rueckgaengig: Funktion für den Knopf „Rückgängig“ in der Meldung (steht dann 6 s)
+// rueckgaengig: Funktion für den Knopf „Rückgängig“ in der Meldung (steht dann 10 s, im Auto braucht man länger)
+const RUECKGAENGIG_MS = 10000;
 function toast(t, rueckgaengig = null) {
   const el = $('toast'); V.rueckgaengig = rueckgaengig;
   el.innerHTML = esc(t) + (rueckgaengig ? '<button class="toast-knopf" data-act="rueckgaengig">Rückgängig</button>' : '');
-  el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { el.hidden = true; V.rueckgaengig = null; }, rueckgaengig ? 6000 : 3000);
+  el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { el.hidden = true; V.rueckgaengig = null; }, rueckgaengig ? RUECKGAENGIG_MS : 3000);
 }
 const overlay = html => { $('overlay').innerHTML = html; V.fahrtAnsicht = html.includes('class="drive"'); };
 const sheetOffen = () => !!$('overlay').querySelector('.sheet');
@@ -722,7 +723,8 @@ function socSheet(ueberschrift, v, knopf, text, extra = '', art = null) {
     <button class="btn block foto-knopf" data-act="foto">📷 Display fotografieren</button>
     <div class="foto-info small" id="fotoInfo" hidden></div>${extra}
     <button class="btn primary block" data-act="${knopf[0]}">${knopf[1]}</button>
-    ${knopf[2] ? `<button class="btn block danger" data-act="${knopf[2][0]}">${knopf[2][1]}</button>` : ''}`, art ?? (knopf[0] === 'go' ? 'losfahren' : ''));
+    ${knopf[3] ? `<button class="btn block" data-act="${knopf[3][0]}">${knopf[3][1]}</button>` : ''}
+    ${knopf[2] ? `<button class="btn-link block verwerfen" data-act="${knopf[2][0]}">${knopf[2][1]}</button>` : ''}`, art ?? (knopf[0] === 'go' ? 'losfahren' : ''));
   wheelInit(v);
 }
 
@@ -1095,7 +1097,7 @@ function endeSheet() {
     <span>Gilt auch für ${k.map(w => `<b>${zeitpunkt(w.t0)}–${uhrzeit(w.t1 ?? w.t0)} · ${km(w.km)}</b>`).join(', ')} (wartet noch). Der Verbrauch wird nach Strecke verteilt.</span></label>` : '';
   const startZeile = ketteZeile + `<div class="between small start-zeile"><span class="muted">Start ${o.startSoc} %${startAutomatisch(o.startQuelle) ? ` · ${o.startQuelle === 'stand' ? 'letzter Stand' : 'geschätzt'}` : ''}</span><button class="btn-link" data-act="startsoc">Start korrigieren</button></div>`;
   // Späte Frage (US6): groß, um welche Fahrt es geht; vorgeschlagen ist der Wert von damals, nicht der von jetzt
-  socSheet(spaet ? `Fahrt ${zeitpunkt(o.t0)}–${uhrzeit(t1)} · ${km(o.km)}` : `Fahrt beendet · ${km(o.km)}`, endeVorschlag(o, k), ['save', 'Fahrt speichern', ['discard', 'Fahrt verwerfen']],
+  socSheet(spaet ? `Fahrt ${zeitpunkt(o.t0)}–${uhrzeit(t1)} · ${km(o.km)}` : `Fahrt beendet · ${km(o.km)}`, endeVorschlag(o, k), ['save', 'Fahrt speichern', ['discard', 'Fahrt verwerfen'], ['spaeter', 'Später · ich fahre gleich weiter']],
     spaet ? `Akkustand <b>am Ende dieser Fahrt um ${uhrzeit(t1)}</b>, nicht von jetzt: danach bist du schon weitergefahren${geladenSeit.length ? ` und hast geladen (zuletzt auf ${geladenSeit.at(-1).bis} %)` : ''}. Vorgeschlagen ist die Schätzung für ${uhrzeit(t1)}; weißt du den Wert nicht mehr, nimm sie.`
       : 'Akkustand <b>jetzt</b> vom Microlino-Display übernehmen. Vorgeschlagen ist die Schätzung aus deinem Verbrauch.',
     startZeile + `<div class="label">Zweck</div><div class="chips" id="zweck">${ZWECKE.map((z, i) => `<button class="chip" data-zweck="${z}" aria-pressed="${i === 0}">${z}</button>`).join('')}</div>
@@ -1128,10 +1130,10 @@ function kurzVerwerfen(o, zeit) {
   fahrtVerwerfen(); toast(`Kurze Bewegung (${Math.round(o.km * 1000)} m) nicht als Fahrt gespeichert`);
   return true;
 }
-function fahrtVerwerfen() {
+function fahrtVerwerfen({ fotosBehalten = false } = {}) {
   if (eigen.offen?.v12?.summen) bordnetz.abbrechen();   // lief noch; nach dem Fahrtende läuft nur noch der Ruhewert, der bleibt
   if (eigen.offen && 'parkVorher' in eigen.offen) eigen.parkplatz = eigen.offen.parkVorher;
-  if (eigen.offen && !V.sandbox) foto.loeschen(eigen.offen.fotoStart, eigen.offen.fotoEnde);
+  if (eigen.offen && !V.sandbox && !fotosBehalten) foto.loeschen(eigen.offen.fotoStart, eigen.offen.fotoEnde);
   eigen.offen = null; sichern(); tracker.setModus(zielModus()); overlay(''); render();
 }
 // Offene oder zurückgestellte Fahrt → Eintrag fürs Fahrtenbuch (auch für den Tagesabschluss ohne Drehrad)
@@ -1632,7 +1634,28 @@ document.addEventListener('click', e => {
       break;
     case 'ende': endeSheet(); break;
     case 'save': if (plausibel()) fahrtSpeichern(); break;
-    case 'discard': devlog.log('fahrt', { schritt: 'verworfen', km: eigen.offen?.km }); fahrtVerwerfen(); toast('Fahrt verworfen'); break;
+    // 09.11.2026 Bäcker: Die Ende-Frage kam beim Einsteigen, „verwerfen“ war der schnelle Weg raus, die Hinfahrt war weg.
+    // Darum „Später“ (Fahrt wartet, die nächste fragt per Kette mit, US6) und Verwerfen nur noch klein und mit Rückgängig.
+    case 'spaeter': {
+      const o = eigen.offen; if (!o) break;
+      zurueckstellen(); tracker.setModus(zielModus()); overlay(''); render();
+      toast('Fahrt wartet. Am Ende der nächsten Fahrt fragt die App mit.'); break;
+    }
+    case 'discard': {
+      const o = eigen.offen; if (!o) break;
+      const park = eigen.parkplatz;
+      devlog.log('fahrt', { schritt: 'verworfen', km: o.km });
+      fahrtVerwerfen({ fotosBehalten: true });
+      const fotosWeg = setTimeout(() => { if (eigen.offen !== o && !ohneAkku().includes(o) && !V.sandbox) foto.loeschen(o.fotoStart, o.fotoEnde); }, RUECKGAENGIG_MS + 1000);
+      toast('Fahrt verworfen', () => {
+        clearTimeout(fotosWeg);
+        if (eigen.offen) {   // inzwischen läuft schon die nächste Fahrt: die verworfene wartet dann
+          o.zurueckgestellt = true; eigen.ohneAkku = [...ohneAkku(), o]; sichern(); render(); toast('Fahrt zurückgeholt, sie wartet auf den Akkustand');
+        } else { eigen.offen = o; eigen.parkplatz = park; sichern(); tracker.setModus(zielModus()); render(); endeSheet(); }
+        devlog.log('fahrt', { schritt: 'verwerfen rückgängig', km: o.km });
+      });
+      break;
+    }
     case 'close':
       V.loeschen = false; V.devLoeschen = false; foto.loeschen(V.fotoNeu); V.fotoNeu = null;
       if (V.nt && !V.nt.id) foto.loeschen(V.nt.fotoEnde);   // abgebrochener Nachtrag: Foto gehört zu keiner Fahrt

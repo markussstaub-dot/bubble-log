@@ -2,6 +2,14 @@
 
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
+## Bubble-Log (09.11.2026, kurze Pausen)
+- **„Später · ich fahre gleich weiter“** im Dialog am Fahrtende (Fund 09.11., Bäcker): Die Fahrt wartet dann auf den
+  Akkustand, am Ende der nächsten Fahrt steht sie mit Haken im Dialog („Gilt auch für …“, US6). Startet die nächste
+  Fahrt von selbst, wird eine unbeantwortete Fahrt wie bisher automatisch zurückgestellt.
+- **Verwerfen nur noch klein und mit Rückgängig:** roter Textlink unter den Knöpfen statt großem Knopf; danach 10 s
+  „Rückgängig“ (vorher 6 s, gilt auch fürs Laden). Läuft inzwischen schon die nächste Fahrt, kommt die verworfene als
+  wartende Fahrt zurück. Fotos werden erst nach Ablauf gelöscht.
+
 ## Bubble-Log-2125 (08.11.2026, Version 2026.11.08-2125)
 Per adb über 1052 installiert, Daten bleiben.
 - **Akku-Schätzung mit Grund neben dem Schild** (Wunsch 08.11., `SPEC-usability.md` US2): In der Fahrt-Ansicht steht

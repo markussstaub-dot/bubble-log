@@ -189,6 +189,7 @@ input[type=number], input[type=datetime-local], select { font: inherit; color: v
 .halten-text { position: relative; font-size: 11px; line-height: 1.15; font-weight: 600; pointer-events: none; }
 .start-zeile { align-items: center; margin-top: -4px; }
 .start-zeile .btn-link { min-height: 36px; }
+.btn-link.verwerfen { display: block; margin: 4px auto 0; color: var(--bad); }
 /* Akku-Schätzung neben dem Schild (SPEC-usability.md, US2): groß der Akku, darunter klein, womit gerechnet wird */
 .drive-akku { position: absolute; left: 14px; top: calc(14px + env(safe-area-inset-top, 0px)); z-index: 2; pointer-events: none;
   max-width: calc(100vw - min(60vw, 34vh) - 42px); background: color-mix(in srgb, var(--surface) 88%, transparent);
