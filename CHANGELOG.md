@@ -2,7 +2,8 @@
 
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
-## Bubble-Log (09.11.2026, kurze Pausen)
+## Bubble-Log-0837 (09.11.2026, kurze Pausen)
+Per adb über 2125 installiert, Daten bleiben.
 - **„Später · ich fahre gleich weiter“** im Dialog am Fahrtende (Fund 09.11., Bäcker): Die Fahrt wartet dann auf den
   Akkustand, am Ende der nächsten Fahrt steht sie mit Haken im Dialog („Gilt auch für …“, US6). Startet die nächste
   Fahrt von selbst, wird eine unbeantwortete Fahrt wie bisher automatisch zurückgestellt.
