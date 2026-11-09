@@ -2,6 +2,13 @@
 
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
+## Bubble-Log-1530 (09.11.2026, Version 2026.11.09-1530)
+Per adb über 1034 installiert, Daten bleiben.
+- **Ladeort:** „Zuhause“ wird nur noch vorgeschlagen, wenn das Auto dort steht (300 m). Woanders ohne eigenen Ladeort
+  steht „Bitte wählen“, Speichern (auch übers Drehrad) geht erst mit gewähltem Ort. Nach dem Speichern schlägt das
+  nächste Formular wieder nach Standort vor statt den letzten Ort zu behalten. Anlass: 09.11. Laden bei Mami wurde als
+  „Zuhause“ zu 0,35 €/kWh gespeichert.
+
 ## Bubble-Log-1034 (09.11.2026, Version 2026.11.09-1034)
 Per adb über 1011 installiert, Daten bleiben.
 - **Auto-Weiter:** Rollt das Auto schon (über ≈ 11 km/h oder Fahrt-Kandidat), kommt keine Ende-Frage mehr. Die

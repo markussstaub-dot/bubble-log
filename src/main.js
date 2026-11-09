@@ -22,6 +22,7 @@ import * as ladecache from './ladecache.js';
 import * as tempolimit from './tempolimit.js';
 import * as nt from './nachtragen.js';
 import * as dialoge from './dialoge.js';
+import * as ladeort from './ladeort.js';
 import * as bm6 from './bm6.js';
 import * as bordnetz from './bordnetz.js';
 import { belegCsv, kurveSvg, STUFE_TEXT, STUFE_KLASSE } from './bordspannung.js';
@@ -590,20 +591,16 @@ function karteZeichnen() {
   groessen();
 }
 const LADEORTE = ['Zuhause', 'Bei Freunden', 'Arbeit', 'Öffentlich'];
-const LADEORT_RADIUS = 200;   // m: so nah an einem eigenen Ladeort wird er beim Laden vorgeschlagen
+const { LADEORT_RADIUS } = ladeort;
 // Eigene Ladeorte mit Namen (z. B. „Mami“), nur auf diesem Handy gespeichert: { name, p }
 const eigeneLadeorte = () => eigen.ladeorte || [];
 const ortListe = () => [LADEORTE[0], ...eigeneLadeorte().map(o => o.name), ...LADEORTE.slice(1)];
 // Preisvorschlag: zuletzt eingetragener Preis an diesem Ort, sonst Haushaltsstrom bzw. gratis bei Freunden und eigenen Orten
 const preisFuer = ort => eigen.laden.findLast(l => l.ort === ort)?.preis
   ?? (ort === 'Bei Freunden' || eigeneLadeorte().some(o => o.name === ort) ? 0 : STROMPREIS);
-// Ort fürs Formular: eigene Wahl, sonst ein eigener Ladeort oder Zuhause in der Nähe des Standorts
-function ortVorschlag() {
-  if (V.lOrt && ortListe().includes(V.lOrt)) return V.lOrt;
-  const hier = V.hier || eigen.parkplatz?.p;
-  const nah = hier && eigeneLadeorte().find(o => nahe(o.p, hier, LADEORT_RADIUS));
-  return nah ? nah.name : 'Zuhause';
-}
+// Ort fürs Formular: eigene Wahl, sonst ein eigener Ladeort in der Nähe, „Zuhause“ nur dort, woanders '' (bitte wählen)
+const ortVorschlag = () => ladeort.ortVorschlag({ gewaehlt: V.lOrt, liste: ortListe(), hier: V.hier || eigen.parkplatz?.p,
+  zuhause: eigen.zuhause?.p, eigene: eigeneLadeorte(), nahe });
 function ladeorteKarte() {
   const liste = eigeneLadeorte();
   return `<details class="card"${V.ladeorteOffen ? ' open' : ''} id="ladeorteKarte"><summary><b>Eigene Ladeorte</b> <span class="small muted">${liste.length ? liste.map(o => esc(o.name)).join(', ') : 'z. B. bei Familie'}</span></summary>
@@ -638,8 +635,9 @@ function viewLaden() {
       <form id="ladeForm" class="list" style="margin-top:8px">
         <div class="grid2"><div class="field"><label>Akku vorher</label><button type="button" class="btn block mono" data-act="lVonRad" aria-label="Akku vorher ${lv} Prozent, zum Ändern tippen">${lv} %</button><input id="lVon" type="hidden" value="${lv}"></div>
         <div class="field"><label>Akku nachher</label><button type="button" class="btn block mono" data-act="lBisRad" aria-label="Akku nachher ${lb} Prozent, zum Ändern tippen">${lb} %</button><input id="lBis" type="hidden" value="${lb}"></div></div>
-        <div class="grid2"><div class="field"><label for="lOrt">Ort</label><select id="lOrt">${ortListe().map(o => `<option${o === ort ? ' selected' : ''}>${o}</option>`).join('')}</select></div>
-        <div class="field"><label for="lPreis">€ pro kWh</label><input id="lPreis" type="number" inputmode="decimal" min="0" step="0.01" value="${preisFuer(ort)}"></div></div>
+        <div class="grid2"><div class="field"><label for="lOrt">Ort</label><select id="lOrt">${ort ? '' : '<option value="" selected disabled>Bitte wählen</option>'}${ortListe().map(o => `<option${o === ort ? ' selected' : ''}>${o}</option>`).join('')}</select></div>
+        <div class="field"><label for="lPreis">€ pro kWh</label><input id="lPreis" type="number" inputmode="decimal" min="0" step="0.01" value="${ort ? preisFuer(ort) : ''}"></div></div>
+        ${ort ? '' : '<p class="small muted" style="margin:0">Du stehst nicht zu Hause. Lädst du öfter hier, speichere den Ort unten als eigenen Ladeort.</p>'}
         <div class="field" id="lPunktFeld"${ort === 'Öffentlich' ? '' : ' hidden'}><label for="lPunkt">Ladepunkt</label>${ort === 'Öffentlich' ? ladepunktAuswahl() : ''}
           <span class="small muted">Nächste Säulen von ${V.hier ? 'deinem Standort' : eigen.parkplatz ? 'deinem Abstellort' : 'Zuhause'}. Nach dem Speichern kannst du sie gleich markieren.</span></div>
         <p class="small muted" id="lFehler" hidden></p>
@@ -1923,13 +1921,18 @@ function ladenSpeichern(quelle) {
     devlog.log('laden', { abgelehnt: 'nachher nicht größer als vorher', von, bis, quelle });
     toast('Nicht gespeichert: Akku nachher muss größer sein als vorher'); return;
   }
+  if (!$('lOrt').value) {
+    fehler.hidden = false; fehler.textContent = 'Bitte wähle, wo du geladen hast.'; fehler.className = 'small bad';
+    devlog.log('laden', { abgelehnt: 'kein Ort', von, bis, quelle });
+    toast('Nicht gespeichert: bitte noch den Ort wählen'); return;
+  }
   const ort = $('lOrt').value, punkt = ort === 'Öffentlich' ? $('lPunkt')?.value || null : null, s = punkt && lade.finde(punkt);
   const eintrag = { id: 'l' + Date.now(), tag: datum(Date.now()), ort, von, bis, preis: preis >= 0 ? preis : 0 };
   if (s) Object.assign(eintrag, { ladepunkt: punkt, ladepunktName: s.b });
   const alt = { soc: eigen.soc, socT: eigen.socT, entwurf: eigen.ladeEntwurf };
   eigen.laden.push(eintrag); eigen.soc = bis; eigen.socT = Date.now(); eigen.ladeEntwurf = null; sichern();
   devlog.log('laden', { ort, von, bis, preis: eintrag.preis, ladepunkt: punkt, quelle });
-  V.lOrt = ort; V.lVon = V.lBis = null; render();
+  V.lOrt = null; V.lVon = V.lBis = null; render();   // nächstes Mal wieder nach Standort vorschlagen
   toast(`Gespeichert: ${von} → ${bis} %, ${de((bis - von) / 100 * eigen.akku, 1)} kWh`, () => {
     const i = eigen.laden.findIndex(x => x.id === eintrag.id); if (i >= 0) eigen.laden.splice(i, 1);
     Object.assign(eigen, { soc: alt.soc, socT: alt.socT, ladeEntwurf: alt.entwurf }); V.lVon = von; V.lBis = bis;
