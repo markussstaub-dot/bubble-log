@@ -1392,7 +1392,14 @@ const gpsNeuBeimWarten = () => { if (tracker.modus === 'warten' && !V.sandbox) t
 // Fahrterkennung: Rückmeldungen vom GPS
 const tracker = createTracker({
   ruheTakt,
-  onLog(typ, daten) { devlog.log(typ, daten); if (typ === 'gps') V.devGps = daten; },
+  onLog(typ, daten) {
+    devlog.log(typ, daten);
+    if (typ === 'gps') {
+      V.devGps = daten;
+      // Ende-Dialog offen und das Auto fährt los: Dialog weicht (nur bei echtem Tempo, nicht schon beim Kandidaten)
+      if (sheetArt() === 'ende' && document.visibilityState === 'visible') autoWeiter({ kandidatZaehlt: false });
+    }
+  },
   onStart(start, punkt) {
     // Testfahrt 01.11.2026: Fahrt 1 wartete nach dem Ende im Hintergrund noch auf den Akkustand, und alle Starts
     // der Fahrt 2 (24 km) wurden still ignoriert. Eine beendete Fahrt wird darum zurückgestellt, die neue beginnt.
@@ -1480,7 +1487,19 @@ sensoren.aufEreignisse((name, d) => {
 
 // Beim Öffnen der App: offene Fahrt fortsetzen oder nachfragen. Ein Dialog von vor der Fahrt („Akkustand jetzt“,
 // „Losfahren“, Ergebnis der vorigen Fahrt) gilt dann nicht mehr und weicht (src/dialoge.js).
+// Auto-Weiter (src/dialoge.js): rollt das Auto schon, keine Ende-Frage, die beendete Fahrt wartet still
+function autoWeiter({ kandidatZaehlt }) {
+  const ist = dialoge.bewegt({ gps: V.devGps, jetzt: Date.now(), kandidat: kandidatZaehlt && tracker.wach });
+  if (!dialoge.stillZurueckstellen(eigen.offen, ist)) return false;
+  const offenerDialog = sheetArt() === 'ende';
+  devlog.log('fahrt', { schritt: 'auto-weiter', km: eigen.offen.km, tempo: V.devGps?.tempo, kandidat: tracker.wach, dialog: offenerDialog });
+  if (offenerDialog) { foto.loeschen(V.fotoNeu); V.fotoNeu = null; V.fotoErkannt = null; overlay(''); }
+  zurueckstellen(); render();
+  toast('Vorige Fahrt wartet, gefragt wird am Ende dieser Fahrt.');
+  return true;
+}
 function pruefeOffen() {
+  if (autoWeiter({ kandidatZaehlt: true })) return;
   if (eigen.offen?.status === 'faehrt' && eigen.offen.startSoc == null) { startSetzen(eigen.offen); sichern(); }   // ältere Version
   const art = sheetArt(), was = dialoge.beimOeffnen(eigen.offen, art); if (!was) return;
   if (art) {

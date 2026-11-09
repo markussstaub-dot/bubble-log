@@ -24,5 +24,16 @@ export function beimOeffnen(offen, art) {
 }
 
 // Knopf aus einem Dialog ohne Fahrt, während inzwischen eine Fahrt offen ist?
+// Auto-Weiter (09.11.2026, McDonald's Homburg): Beim Losfahren das Handy an der Ampel eingeschaltet, sofort kam die
+// Ende-Frage der Hinfahrt. Rollt das Auto schon (Tempo über ≈ 11 km/h, GPS höchstens 10 s alt; beim Öffnen reicht auch
+// ein Fahrt-Kandidat), fragt die App nicht, sondern stellt die beendete Fahrt still zurück. Gefragt wird am Ende der
+// nächsten Fahrt mit (US6).
+export const WEITER_TEMPO = 3;   // m/s
+export function bewegt({ gps, jetzt, kandidat = false }) {
+  if (kandidat) return true;
+  return !!gps && jetzt - gps.zeit <= 10000 && (gps.tempo ?? 0) > WEITER_TEMPO;
+}
+export const stillZurueckstellen = (offen, istBewegt) => offen?.status === 'beendet' && !offen.gpsAusfall && istBewegt;
+
 // … oder Knopf vom Fahrtende, obwohl gar keine beendete Fahrt mehr offen ist?
 export const veraltet = (akt, offen) => (!!offen && AKTIONEN_OHNE_FAHRT.includes(akt)) || (NUR_BEENDET.includes(akt) && offen?.status !== 'beendet');

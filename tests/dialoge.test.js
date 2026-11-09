@@ -4,7 +4,7 @@
 // starten“ hat die beendete Fahrt überschrieben.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { beimOeffnen, veraltet, OHNE_FAHRT } from '../src/dialoge.js';
+import { beimOeffnen, veraltet, OHNE_FAHRT, bewegt, stillZurueckstellen } from '../src/dialoge.js';
 
 const beendet = { status: 'beendet', startSoc: null, km: 4.9 };
 const faehrt = { status: 'faehrt', startSoc: null, km: 0.3 };
@@ -67,4 +67,16 @@ test('09.11. Homburg: Ende-Dialog der vorigen Fahrt weicht, wenn die nächste sc
     assert.ok(veraltet(akt, null), akt);
     assert.ok(!veraltet(akt, beendet), akt);
   }
+});
+
+test('09.11. Ampel nach McDonald\'s: rollt das Auto schon, keine Ende-Frage', () => {
+  const jetzt = 1_000_000;
+  assert.ok(bewegt({ gps: { zeit: jetzt - 2000, tempo: 6 }, jetzt }));            // ≈ 22 km/h
+  assert.ok(!bewegt({ gps: { zeit: jetzt - 2000, tempo: 1 }, jetzt }));           // an der Ampel stehend, ohne Kandidat
+  assert.ok(!bewegt({ gps: { zeit: jetzt - 60000, tempo: 6 }, jetzt }));          // alter Wert zählt nicht
+  assert.ok(bewegt({ gps: null, jetzt, kandidat: true }));                         // 09:49:56 Kandidat, 09:50:10 Handy an
+  assert.ok(stillZurueckstellen(beendet, true));
+  assert.ok(!stillZurueckstellen(beendet, false));                                 // im Stand wird gefragt
+  assert.ok(!stillZurueckstellen(faehrt, true));
+  assert.ok(!stillZurueckstellen({ ...beendet, gpsAusfall: 1 }, true));            // Nachtragen braucht die Frage
 });
