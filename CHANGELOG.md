@@ -2,6 +2,13 @@
 
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
+## Bubble-Log-1034 (09.11.2026, Version 2026.11.09-1034)
+Per adb über 1011 installiert, Daten bleiben.
+- **Auto-Weiter:** Rollt das Auto schon (über ≈ 11 km/h oder Fahrt-Kandidat), kommt keine Ende-Frage mehr. Die
+  beendete Fahrt wartet still („Vorige Fahrt wartet, gefragt wird am Ende dieser Fahrt“) und steht am Ende der
+  nächsten Fahrt mit Haken im Dialog. Ist der Ende-Dialog offen und das Auto fährt los, weicht er. Im Stand wird wie
+  bisher gefragt. Anlass: 09.11. Handy an der Ampel nach McDonald's eingeschaltet, sofort kam die Frage.
+
 ## Bubble-Log-1011 (09.11.2026)
 Per adb über 0837 installiert, Daten bleiben.
 - **Ende-Dialog weicht, wenn schon die nächste Fahrt läuft** (Fund 09.11., Homburg → Bexbach): Der Dialog der
