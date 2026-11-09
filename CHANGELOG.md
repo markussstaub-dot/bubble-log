@@ -2,6 +2,13 @@
 
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
+## Bubble-Log-1011 (09.11.2026)
+Per adb über 0837 installiert, Daten bleiben.
+- **Ende-Dialog weicht, wenn schon die nächste Fahrt läuft** (Fund 09.11., Homburg → Bexbach): Der Dialog der
+  Hinfahrt blieb offen, „Später“ stellte dann die laufende Rückfahrt zurück (0,5 km mit falschem Ende 10:01). Jetzt
+  zeigt die App beim Start der nächsten Fahrt die Fahrtansicht, und Speichern/Verwerfen/Später greifen nur bei einer
+  beendeten Fahrt.
+
 ## Bubble-Log-0837 (09.11.2026, kurze Pausen)
 Per adb über 2125 installiert, Daten bleiben.
 - **„Später · ich fahre gleich weiter“** im Dialog am Fahrtende (Fund 09.11., Bäcker): Die Fahrt wartet dann auf den
