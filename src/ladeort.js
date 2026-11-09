@@ -15,3 +15,14 @@ export function ortVorschlag({ gewaehlt, liste, hier, zuhause, eigene = [], nahe
   if (!zuhause || nahe(zuhause, hier, HEIM_RADIUS)) return 'Zuhause';
   return '';
 }
+
+// Doppelt gespeichert? 09.11.2026: Nach dem Speichern übers Drehrad (49 → 65) füllte sich das Formular gleich neu
+// (65 → 100), ein Tipp auf „Ladevorgang speichern“ 1,6 s später legte ein erfundenes Laden auf 100 % an. Kommt ein
+// Speichern kurz nach dem letzten, muss man es ein zweites Mal bestätigen.
+export const DOPPEL_MS = 60000;      // so kurz nach dem letzten Ladevorgang wird nachgefragt
+export const BESTAETIGEN_MS = 15000; // so lange gilt der zweite Tipp als Bestätigung
+export function nachfragen({ letzter, jetzt, bestaetigtUm = 0 }) {
+  const t = Number(String(letzter?.id ?? '').slice(1));
+  if (!t || jetzt - t > DOPPEL_MS) return false;
+  return !(bestaetigtUm && jetzt - bestaetigtUm <= BESTAETIGEN_MS);
+}

@@ -1926,6 +1926,14 @@ function ladenSpeichern(quelle) {
     devlog.log('laden', { abgelehnt: 'kein Ort', von, bis, quelle });
     toast('Nicht gespeichert: bitte noch den Ort wählen'); return;
   }
+  if (ladeort.nachfragen({ letzter: eigen.laden.at(-1), jetzt: Date.now(), bestaetigtUm: V.lDoppelOk })) {
+    V.lDoppelOk = Date.now(); const l = eigen.laden.at(-1);
+    fehler.hidden = false; fehler.className = 'small bad';
+    fehler.textContent = `Eben erst gespeichert (${l.von} → ${l.bis} %). Wirklich noch ein Ladevorgang? Dann nochmal tippen.`;
+    devlog.log('laden', { abgelehnt: 'gerade erst gespeichert', von, bis, quelle });
+    toast('Noch nicht gespeichert: eben kam schon ein Ladevorgang'); return;
+  }
+  V.lDoppelOk = 0;
   const ort = $('lOrt').value, punkt = ort === 'Öffentlich' ? $('lPunkt')?.value || null : null, s = punkt && lade.finde(punkt);
   const eintrag = { id: 'l' + Date.now(), tag: datum(Date.now()), ort, von, bis, preis: preis >= 0 ? preis : 0 };
   if (s) Object.assign(eintrag, { ladepunkt: punkt, ladepunktName: s.b });

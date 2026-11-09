@@ -2,6 +2,12 @@
 
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
+## Bubble-Log-1540 (09.11.2026, Version 2026.11.09-1540)
+Per adb über 1530 installiert, Daten bleiben.
+- **Kein doppeltes Laden mehr:** Kommt ein Speichern bis 60 s nach dem letzten Ladevorgang, speichert die App erst
+  nach einem zweiten Tipp („Eben erst gespeichert … Dann nochmal tippen“). Anlass: 09.11. nach dem Drehrad (49 → 65)
+  füllte sich das Formular neu, ein Tipp 1,6 s später speicherte „Zuhause 65 → 100“ und setzte den Akku auf 100 %.
+
 ## Bubble-Log-1530 (09.11.2026, Version 2026.11.09-1530)
 Per adb über 1034 installiert, Daten bleiben.
 - **Ladeort:** „Zuhause“ wird nur noch vorgeschlagen, wenn das Auto dort steht (300 m). Woanders ohne eigenen Ladeort

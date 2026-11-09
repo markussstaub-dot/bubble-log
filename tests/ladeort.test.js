@@ -18,3 +18,16 @@ test('ohne Standort oder ohne Zuhause: Zuhause wie bisher', () => {
   assert.equal(ortVorschlag({ ...basis, hier: null }), 'Zuhause');
   assert.equal(ortVorschlag({ ...basis, hier: MAMI, zuhause: null }), 'Zuhause');
 });
+
+import { nachfragen } from '../src/ladeort.js';
+const T = 1794235040161;
+test('09.11. zweites Speichern 1,6 s nach dem Drehrad: nachfragen', () =>
+  assert.equal(nachfragen({ letzter: { id: 'l' + T }, jetzt: T + 1600 }), true));
+test('zweiter Tipp kurz danach bestätigt', () =>
+  assert.equal(nachfragen({ letzter: { id: 'l' + T }, jetzt: T + 5000, bestaetigtUm: T + 1600 }), false));
+test('alte Bestätigung zählt nicht', () =>
+  assert.equal(nachfragen({ letzter: { id: 'l' + T }, jetzt: T + 40000, bestaetigtUm: T + 1600 }), true));
+test('letztes Laden länger her oder keins: speichern', () => {
+  assert.equal(nachfragen({ letzter: { id: 'l' + T }, jetzt: T + 61000 }), false);
+  assert.equal(nachfragen({ letzter: undefined, jetzt: T }), false);
+});
