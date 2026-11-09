@@ -892,6 +892,8 @@ function fahrtBeginnen({ startSoc, startQuelle, punkte = [], km: strecke = 0, ma
 const tlZuordnung = tempolimit.createZuordnung({
   onWechsel: (limit, vorher, d) => devlog.log('tempolimit', { limit, vorher, ...d, sim: !!V.sandbox }),
 });
+// Schild in der Fahrtansicht: nur mit Daten und wenn nicht in den Einstellungen ausgeschaltet (Markus 09.11.)
+const tlSchildAn = () => tempolimit.bereit() && eigen.tlSchild !== false;
 // Schild im Behälter el anzeigen bzw. aktualisieren (Fahrt-Bildschirm, Sim-Karte); ohne Daten kein Schild
 function tlSchildZeigen(el, id = 'tlSchild') {
   if (!el) return;
@@ -909,8 +911,8 @@ function fahrtAnsicht() {
   const s = fahrtRechnung(o), g = s.soc; o.gesehen = true;
   overlay(`<div class="drive" role="dialog" aria-label="Fahrt läuft">
     <div class="map" id="map">${karte(o.punkte)}</div>
-    <div class="drive-akku"><div class="drive-akku-wert" id="dAkku">≈ ${g} %</div><div class="drive-akku-grund" id="dGrund">${grundText(s)}</div></div>
-    ${tempolimit.bereit() ? tempolimit.schildHtml(tlZuordnung.limit ?? null) : ''}
+    <div class="drive-akku${tlSchildAn() ? '' : ' allein'}"><div id="dAkku" data-soc="${g}">${ring(g)}</div><div class="drive-akku-grund" id="dGrund">${grundText(s)}</div></div>
+    ${tlSchildAn() ? tempolimit.schildHtml(tlZuordnung.limit ?? null) : ''}
     <div class="panel">
       <div class="between"><div><div class="label">Fahrt läuft seit ${uhrzeit(o.t0)}</div><div class="big" id="dKm">${km(o.km)}</div></div>
         <div class="drive-knoepfe"><button class="btn" data-act="close">Ausblenden</button>
@@ -926,7 +928,8 @@ function fahrtAnsicht() {
 function fahrtAnzeigeAktualisieren() {
   const o = eigen.offen; if (!V.fahrtAnsicht || !o) return;
   const min = (Date.now() - o.t0) / 60000, s = fahrtRechnung(o), g = s.soc;
-  $('dAkku').textContent = `≈ ${g} %`; $('dGrund').textContent = grundText(s);
+  if ($('dAkku').dataset.soc !== String(g)) { $('dAkku').innerHTML = ring(g); $('dAkku').dataset.soc = g; }
+  $('dGrund').textContent = grundText(s);
   $('map').innerHTML = karte(o.punkte, o.ausschlaege);
   tempolimit.schildSetzen($('tlSchild'), tlZuordnung.limit ?? null);
   const dg = V.devGps;
@@ -1522,6 +1525,7 @@ function tlEinstellung() {
   const t = tempolimit.info(), weit = t && eigen.zuhause && distanz(t.zuhause, eigen.zuhause.p) > 5000;
   return `<p class="small" style="margin:0">Zeigt während der Fahrt das Tempolimit der Straße als großes Schild. Nur Anzeige, keine Warnung und kein Ton; das Display bleibt dabei an. Daten: ${tempolimit.QUELLE} (OpenStreetMap, ODbL), Saarland und Rheinland-Pfalz. Ohne Eintrag zeigt das Schild „?“.</p>
     <p class="small warn" style="margin:0"><b>Nur zur Orientierung.</b> Es gelten immer die Schilder an der Straße. Die Daten können veraltet oder falsch sein; Baustellen, Wechselschilder und zeitliche Limits fehlen ganz.</p>
+    ${t ? `<label class="switch" for="tlSchildAn"><span><b>Schild während der Fahrt zeigen</b><br><span class="small muted">Aus: nur der Akku oben, Display bleibt trotzdem wach.</span></span><input type="checkbox" id="tlSchildAn" ${eigen.tlSchild !== false ? 'checked' : ''}></label>` : ''}
     ${t ? `<p class="small muted" style="margin:0">${t.stuecke} Straßenstücke im Umkreis von ${t.radiusKm} km · Stand ${esc(t.stand.split('-').reverse().join('.'))} · geladen ${datum(t.geladen)}${weit ? ' · <span class="warn">gilt für das alte Zuhause</span>' : ''}</p>` : ''}
     ${eigen.zuhause ? `<div class="grid2"><button class="btn${t ? '' : ' block'}" data-act="tlLaden"${V.tlLaeuft ? ' disabled' : ''}>${V.tlLaeuft ? `Lade … ${V.tlLaeuft}` : t ? 'Neu laden' : `Tempolimits laden (${tempolimit.RADIUS_KM} km, etwa 4 MB)`}</button>${t ? `<button class="btn" data-act="tlWeg">Entfernen</button>` : ''}</div>`
       : '<p class="small muted" style="margin:0">Dafür zuerst „Hier ist Zuhause“ tippen.</p>'}`;
@@ -1875,6 +1879,7 @@ document.addEventListener('change', e => {
       settingsSheet(); toast(eigen.entwickler ? 'Entwicklermodus an: Logs werden geschrieben' : 'Entwicklermodus aus'); });
   }
   if (e.target.id === 'fotoExport') { eigen.fotoExport = e.target.checked; sichern(); }
+  if (e.target.id === 'tlSchildAn') { eigen.tlSchild = e.target.checked; sichern(); devlog.log('tempolimit', { schild: e.target.checked }); toast(e.target.checked ? 'Tempolimit-Schild in der Fahrt an' : 'Tempolimit-Schild in der Fahrt aus'); }
   if (e.target.id === 'gpsVoll') { eigen.gpsVoll = e.target.checked; sichern(); gpsNeuBeimWarten(); settingsSheet(); toast(eigen.gpsVoll ? 'Warten: GPS jede Sekunde' : `Warten: Sparmodus, alle ${ruheTakt() / 1000} s`); }
   if (e.target.id === 'ruheTakt') { eigen.ruheTakt = Number(e.target.value); sichern(); gpsNeuBeimWarten(); toast(`Warten: Ortung in Ruhe alle ${eigen.ruheTakt / 1000} s`); }
   if (e.target.id === 'bm6an') {

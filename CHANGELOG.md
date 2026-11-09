@@ -2,6 +2,12 @@
 
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
+## Bubble-Log-1620 (09.11.2026, Version 2026.11.09-1620)
+Per adb über 1540 installiert, Daten bleiben.
+- **Fahrtansicht:** Akku-Schätzung als Ring wie auf „Heute“ statt „≈ 62 %“ als Text, gleich groß wie das
+  Tempolimit-Schild und daneben (für das zugeklappte Fold im Hochformat). Darunter klein, womit gerechnet wird.
+- **Einstellungen → Tempolimit:** Schalter „Schild während der Fahrt zeigen“. Aus: nur der Ring, Display bleibt wach.
+
 ## Bubble-Log-1540 (09.11.2026, Version 2026.11.09-1540)
 Per adb über 1530 installiert, Daten bleiben.
 - **Kein doppeltes Laden mehr:** Kommt ein Speichern bis 60 s nach dem letzten Ladevorgang, speichert die App erst
