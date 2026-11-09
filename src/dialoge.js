@@ -6,6 +6,9 @@
 export const OHNE_FAHRT = ['warten', 'losfahren', 'ergebnis', 'laden'];
 // Knöpfe aus diesen Dialogen, die eine offene Fahrt überschreiben, doppelt zählen oder ihren Akkustand verfälschen würden
 export const AKTIONEN_OHNE_FAHRT = ['go', 'socMerken', 'ntAusAkku'];
+// Knöpfe aus dem Dialog am Fahrtende (Art 'ende'). 09.11.2026: Der Dialog der Fahrt nach Homburg blieb offen, als schon
+// die Rückfahrt lief; „Später“ stellte dann die laufende Fahrt zurück. Sie gelten nur für eine beendete Fahrt.
+export const NUR_BEENDET = ['save', 'discard', 'spaeter', 'ntAusfall'];
 
 // Beim Sichtbarwerden der App, Antippen der Meldung oder Erkennen einer Fahrt. art: offener Dialog (null = keiner,
 // 'anderes' = ohne Art). Ergebnis: 'ende' (Akku-Abfrage zum Fahrtende), 'fahrt' (Fahrtansicht) oder null.
@@ -14,10 +17,12 @@ export const AKTIONEN_OHNE_FAHRT = ['go', 'socMerken', 'ntAusAkku'];
 // (Fahrt im Hintergrund erkannt); hat man sie danach ausgeblendet, bleibt sie zu.
 export function beimOeffnen(offen, art) {
   if (!offen) return null;
+  if (art === 'ende' && offen.status === 'faehrt') return 'fahrt';   // Ende-Dialog der vorigen, schon zurückgestellten Fahrt
   if (art && !OHNE_FAHRT.includes(art)) return null;   // Dialog zur Fahrt oder z. B. Einstellungen: nicht stören
   if (offen.status === 'beendet') return 'ende';
   return art || !offen.gesehen ? 'fahrt' : null;
 }
 
 // Knopf aus einem Dialog ohne Fahrt, während inzwischen eine Fahrt offen ist?
-export const veraltet = (akt, offen) => !!offen && AKTIONEN_OHNE_FAHRT.includes(akt);
+// … oder Knopf vom Fahrtende, obwohl gar keine beendete Fahrt mehr offen ist?
+export const veraltet = (akt, offen) => (!!offen && AKTIONEN_OHNE_FAHRT.includes(akt)) || (NUR_BEENDET.includes(akt) && offen?.status !== 'beendet');

@@ -58,3 +58,13 @@ test('Dialoge zur Fahrt oder andere (Einstellungen, Nachtragen) werden nicht ers
   assert.equal(beimOeffnen(faehrt, 'anderes'), null);
   assert.ok(!OHNE_FAHRT.includes('anderes'));
 });
+
+test('09.11. Homburg: Ende-Dialog der vorigen Fahrt weicht, wenn die nächste schon läuft', () => {
+  assert.equal(beimOeffnen(faehrt, 'ende'), 'fahrt');
+  assert.equal(beimOeffnen(beendet, 'ende'), null);   // eigener Dialog dieser Fahrt: nicht neu öffnen
+  for (const akt of ['save', 'discard', 'spaeter', 'ntAusfall']) {
+    assert.ok(veraltet(akt, faehrt), akt);           // „Später“ stellte am 09.11. die laufende Fahrt zurück
+    assert.ok(veraltet(akt, null), akt);
+    assert.ok(!veraltet(akt, beendet), akt);
+  }
+});

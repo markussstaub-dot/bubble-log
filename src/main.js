@@ -1086,7 +1086,7 @@ function endeSheet() {
   const o = eigen.offen; if (!o) return;
   if (o.gpsAusfall) {   // Strecke unvollständig (Testfahrt 31.10.2026): nicht so speichern, sondern nachtragen
     socSheet('GPS unterwegs ausgefallen', socJetzt(), ['ntAusfall', 'Fahrt nachtragen', ['discard', 'Fahrt verwerfen']],
-      `Ab ${uhrzeit(o.gpsAusfall)} hat die App keine Position mehr bekommen, aufgezeichnet sind nur ${km(o.km)}. Akkustand <b>jetzt</b> übernehmen, dann Ende und Strecke nachtragen.`);
+      `Ab ${uhrzeit(o.gpsAusfall)} hat die App keine Position mehr bekommen, aufgezeichnet sind nur ${km(o.km)}. Akkustand <b>jetzt</b> übernehmen, dann Ende und Strecke nachtragen.`, '', 'ende');
     V.fotoZiel = 'ende';
     return;
   }
@@ -1101,7 +1101,7 @@ function endeSheet() {
     spaet ? `Akkustand <b>am Ende dieser Fahrt um ${uhrzeit(t1)}</b>, nicht von jetzt: danach bist du schon weitergefahren${geladenSeit.length ? ` und hast geladen (zuletzt auf ${geladenSeit.at(-1).bis} %)` : ''}. Vorgeschlagen ist die Schätzung für ${uhrzeit(t1)}; weißt du den Wert nicht mehr, nimm sie.`
       : 'Akkustand <b>jetzt</b> vom Microlino-Display übernehmen. Vorgeschlagen ist die Schätzung aus deinem Verbrauch.',
     startZeile + `<div class="label">Zweck</div><div class="chips" id="zweck">${ZWECKE.map((z, i) => `<button class="chip" data-zweck="${z}" aria-pressed="${i === 0}">${z}</button>`).join('')}</div>
-     <p class="small warn" id="plausi" style="margin:0" hidden></p>`);
+     <p class="small warn" id="plausi" style="margin:0" hidden></p>`, 'ende');
   V.plausiGefragt = false;
 }
 // Vorschlag fürs Ende: mit Kette ab dem Start der ersten wartenden Fahrt (der Start der letzten ist dann nur geschätzt)
@@ -1590,8 +1590,10 @@ document.addEventListener('click', e => {
   if (d.zweck) { t.parentElement.querySelectorAll('[data-zweck]').forEach(b => b.setAttribute('aria-pressed', String(b === t))); return; }
   if (simAktion(d.act, d)) return;
   if (dialoge.veraltet(d.act, eigen.offen)) {   // Knopf aus einem Dialog von vor der Fahrt: nichts überschreiben
-    devlog.log('fahrt', { schritt: 'knopf veraltet', aktion: d.act, offen: eigen.offen.status, km: eigen.offen.km });
-    toast('Inzwischen wurde eine Fahrt erkannt'); pruefeOffen(); return;
+    devlog.log('fahrt', { schritt: 'knopf veraltet', aktion: d.act, offen: eigen.offen?.status ?? null, km: eigen.offen?.km });
+    if (!eigen.offen) { overlay(''); render(); toast('Die Fahrt ist schon abgeschlossen'); return; }
+    toast(eigen.offen.status === 'faehrt' ? 'Inzwischen läuft schon die nächste Fahrt. Die vorige wartet.' : 'Inzwischen wurde eine Fahrt erkannt');
+    pruefeOffen(); return;
   }
   switch (d.act) {
     case 'start': if (!eigen.offen && zielModus() === 'warten') wartenSheet(); else if (!eigen.offen) socSheet('Akkustand beim Start', socJetzt(), ['go', 'Losfahren'], 'Wert vom Microlino-Display übernehmen. Vorgeschlagen ist der letzte bekannte Stand.'); break;
