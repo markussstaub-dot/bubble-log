@@ -18,13 +18,19 @@ export async function laden() {
   return { ...LEER };
 }
 
-let wartend = null, timer = 0;
+export const SPAETER_MS = 15000;
+let wartend = null, timer = 0, zuletzt = 0;
 export function speichern(daten) {
-  clearTimeout(timer); wartend = null;
+  // timer = 0 gehört dazu (Fahrt 12.11.2026 verloren): Blieb die alte Timer-Nummer stehen, legte speichernSpaeter nach
+  // einem direkten Speichern (Fahrtbeginn, 12-V-Messung) nie wieder einen Timer an, und die Fahrt stand bis zum
+  // Neustart der App auf dem Stand von 09:39 (0,4 statt 3,2 km).
+  clearTimeout(timer); timer = 0; wartend = null; zuletzt = Date.now();
   return Preferences.set({ key: KEY, value: JSON.stringify(daten) }).catch(e => console.warn('Speichern fehlgeschlagen', e));
 }
-// Während einer Fahrt kommen jede Sekunde Punkte; die werden höchstens alle 15 s geschrieben
+// Während einer Fahrt kommen jede Sekunde Punkte; die werden höchstens alle 15 s geschrieben. Ist das letzte Speichern
+// schon so lange her, gleich hier: Im Hintergrund (Doze) drosselt der WebView Timer, die GPS-Punkte wecken JS aber.
 export function speichernSpaeter(daten) {
   wartend = daten;
-  if (!timer) timer = setTimeout(() => { timer = 0; if (wartend) speichern(wartend); }, 15000);
+  if (Date.now() - zuletzt >= SPAETER_MS) return speichern(daten);
+  if (!timer) timer = setTimeout(() => { timer = 0; if (wartend) speichern(wartend); }, SPAETER_MS - (Date.now() - zuletzt));
 }

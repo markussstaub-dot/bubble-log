@@ -11,7 +11,7 @@ const MAX_PUFFER = 200;         // Zeilen, bevor sofort geschrieben wird
 const SCHREIB_PAUSE = 10000;    // ms, sonst spätestens nach dieser Zeit
 const WEB_MAX = 5000;           // Browser: nur im Speicher, die letzten Zeilen
 
-let an = false, puffer = [], timer = 0, web = [];
+let an = false, puffer = [], timer = 0, web = [], seit = 0;   // seit: ältestes ungeschriebenes Ereignis
 
 export const aktiv = () => an;
 
@@ -32,8 +32,11 @@ export function mitlesen(f) { mitleser = f; }
 export function log(typ, daten = {}) {
   mitleser?.(typ, daten);
   if (!an) return;
-  puffer.push(JSON.stringify({ t: Date.now(), typ, ...daten }));
-  if (puffer.length >= MAX_PUFFER) flush();
+  const t = Date.now();
+  if (!puffer.length) seit = t;
+  puffer.push(JSON.stringify({ t, typ, ...daten }));
+  // Im Hintergrund (Doze) kann der Timer ausbleiben: dann schreibt das nächste Ereignis (12.11.2026: Zeilen nach 09:44 fehlen)
+  if (puffer.length >= MAX_PUFFER || t - seit >= SCHREIB_PAUSE) flush();
   else if (!timer) timer = setTimeout(flush, SCHREIB_PAUSE);
 }
 
