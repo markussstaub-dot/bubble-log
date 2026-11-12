@@ -2,6 +2,15 @@
 
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
+## Bubble-Log-1152 (12.11.2026, Version 2026.11.12-1152)
+Per adb über 1620 installiert, Daten bleiben.
+- **Laufende Fahrt geht nicht mehr verloren:** Nach einem direkten Speichern (Fahrtbeginn, 12-V-Messung) hat die App
+  die Fahrt bisher bis zum Ende nicht mehr zwischengespeichert. Wurde sie im Hintergrund beendet, blieb beim Neustart
+  nur der Anfang übrig. Anlass: 12.11. Fahrt 09:38–09:43 (≈ 3,2 km) stand auf 09:39 (0,4 km) und wurde als zu kurz
+  verworfen. Die 66 % vom Ende landeten bei der Fahrt davor. Jetzt speichern die GPS-Punkte selbst, spätestens alle
+  15 s, auch wenn Android im Doze die Timer drosselt.
+- **Devlog** schreibt im Hintergrund spätestens beim nächsten Ereignis nach 10 s, nicht nur bei 200 Zeilen.
+
 ## Bubble-Log-1620 (09.11.2026, Version 2026.11.09-1620)
 Per adb über 1540 installiert, Daten bleiben.
 - **Fahrtansicht:** Akku-Schätzung als Ring wie auf „Heute“ statt „≈ 62 %“ als Text, gleich groß wie das
