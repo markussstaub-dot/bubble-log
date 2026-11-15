@@ -26,6 +26,8 @@ import * as ladeort from './ladeort.js';
 import * as bm6 from './bm6.js';
 import * as bordnetz from './bordnetz.js';
 import { belegCsv, kurveSvg, STUFE_TEXT, STUFE_KLASSE } from './bordspannung.js';
+import * as konsole from './konsole.js';
+import * as notizen from './notizen.js';
 import { simTabVerbinden, simTabZeichnen, simTabStoppen, simHud, simAktion } from './simtab.js';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -1570,6 +1572,7 @@ function settingsSheet() {
       ${devlog.aktiv() ? `<p class="small mono muted" id="devInfo" style="margin:0">Logs werden gezählt …</p>
         <div class="grid2"><button class="btn" data-act="devTeilen">Logs teilen</button>${V.devLoeschen
           ? `<button class="btn danger" data-act="devLoeschenJa">Wirklich löschen</button>` : `<button class="btn" data-act="devLoeschen">Logs löschen</button>`}</div>
+        <button class="btn block" data-act="konsole">Konsole: Logs und Sticky-Notizen live</button>
         <label class="switch" for="gpsVoll"><span><b>Warten: volle GPS-Rate</b><br><span class="small muted">Ortet beim Warten jede Sekunde wie früher, für dichte Logs. Kostet viel Handy-Akku (bis 9 h Wachhalten am Tag). Aus: Sparmodus, schaltet erst bei Tempo auf 1 s.</span></span>
           <input type="checkbox" id="gpsVoll" ${eigen.gpsVoll ? 'checked' : ''}></label>
         <div class="field"><label for="ruheTakt">Warten: Ortung in Ruhe alle</label><select id="ruheTakt"${eigen.gpsVoll ? ' disabled' : ''}>${RUHE_TAKTE.map(ms => `<option value="${ms}" ${ms === (eigen.ruheTakt ?? RUHE_TAKT) ? 'selected' : ''}>${ms / 1000} s${ms === RUHE_TAKT ? ' (Standard)' : ''}</option>`).join('')}</select>
@@ -1824,6 +1827,7 @@ document.addEventListener('click', e => {
         .catch(e => { console.warn(e); toast('Teilen nicht möglich'); });
       break;
     case 'devLoeschen': V.devLoeschen = true; settingsSheet(); break;
+    case 'konsole': overlay(''); notizen.abholen(); konsole.oeffnen($('app')); break;
     case 'devLoeschenJa': V.devLoeschen = false; devlog.loeschen().then(() => { settingsSheet(); toast('Logs gelöscht'); }); break;
     case 'loeschen': V.loeschen = true; settingsSheet(); break;
     case 'loeschenNein': V.loeschen = false; settingsSheet(); break;
@@ -1873,7 +1877,9 @@ document.addEventListener('change', e => {
   if (e.target.id === 'entwickler') {
     eigen.entwickler = e.target.checked; V.devLoeschen = false; sichern();
     const taktVorher = ruheTakt();
+    if (!eigen.entwickler) konsole.schliessen();
     devlog.setAktiv(eigen.entwickler).then(() => {
+      notizen.abholen();
       if (tracker.modus === 'warten' && !V.sandbox) { if (eigen.entwickler) sensoren.start('warten'); else sensoren.stopp(); }   // Messfenster beim Warten
       if (ruheTakt() !== taktVorher) gpsNeuBeimWarten();   // GPS-Takt der Einstellungen gilt nur im Entwicklermodus
       settingsSheet(); toast(eigen.entwickler ? 'Entwicklermodus an: Logs werden geschrieben' : 'Entwicklermodus aus'); });
@@ -1999,6 +2005,7 @@ window.addEventListener('unhandledrejection', e => devlog.log('fehler', { quelle
   // Zuhause legt jeder selbst fest, sonst läge auch die Unschärfe im Logbuch um Bexbach statt um das eigene Haus.
   // Wer die Liste schon hat (startlisteGesetzt), behält sie.
   if (eigen.entwickler) await devlog.setAktiv(true);
+  notizen.starten();
   devlog.log('app', { start: true, offen: eigen.offen?.status ?? null, erfassung: eigen.erfassung, fahrten: eigen.fahrten.length });
   render();
   if (NATIV) LocalNotifications.addListener('localNotificationActionPerformed', a => { devlog.log('meldung', { getippt: a?.notification?.id }); setTimeout(pruefeOffen, 300); }).catch(() => {});

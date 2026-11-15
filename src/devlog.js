@@ -25,6 +25,26 @@ export async function setAktiv(neu) {
   log('devlog', { an: true, plattform: Capacitor.getPlatform(), ua: navigator.userAgent });
 }
 
+// Konsole (src/konsole.js): die letzten Ereignisse im Speicher und Live-Abonnenten, nur bei aktivem Entwicklermodus
+const LETZTE_MAX = 1000;
+let letzte = [];
+const hoerer = new Set();
+export const letzteEreignisse = () => letzte.slice();
+export function abonnieren(f) { hoerer.add(f); return () => hoerer.delete(f); }
+
+// Ältere Zeilen von heute aus der Datei (z. B. nach einem App-Neustart), höchstens n, große Dateien nur am Ende
+export async function heuteAusDatei(n = LETZTE_MAX) {
+  await flush(); await schreiben;
+  if (!NATIV) return web.slice(-n).map(z => JSON.parse(z));
+  const name = tagesDatei().slice(ORDNER.length + 1);
+  const f = (await dateien()).find(x => x.name === name);
+  if (!f || f.groesse > 8e6) return [];   // über 8 MB lieber nicht übers Plugin ziehen
+  try {
+    const { data } = await Filesystem.readFile({ path: tagesDatei(), directory: Directory.Data, encoding: Encoding.UTF8 });
+    return String(data).trimEnd().split('\n').slice(-n).flatMap(z => { try { return [JSON.parse(z)]; } catch { return []; } });
+  } catch { return []; }
+}
+
 let mitleser = null;
 // Liest jede Zeile mit, auch wenn der Entwicklermodus aus ist (Spur für „Fahrt nachtragen“, src/nachtragen.js)
 export function mitlesen(f) { mitleser = f; }
@@ -34,7 +54,10 @@ export function log(typ, daten = {}) {
   if (!an) return;
   const t = Date.now();
   if (!puffer.length) seit = t;
-  puffer.push(JSON.stringify({ t, typ, ...daten }));
+  const e = { t, typ, ...daten };
+  puffer.push(JSON.stringify(e));
+  letzte.push(e); if (letzte.length > LETZTE_MAX * 1.2) letzte = letzte.slice(-LETZTE_MAX);
+  for (const f of hoerer) { try { f(e); } catch (x) { console.warn(x); } }
   // Im Hintergrund (Doze) kann der Timer ausbleiben: dann schreibt das nächste Ereignis (12.11.2026: Zeilen nach 09:44 fehlen)
   if (puffer.length >= MAX_PUFFER || t - seit >= SCHREIB_PAUSE) flush();
   else if (!timer) timer = setTimeout(flush, SCHREIB_PAUSE);
@@ -97,7 +120,7 @@ export async function teilen() {
 }
 
 export async function loeschen() {
-  puffer = []; web = [];
+  puffer = []; web = []; letzte = [];
   if (!NATIV) return;
   await Filesystem.rmdir({ path: ORDNER, directory: Directory.Data, recursive: true }).catch(() => {});
   await Filesystem.mkdir({ path: ORDNER, directory: Directory.Data, recursive: true }).catch(() => {});

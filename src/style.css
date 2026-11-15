@@ -203,3 +203,22 @@ input[type=number], input[type=datetime-local], select { font: inherit; color: v
 .drive-akku-grund { background: color-mix(in srgb, var(--surface) 88%, transparent); border-radius: 10px; padding: 3px 8px;
   text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
 .drive-akku-grund { font-size: 13px; line-height: 1.3; color: var(--muted, #6b7472); margin-top: 8px; }
+
+/* Konsole (src/konsole.js): Devlog live im Entwicklermodus, eigene Ebene unter den Dialogen */
+.konsole { position: absolute; inset: 0; z-index: 35; background: var(--bg); display: flex; flex-direction: column; gap: 8px;
+  padding: calc(10px + env(safe-area-inset-top, 0px)) 12px calc(10px + env(safe-area-inset-bottom, 0px)); }
+.k-kopf { display: flex; align-items: center; gap: 10px; }
+.k-kopf b { font-family: var(--f-display); font-size: 24px; font-weight: 600; }
+.k-kopf .mono { flex: 1; }
+.k-suche { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 10px; padding: 8px 10px; font: inherit; }
+.k-liste { flex: 1; min-height: 0; overflow-y: auto; background: var(--sunk); border: 1px solid var(--line); border-radius: 12px; padding: 6px 8px;
+  font-size: 11.5px; line-height: 1.35; overscroll-behavior: contain; }
+.k-z { padding: 3px 0; border-bottom: 1px solid var(--line); word-break: break-word; }
+.k-z .k-t { color: var(--muted); }
+.k-z .k-typ { font-weight: 500; }
+.k-z.akz .k-typ { color: var(--accent); }
+.k-z.notiz { background: color-mix(in srgb, var(--lade) 12%, transparent); margin: 0 -8px; padding: 3px 8px; }
+.k-z.notiz .k-typ { color: var(--lade); }
+.k-z pre { display: none; margin: 4px 0 2px; white-space: pre-wrap; font: inherit; color: var(--ink); }
+.k-z.auf pre { display: block; }
+.k-runter { position: absolute; right: 22px; bottom: calc(22px + env(safe-area-inset-bottom, 0px)); box-shadow: 0 4px 12px rgba(0,0,0,.2); }

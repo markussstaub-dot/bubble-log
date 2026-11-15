@@ -2,6 +2,18 @@
 
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
+## Bubble-Log-1122 (15.11.2026, Version 2026.11.15-1122)
+Per adb über 1152 installiert, Daten bleiben. Dazu Sticky-App 2026.11.15-1126.
+- **Konsole** (Einstellungen → Entwicklermodus → „Konsole“): Devlog live am Handy, die Zeilen von heute zuerst
+  (aus der Tagesdatei). Filter Ohne GPS / Alles / Notizen / Fahrt / GPS / Fehler, Suche, Pause, Zeile antippen zeigt
+  das ganze Ereignis. `src/konsole.js`, Tests `tests/konsole.test.js`
+- **Sticky-Notizen im Devlog:** Die Sticky-App schickt jede Testnotiz (Knopf, Diktat) per Broadcast an Bubble Log
+  (`Notizen.java`, `src/notizen.js`). Sie landet als Typ `notiz` mit der Zeit vom Sticky im Devlog, also auch in den
+  geteilten Logs. Nur mit Entwicklermodus, sonst wartet sie im Eingang (bis 2 MB). Signatur-Berechtigung: Nur Apps
+  mit demselben Schlüssel dürfen senden. **Sticky-App nach Bubble Log installieren**, sonst fehlt ihr die Berechtigung.
+  Am Fold geprüft: Testnotiz kam mit Bubble Log im Hintergrund nach 14 ms an (steht mit `test: true` im Devlog
+  vom 15.11.), ein Broadcast von der adb-Shell ohne Berechtigung wurde abgewiesen
+
 ## Bubble-Log-1152 (12.11.2026, Version 2026.11.12-1152)
 Per adb über 1620 installiert, Daten bleiben.
 - **Laufende Fahrt geht nicht mehr verloren:** Nach einem direkten Speichern (Fahrtbeginn, 12-V-Messung) hat die App

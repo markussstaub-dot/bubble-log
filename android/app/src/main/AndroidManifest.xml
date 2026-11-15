@@ -24,6 +24,16 @@
 
         </activity>
 
+        <!-- Notizen.java: Testnotizen der Sticky-App für die Konsole, nur von Apps mit gleichem Schlüssel -->
+        <receiver
+            android:name=".Notizen$Empfaenger"
+            android:exported="true"
+            android:permission="app.bubblelog.microlino.permission.NOTIZ">
+            <intent-filter>
+                <action android:name="app.bubblelog.microlino.NOTIZ" />
+            </intent-filter>
+        </receiver>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -43,6 +53,9 @@
     </queries>
 
     <!-- Permissions -->
+
+    <!-- Wer Notizen schicken darf (Sticky-App, gleicher Debug-Schlüssel). Sticky-App nach Bubble Log installieren -->
+    <permission android:name="app.bubblelog.microlino.permission.NOTIZ" android:protectionLevel="signature" />
 
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Fahrsensoren: CPU während einer Fahrt wach halten, sonst gehen bei dunklem Bildschirm Sensorwerte verloren -->
