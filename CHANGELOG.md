@@ -2,6 +2,13 @@
 
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
+## Noch nicht in einer APK
+- **Winterzuschlag pauschal** statt des gelernten Kältezuschlags (der griff erst mit je 3 Fahrten unter und über 5 °C,
+  stand also bei 0): unter 10 °C +10 %, unter 5 °C +20 %, unter 0 °C +30 %, für Heizen und kalten Akku zusammen.
+  Gilt für Reichweite, Ziel-Check, Schätzung während der Fahrt und Tagesabschluss. Der gelernte Verbrauch wird je
+  Fahrt um ihren Zuschlag bereinigt („Ø … %/km ohne Winter“), damit Kälte nicht doppelt zählt. Stufen in
+  `src/fahrtschaetzung.js` (`WINTER_STUFEN`), über den Winter mit echten Fahrten nachschärfen
+
 ## Bubble-Log-1122 (15.11.2026, Version 2026.11.15-1122)
 Per adb über 1152 installiert, Daten bleiben. Dazu Sticky-App 2026.11.15-1126.
 - **Konsole** (Einstellungen → Entwicklermodus → „Konsole“): Devlog live am Handy, die Zeilen von heute zuerst
