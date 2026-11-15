@@ -14,7 +14,7 @@ import { scrollrad } from './scrollrad.js';
 import { herkunft, nurSchaetzung, startQuelleAuto, startAutomatisch, startGeschaetzt, belastbar } from './herkunft.js';
 import { langerDruck } from './halten.js';
 import * as sensoren from './sensoren.js';
-import { fahrtSchaetzung, grundText } from './fahrtschaetzung.js';
+import { fahrtSchaetzung, grundText, winterZuschlag } from './fahrtschaetzung.js';
 import * as devlog from './devlog.js';
 import { suchen, route as routeBerechnen, wege as wegeBerechnen } from './route.js';
 import * as lade from './laden.js';
@@ -85,17 +85,15 @@ const gelernt = (liste = fahrten()) => liste.filter(x => zaehlt(x) && x.start - 
 const avg = (liste = fahrten()) => {
   if (!gelernt(liste)) return STARTWERT;
   const f = liste.filter(zaehlt);
-  return f.reduce((a, x) => a + x.start - x.ende - steigAnteil(x), 0) /Math.max(.1, f.reduce((a, x) => a + x.km, 0));
+  // Verbrauch „warm und flach“: Steigung abziehen, Winterzuschlag der Fahrt herausrechnen (src/fahrtschaetzung.js)
+  return f.reduce((a, x) => a + (x.start - x.ende - steigAnteil(x)) / (1 + winterZuschlag(x.temp)), 0) / Math.max(.1, f.reduce((a, x) => a + x.km, 0));
 };
-const kaltZuschlag = () => {
-  const f = fahrten().filter(x => x.temp != null), k = f.filter(x => x.temp < 5), w = f.filter(x => x.temp >= 5);
-  return gelernt(k) && gelernt(w) ? Math.max(0, avg(k) / avg(w) - 1) : 0;
-};
+const kaltZuschlag = (t = tempJetzt()) => winterZuschlag(t);
 const steigProzent = hm => Math.max(0, hm) * 9.81 * 600 / 3.6e6 / eigen.akku * 100;   // 600 kg mit Fahrer, Rekuperation konservativ nicht abgezogen
 // % Akku, die die Höhenmeter einer Fahrt gekostet haben. Der gelernte Verbrauch gilt damit für flache Strecken;
 // die Reichweite rechnet die Steigung zum Ziel wieder dazu.
 const steigAnteil = x => x.hm != null ? steigProzent(x.hm - REKUP * (x.hmAb || 0)) : 0;
-const reichweite = soc => Math.round(soc / (avg() * (tempJetzt() < 5 ? 1 + kaltZuschlag() : 1)));
+const reichweite = soc => Math.round(soc / (avg() * (1 + kaltZuschlag())));
 const de = (v, d = 1) => Number(v).toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
 const km = v => `${de(v, v < 10 ? 1 : 0)} km`;
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -106,7 +104,7 @@ const uhrzeit = t => new Date(t).toLocaleTimeString('de-DE', { hour: '2-digit', 
 const fahrtRechnung = o => {
   const hm = sensoren.hoehenmeter(o.punkte || []);
   return fahrtSchaetzung({ start: o.startSoc ?? socJetzt(), km: o.km, proKm: avg(), temp: o.temp ?? eigen.temp ?? null,
-    kaltZuschlag: kaltZuschlag(), steig: hm ? steigProzent(hm.auf - REKUP * hm.ab) : 0, hm });
+    steig: hm ? steigProzent(hm.auf - REKUP * hm.ab) : 0, hm });
 };
 const schaetzung = o => fahrtRechnung(o).soc;
 // Zeitpunkt des letzten bekannten Akkustands; ältere Daten ohne socT: Ende der letzten Fahrt bzw. letzter Ladevorgang
@@ -223,8 +221,8 @@ function viewHeute() {
       <span><span class="label">Fahrterkennung</span><br><span class="small">${eigen.erfassung ? 'An: Fahrten starten von selbst' : 'Aus: Fahrten von Hand starten'}</span></span>
       <span class="pill ${eigen.erfassung ? 'good' : 'muted'}">${eigen.erfassung ? 'an' : 'aus'}</span></button>
     <div class="chips">
-      <span class="chip">${tempJetzt()} °C · ${kz > 0 ? `Kälte +${Math.round(kz * 100)} %` : 'kein Kältezuschlag'}</span>
-      <span class="chip">Ø ${de(a, 2)} %/km</span>
+      <span class="chip">${tempJetzt()} °C · ${kz > 0 ? `Winter +${Math.round(kz * 100)} %` : 'kein Winterzuschlag'}</span>
+      <span class="chip">Ø ${de(a, 2)} %/km ohne Winter</span>
       <span class="chip">${de(a * eigen.akku, 1)} kWh/100 km</span>
     </div>
     ${letzte ? `<section class="card">
@@ -346,7 +344,7 @@ async function zielPruefen(z) {
 }
 function zielRechnung(r, retour = V.retour) {
   const soc = socJetzt(), t = tempJetzt(), weg = r.km * (retour ? 2 : 1);
-  const basis = weg * avg(), kalt = t < 5 ? basis * kaltZuschlag() : 0;
+  const basis = weg * avg(), kalt = basis * kaltZuschlag(t);
   const steig = steigProzent(r.auf - REKUP * r.ab) + (retour ? steigProzent(r.ab - REKUP * r.auf) : 0);   // zurück werden die Abfahrten zu Steigungen
   const ankunft = Math.round(soc - basis - kalt - steig);
   return { soc, t, weg, basis, kalt, steig, ankunft, urteil: ankunft >= reserve() ? ['good', 'Reicht'] : ankunft >= 5 ? ['warn', 'Knapp'] : ['bad', 'Unterwegs laden'] };
@@ -400,7 +398,7 @@ function viewReichweite() {
         <div class="list small" style="margin-top:8px">
           <div class="between"><span>Start: ${esc(r.start.name)}, Akku jetzt</span><b class="mono">${x.soc} %</b></div>
           <div class="between"><span>${km(x.weg)} Straße × Ø ${de(avg(), 2)} %/km</span><b class="mono">−${de(x.basis, 0)} %</b></div>
-          <div class="between"><span>Kälte (${x.t} °C, +${Math.round(kaltZuschlag() * 100)} %)</span><b class="mono">−${de(x.kalt, 0)} %</b></div>
+          <div class="between"><span>Winter (${x.t} °C, +${Math.round(kaltZuschlag(x.t) * 100)} %)</span><b class="mono">−${de(x.kalt, 0)} %</b></div>
           <div class="between"><span>${r.hoeheBekannt ? `Höhenmeter ↑ ${r.auf} / ↓ ${r.ab}${V.retour ? ', zurück umgekehrt' : ''}` : 'Höhenmeter nicht geladen'}</span><b class="mono">−${de(x.steig, 0)} %</b></div>
           <div class="between" style="border-top:1px solid var(--line);padding-top:6px"><span>${V.retour ? 'Zurück' : 'Ankunft'} · etwa ${Math.round(r.minuten * (V.retour ? 2 : 1))} min Fahrt</span><b class="mono ${x.urteil[0]}">${x.ankunft} %</b></div>
         </div>
@@ -1336,7 +1334,7 @@ function tagFahrten() {
 }
 function tagGewicht(o) {   // geschätzter Verbrauch der Fahrt; nur das Verhältnis zwischen den Fahrten zählt
   const hm = sensoren.hoehenmeter(o.punkte);
-  return o.km * avg() + (hm ? steigProzent(hm.auf - REKUP * hm.ab) : 0) + (o.kalt ? KALTSTART : 0);
+  return o.km * avg() * (1 + kaltZuschlag(o.temp ?? null)) + (hm ? steigProzent(hm.auf - REKUP * hm.ab) : 0) + (o.kalt ? KALTSTART : 0);
 }
 const tagWert = id => { const v = $(id)?.value; return v === '' || v == null ? null : Number(v); };
 function tagRechnen() {

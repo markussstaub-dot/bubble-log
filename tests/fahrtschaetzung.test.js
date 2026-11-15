@@ -1,18 +1,22 @@
 // Akku-Schätzung während der Fahrt mit Grund (src/fahrtschaetzung.js, SPEC-usability.md US2)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fahrtSchaetzung, grundText } from '../src/fahrtschaetzung.js';
+import { fahrtSchaetzung, grundText, winterZuschlag } from '../src/fahrtschaetzung.js';
 
 test('flach und warm: gelernter Verbrauch, Grund ist nur die Temperatur', () => {
-  const s = fahrtSchaetzung({ start: 91, km: 16, proKm: 1.1, temp: 8, kaltZuschlag: 0.3 });
+  const s = fahrtSchaetzung({ start: 91, km: 16, proKm: 1.1, temp: 12 });
   assert.equal(s.soc, 73);
-  assert.equal(grundText(s), '≈ 1,1 %/km · 8 °C');
+  assert.equal(grundText(s), '≈ 1,1 %/km · 12 °C');
 });
 
-test('kalt: Zuschlag steht im Grund und senkt den Akku', () => {
-  const s = fahrtSchaetzung({ start: 69, km: 20, proKm: 1.1, temp: 3, kaltZuschlag: 0.3 });
-  assert.equal(s.soc, 40);                        // 20 × 1,1 × 1,3 = 28,6
-  assert.equal(grundText(s), '≈ 1,4 %/km · 3 °C, Kälte +30 %');
+test('kalt: Winterzuschlag steht im Grund und senkt den Akku', () => {
+  const s = fahrtSchaetzung({ start: 69, km: 20, proKm: 1.1, temp: 3 });
+  assert.equal(s.soc, 43);                        // 20 × 1,1 × 1,2 = 26,4
+  assert.equal(grundText(s), '≈ 1,3 %/km · 3 °C, Winter +20 %');
+});
+
+test('Winterzuschlag in Stufen, ohne Temperatur keiner', () => {
+  assert.deepEqual([15, 10, 9.9, 5, 4, 0, -0.1, -8, null].map(winterZuschlag), [0, 0, 0.1, 0.1, 0.2, 0.2, 0.3, 0.3, 0]);
 });
 
 test('bergauf und bergab', () => {
