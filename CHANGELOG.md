@@ -3,6 +3,18 @@
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
 ## Noch nicht in einer APK
+- **Notizen für alle** (SPEC-konsole.md): Notizen sind eigene Daten (`eigen.notizen`), nicht mehr nur Devlog-Zeilen,
+  und kommen ohne Entwicklermodus an. Bubble Log ist Teilen-Ziel für Text (`ACTION_SEND` text/plain): Jede App kann
+  so eine Notiz schicken, Zeit = Empfang, Ort = letzter GPS-Punkt. Der Sticky-Broadcast bleibt (Signatur).
+  Zuordnung zur Fahrt über die Zeit (2 Min. vor dem Start bis 10 Min. nach dem Ende). „🗒 2 Notizen“ aufklappbar in
+  Fahrtdetail (mit Karte) und Tagestour (Stecknadeln), einzeln zur Seite wischen mit Rückgängig, Orte im
+  Unschärfe-Kreis werden nicht gezeigt. Spalte „Notizen“ ganz hinten in der Fahrtenbuch-CSV. „Alle Daten löschen“
+  nimmt sie mit. Format im README. Im Browser: `bubbleTeilen('Text')`. `src/notizbuch.js`, Tests `tests/notizen.test.js`
+- **Verlauf** oben im Fahrten-Tab: wichtige Ereignisse in Klartext (Fahrt erkannt/beendet/verworfen und warum,
+  Laden, Akku-Eingaben, Notizen, Fehler, Tempolimit-Wechsel), ohne GPS-Rohdaten, 14 Tage. Dieselbe Ansicht wie die
+  Konsole, Filter-Chips aus den vorhandenen Typen und Notiz-Quellen. Eigener kleiner Speicher, liest die Log-Zeilen
+  über `devlog.mitlesen` mit, läuft also ohne Entwicklermodus. Die Entwickler-Konsole ist unverändert.
+  `src/verlauf.js`, Tests `tests/verlauf.test.js`
 - **Tempolimits überall:** Die App baut den Cache für das Zuhause selbst aus Overpass (OpenStreetMap), nicht mehr aus
   den Kacheln für Saarland/RLP auf GitHub Pages. Standard 25 km (≈ 35 Kacheln), „Auf 40 km erweitern“ lädt nur
   die fehlenden nach. Je 0,1°-Kachel eine kleine Abfrage, mit Pause,

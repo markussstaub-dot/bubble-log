@@ -3,15 +3,20 @@ import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { ORDNER as FOTOS } from './foto.js';
+import { notizenDerFahrt, csvFeld } from './notizbuch.js';
 
 const ORDNER = 'Bubble Log';
+const p2 = n => String(n).padStart(2, '0');
+const uhr = t => { const d = new Date(t); return `${p2(d.getHours())}:${p2(d.getMinutes())}`; };
 
 // fotos: Spalten „Foto Start“/„Foto Ende“ mit den Dateinamen (Einstellung „Fotos beim Export mitgeben“)
-export function csvText(fahrten, { fotos = false } = {}) {
-  const zeilen = ['Datum;Start;Ende;km;Akku Start %;Akku Ende %;Temperatur °C;Zweck;Höhenmeter auf;Höhenmeter ab;starke Bremsungen;starke Beschleunigungen;raue Strecke %;12 V Start;12 V Fahrt Ø;12 V Ruhe' + (fotos ? ';Foto Start;Foto Ende' : ''),
+// notizen: eigen.notizen; Spalte „Notizen“ ganz hinten, damit die übrigen Spalten an ihrem Platz bleiben
+export function csvText(fahrten, { fotos = false, notizen = [] } = {}) {
+  const zeilen = ['Datum;Start;Ende;km;Akku Start %;Akku Ende %;Temperatur °C;Zweck;Höhenmeter auf;Höhenmeter ab;starke Bremsungen;starke Beschleunigungen;raue Strecke %;12 V Start;12 V Fahrt Ø;12 V Ruhe' + (fotos ? ';Foto Start;Foto Ende' : '') + ';Notizen',
     ...fahrten.map(f => [f.tag, f.von, f.nach, String(f.km).replace('.', ','), f.start, f.ende, f.temp ?? '', f.zweck,
       f.hm ?? '', f.hmAb ?? '', f.brems ?? '', f.beschl ?? '', f.rau ?? '',
-      ...[f.v12?.start, f.v12?.bewertung?.mittel, f.v12?.ruhe].map(v => v == null ? '' : String(v).replace('.', ',')), ...(fotos ? [f.fotoStart ?? '', f.fotoEnde ?? ''] : [])].join(';'))];
+      ...[f.v12?.start, f.v12?.bewertung?.mittel, f.v12?.ruhe].map(v => v == null ? '' : String(v).replace('.', ',')), ...(fotos ? [f.fotoStart ?? '', f.fotoEnde ?? ''] : []),
+      csvFeld(notizenDerFahrt(f, notizen, fahrten), uhr)].join(';'))];
   return zeilen.join('\r\n');
 }
 // Dateinamen aller Fotos der Fahrten (für Teilen/Speichern)

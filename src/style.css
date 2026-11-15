@@ -221,4 +221,18 @@ input[type=number], input[type=datetime-local], select { font: inherit; color: v
 .k-z.notiz .k-typ { color: var(--lade); }
 .k-z pre { display: none; margin: 4px 0 2px; white-space: pre-wrap; font: inherit; color: var(--ink); }
 .k-z.auf pre { display: block; }
+/* Verlauf (dieselbe Ansicht in Klartext, für alle): größere Schrift, Datum als Zwischenzeile */
+.konsole.verlauf .k-liste { font-size: 14px; line-height: 1.4; }
+.konsole.verlauf .k-z { padding: 6px 0; }
+.k-tag { padding: 10px 0 2px; font-weight: 600; }
+.k-z.v-z.bad { color: var(--bad); }
+.verlauf-karte .einzeilig { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Notizen bei der Fahrt und in der Tagestour (SPEC-konsole.md) */
+details.notizen { border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; display: grid; gap: 8px; }
+details.notizen summary { cursor: pointer; font-weight: 600; }
+details.notizen[open] { gap: 8px; }
+.nz-liste { display: grid; gap: 6px; overflow: hidden; }
+.nz { display: grid; gap: 2px; padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, var(--lade) 12%, transparent);
+  touch-action: pan-y; user-select: none; transition: transform .15s, opacity .15s; word-break: break-word; }
+.nkarte { height: 220px; }
 .k-runter { position: absolute; right: 22px; bottom: calc(22px + env(safe-area-inset-bottom, 0px)); box-shadow: 0 4px 12px rgba(0,0,0,.2); }

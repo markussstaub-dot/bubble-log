@@ -54,3 +54,14 @@
 - Sticky-Notizen kommen weiter an, auch ohne Entwicklermodus.
 - Der „Verlauf“ zeigt die wichtigen Ereignisse in Klartext, die Entwickler-Konsole ist unverändert.
 - Tests für Zuordnung Notiz → Fahrt und Klartext-Übersetzung, `npm test` grün, im Browser geprüft.
+
+## Umgesetzt (15.11.2026, noch nicht in einer APK)
+- Notizen: `src/notizbuch.js` (Format, Zuordnung 2 Min. vor dem Start bis 10 Min. nach dem Ende, Ort, CSV),
+  Empfang `src/notizen.js`, Teilen-Ziel in `Notizen.java` + `AndroidManifest.xml`. Ohne eigenen Ort wird er
+  anteilig entlang der Fahrt geschätzt („Ort ungefähr“). Orte im Unschärfe-Kreis um Zuhause/Ladeorte zeigt die Karte nicht.
+- Verlauf, Quelle der Daten (im Vorschlag offen): ein eigener kleiner Speicher (`src/verlauf.js`, Schlüssel
+  `bubble-log.verlauf`, 14 Tage, höchstens 1000 Einträge, Klartext statt Rohzeile). Gefüllt über `devlog.mitlesen`,
+  das jede Log-Zeile auch ohne Entwicklermodus sieht. Warum nicht das Devlog: Es schreibt nur im Entwicklermodus und
+  enthält GPS-Rohdaten. Warum nicht in `eigen`: Das wird während der Fahrt alle 15 s geschrieben und ist das
+  eigentliche Fahrtenbuch; der Verlauf soll es weder aufblähen noch gefährden.
+- Ansicht: `src/konsole.js` mit zwei Arten („konsole“ unverändert, „verlauf“ mit Übersetzungstabelle `KLARTEXT`).

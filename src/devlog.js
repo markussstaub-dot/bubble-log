@@ -45,12 +45,13 @@ export async function heuteAusDatei(n = LETZTE_MAX) {
   } catch { return []; }
 }
 
-let mitleser = null;
-// Liest jede Zeile mit, auch wenn der Entwicklermodus aus ist (Spur für „Fahrt nachtragen“, src/nachtragen.js)
-export function mitlesen(f) { mitleser = f; }
+const mitleser = new Set();
+// Liest jede Zeile mit, auch wenn der Entwicklermodus aus ist (Spur für „Fahrt nachtragen“, src/nachtragen.js;
+// Verlauf für alle, src/verlauf.js)
+export function mitlesen(f) { mitleser.add(f); }
 
 export function log(typ, daten = {}) {
-  mitleser?.(typ, daten);
+  for (const f of mitleser) { try { f(typ, daten); } catch (x) { console.warn(x); } }
   if (!an) return;
   const t = Date.now();
   if (!puffer.length) seit = t;

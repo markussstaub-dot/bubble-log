@@ -23,7 +23,9 @@ import java.nio.file.Files;
  * Die Sticky-App schickt jede neue Notiz als Broadcast (Aktion NOTIZ, Extra "json" = eine JSONL-Zeile). Senden darf nur,
  * wer die Signatur-Berechtigung permission.NOTIZ hat, also eine App mit demselben Schlüssel wie Bubble Log.
  * Der Empfänger legt die Zeile in files/notizen-eingang.jsonl ab (auch wenn Bubble Log gerade nicht läuft),
- * die App holt sie mit abholen() ins Entwickler-Log und bekommt neue live als Ereignis "notiz".
+ * die App holt sie mit abholen() ab (src/notizen.js) und bekommt neue live als Ereignis "notiz".
+ * Außerdem ist Bubble Log Teilen-Ziel für Text (ACTION_SEND text/plain, AndroidManifest.xml): Jede App kann so eine
+ * Notiz schicken, Android zeigt dabei die Auswahl. Geteilter Text landet im selben Eingang, Zeit ist der Empfang.
  */
 @CapacitorPlugin(name = "Notizen")
 public class Notizen extends Plugin {
@@ -32,7 +34,34 @@ public class Notizen extends Plugin {
     private static final long MAX_BYTES = 2_000_000;   // falls die App lange nicht abholt
     private static Notizen aktiv;
 
-    @Override public void load() { aktiv = this; }
+    static final int TEXT_MAX = 2000;
+
+    @Override public void load() {
+        aktiv = this;
+        geteilt(getActivity() != null ? getActivity().getIntent() : null);   // App wurde über „Teilen“ gestartet
+    }
+    @Override protected void handleOnNewIntent(Intent intent) { super.handleOnNewIntent(intent); geteilt(intent); }
+
+    /** Geteilten Text als Notiz ablegen; die Aktion wird danach geleert, damit ein Neustart ihn nicht noch mal nimmt */
+    private void geteilt(Intent intent) {
+        if (intent == null || !Intent.ACTION_SEND.equals(intent.getAction())) return;
+        String typ = intent.getType();
+        CharSequence text = intent.getCharSequenceExtra(Intent.EXTRA_TEXT);
+        String betreff = intent.getStringExtra(Intent.EXTRA_SUBJECT);
+        intent.setAction(null);
+        if (typ == null || !typ.startsWith("text/") || text == null || text.toString().trim().isEmpty()) return;
+        String s = text.toString().trim();
+        if (betreff != null && !betreff.trim().isEmpty() && !s.startsWith(betreff.trim())) s = betreff.trim() + ": " + s;
+        if (s.length() > TEXT_MAX) s = s.substring(0, TEXT_MAX);
+        try {
+            JSONObject n = new JSONObject();
+            n.put("t", System.currentTimeMillis());
+            n.put("quelle", "teilen");
+            n.put("art", "text");
+            n.put("text", s);
+            ablegen(getContext(), n.toString());
+        } catch (Exception e) { /* nichts abgelegt */ }
+    }
     @Override protected void handleOnDestroy() { if (aktiv == this) aktiv = null; }
 
     static synchronized void ablegen(Context ctx, String json) {

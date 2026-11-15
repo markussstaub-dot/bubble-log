@@ -16,6 +16,8 @@ daraus deinen Verbrauch.
   (DE, CH, AT, IT, FR).
   **Nur zur Orientierung: Es gelten immer die Schilder an der Straße.** Die Daten können veraltet oder falsch sein,
   Baustellen, Wechselschilder und zeitliche Limits fehlen. Korrekturen gehören in OpenStreetMap.
+- **Notizen und Verlauf:** Text aus jeder App über „Teilen“ an Bubble Log schicken (z. B. ein Diktat), er landet
+  bei der passenden Fahrt. Der Verlauf oben im Fahrten-Tab zeigt in Klartext, was die App erkannt hat.
 
 Fahrten bleiben auf dem Handy, es gibt kein Konto und keinen Server.
 
@@ -36,6 +38,34 @@ die Fahrten bleiben erhalten.
 
 Bauen und Technik: [ANLEITUNG.md](ANLEITUNG.md), Arbeitsweise: [ENTWICKLUNG.md](ENTWICKLUNG.md),
 Änderungen: [CHANGELOG.md](CHANGELOG.md).
+
+## Notizen schicken
+
+Während der Fahrt tippt man in Bubble Log nichts ein. Notizen kommen von außen und landen bei der Fahrt, in deren
+Zeit sie fallen (bis 2 Minuten vor dem Start und 10 Minuten nach dem Ende). Sie stehen in den Fahrtdetails, in der
+Tagestour (mit Ort auf der Karte) und als Spalte „Notizen“ in der Fahrtenbuch-CSV. Sie bleiben auf dem Handy.
+
+- **Teilen (für alle):** In einer beliebigen App Text teilen und Bubble Log wählen, etwa ein Diktat aus der
+  Rekorder-App, eine Notiz aus Keep oder eine Aktion aus Tasker (`ACTION_SEND`, `text/plain`). Zeit ist der Empfang,
+  Ort der letzte GPS-Punkt. Android zeigt dabei die Auswahl, keine App kann also unbemerkt Notizen einspielen.
+- **Broadcast (nur eigene Apps):** Aktion `app.bubblelog.microlino.NOTIZ`, Extra `json` mit einer Zeile wie unten.
+  Senden darf nur eine App mit demselben Signaturschlüssel (Berechtigung `app.bubblelog.microlino.permission.NOTIZ`,
+  `protectionLevel="signature"`). So schickt die Sticky-App ihre Notizen.
+
+Gespeichert wird jede Notiz so (`eigen.notizen`, Code in `src/notizbuch.js`):
+
+```json
+{ "t": 1794733080000, "quelle": "teilen", "art": "text", "text": "Schild zeigt 50, ist aber 30", "lat": 49.35, "lon": 7.25 }
+```
+
+| Feld | Bedeutung |
+|---|---|
+| `t` | Zeitpunkt in Millisekunden (Unix). Beim Broadcast darf der Absender seine eigene Zeit mitgeben |
+| `quelle` | Woher: `teilen`, `sticky` oder ein eigener Name |
+| `art` | Was: `text`, `diktat`, `knopf` … |
+| `text` | Der Inhalt, höchstens 2000 Zeichen |
+| `lat`, `lon` | Ort (optional). Fehlt er, schätzt die App ihn entlang der Fahrt |
+| `fahrtId` | Fahrt (optional), nur wenn der Absender sie kennt; sonst ordnet die App über die Zeit zu |
 
 ## Selbst weiterbauen
 

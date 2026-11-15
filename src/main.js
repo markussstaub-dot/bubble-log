@@ -28,6 +28,8 @@ import * as bordnetz from './bordnetz.js';
 import { belegCsv, kurveSvg, STUFE_TEXT, STUFE_KLASSE } from './bordspannung.js';
 import * as konsole from './konsole.js';
 import * as notizen from './notizen.js';
+import * as ereignisse from './verlauf.js';   // „Verlauf“ für alle (verlauf heißt hier schon das GPS-Tempo)
+import { notizenDerFahrt, notizenDesTages, fahrtFuer, ortVon } from './notizbuch.js';
 import { simTabVerbinden, simTabZeichnen, simTabStoppen, simHud, simAktion } from './simtab.js';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -248,7 +250,11 @@ function badge(f) {
 function viewFahrten() {
   const liste = fahrten().filter(f => V.filter === 'Alle' || f.zweck === V.filter).slice().reverse();
   const summeKm = liste.reduce((a, x) => a + x.km, 0);
+  const letztes = ereignisse.eintraege().at(-1);
   return `
+    <button class="card between verlauf-karte" data-act="verlauf" style="text-align:left">
+      <span style="min-width:0"><span class="label">Verlauf</span><br><span class="small ${letztes?.typ === 'fehler' ? 'bad' : 'muted'} einzeilig">${letztes ? `${datum(letztes.t) === datum(Date.now()) ? '' : datum(letztes.t) + ' '}${uhrzeit(letztes.t)} ${esc(letztes.text)}` : 'Was die App erkannt hat, in Klartext'}</span></span>
+      <span class="pill muted">›</span></button>
     <div class="chips">${['Alle', ...ZWECKE].map(z => `<button class="chip" data-filter="${z}" aria-pressed="${V.filter === z}">${z}</button>`).join('')}</div>
     <section class="card">
       <div class="stat3">
@@ -260,7 +266,7 @@ function viewFahrten() {
     <div class="list">${liste.map((f, i) => `${i === 0 || liste[i - 1].tag !== f.tag ? `<button class="btn tagkopf" data-act="tagestour" data-tag="${esc(f.tag)}">🗺️ Tagestour ${esc(f.tag)} · ${liste.filter(x => x.tag === f.tag).length} Fahrten</button>` : ''}
       <section class="card trip" data-act="${f.nachgetragen ? 'ntBearbeiten' : 'fahrtKorr'}" data-id="${esc(f.id)}" role="button" style="cursor:pointer">${miniRoute(f)}
         <div style="min-width:0"><b>${titel(f)}</b>${f.nachgetragen ? '<span class="pill siegel">nachgetragen</span>' : ''}
-          <div class="muted small">${esc(f.tag)} · ${f.nachgetragen ? '≈ ' : ''}${km(f.km)} · ${f.start} → ${f.ende} % · ${esc(f.zweck)}${f.temp != null ? ` · ${f.temp} °C` : ''}${f.hm != null ? ` · ↑ ${f.hm} Hm` : ''}${f.brems ? ` · ${f.brems}× stark gebremst` : ''}${f.nachgetragen ? ` · ${f.strecke?.quelle === 'ziel' ? `${esc(f.strecke.ziel)}${f.strecke.retour ? ', hin und zurück' : ''}` : 'km von Hand'}` : ''}</div>
+          <div class="muted small">${esc(f.tag)} · ${f.nachgetragen ? '≈ ' : ''}${km(f.km)} · ${f.start} → ${f.ende} % · ${esc(f.zweck)}${f.temp != null ? ` · ${f.temp} °C` : ''}${f.hm != null ? ` · ↑ ${f.hm} Hm` : ''}${f.brems ? ` · ${f.brems}× stark gebremst` : ''}${f.nachgetragen ? ` · ${f.strecke?.quelle === 'ziel' ? `${esc(f.strecke.ziel)}${f.strecke.retour ? ', hin und zurück' : ''}` : 'km von Hand'}` : ''}${notizZahl(f) ? ` · 🗒 ${notizZahl(f)}` : ''}</div>
           ${f.fotoStart || f.fotoEnde ? `<div class="fotos">${[f.fotoStart, f.fotoEnde].filter(Boolean).map(n => `<img class="foto-mini" data-foto="${esc(n)}" data-act="fotoGross" alt="Foto vom Display">`).join('')}</div>` : ''}</div>
         <div class="list" style="gap:4px;justify-items:end">${badge(f)}${v12Pill(f)}</div></section>`).join('') || '<p class="muted">Keine Fahrten mit diesem Zweck.</p>'}</div>
     <button class="btn block gestrichelt" data-act="ntNeu">+ Fahrt nachtragen</button>
@@ -1065,6 +1071,8 @@ function ntLoeschen() {
   toast('Fahrt gelöscht', () => { eigen.fahrten = vorher; sichern(); render(); devlog.log('fahrt', { schritt: 'löschen rückgängig', id }); });
 }
 // Spur für die Lücken-Erkennung: App sichtbar/verborgen und Bewegung, auch ohne Entwicklermodus
+// Verlauf für alle (src/verlauf.js): wichtige Ereignisse in Klartext, ohne Simulator
+devlog.mitlesen((typ, daten) => { if (!V.sandbox) ereignisse.mitlesen(typ, daten); });
 devlog.mitlesen((typ, daten) => {
   if (!V.sandbox && nt.spurAnhaengen(eigen.spur ??= [], nt.spurZeile(typ, daten, Date.now()))) speichernSpaeter(eigen);
 });
@@ -1261,9 +1269,100 @@ function ohneAkkuOeffnen(i) {
 // ---------- Visuelles Logbuch: Tagestour (SPEC-logbuch.md) ----------
 const privatRadius = () => eigen.privatRadius ?? 400;
 const privatOrte = () => [eigen.zuhause && { name: 'Zuhause', p: eigen.zuhause.p }, ...eigeneLadeorte().map(o => ({ name: o.name, p: o.p }))].filter(Boolean);
+
+// ---------- Notizen (SPEC-konsole.md): bei der Fahrt und in der Tagestour, einzeln wegwischen ----------
+const notizListe = () => eigen.notizen ??= [];
+const notizZahl = f => notizenDerFahrt(f, notizListe(), fahrten()).length;
+const QUELLE_TEXT = { sticky: 'Sticky', teilen: 'geteilt', browser: 'Browser' };
+// Ort auf der Karte, außer im Umkreis privater Orte (wie die Strecke in der Tagestour)
+function notizOrt(n) {
+  const id = n.fahrtId ?? fahrtFuer(n.t, fahrten()), f = fahrten().find(x => x.id === id);
+  const o = ortVon(n, f), r = privatRadius();
+  if (!o) return null;
+  return r && privatOrte().some(p => distanz(p.p, o) < r) ? { privat: true } : { p: [o[0], o[1]], ungefaehr: o[2] };
+}
+// liste: Notizen dieser Ansicht; neu zeichnen nach dem Löschen über V.notizSicht
+function notizBlock(liste) {
+  if (!liste.length) return '';
+  return `<details class="notizen"${V.notizenAuf ? ' open' : ''}><summary>🗒 ${liste.length === 1 ? '1 Notiz' : `${liste.length} Notizen`}</summary>
+    <div class="nz-liste">${liste.map(n => { const o = notizOrt(n); return `<div class="nz" data-nz="${notizListe().indexOf(n)}">
+      <span class="mono">${uhrzeit(n.t)}</span> <span>${esc(n.text)}</span>
+      <span class="small muted">${esc(QUELLE_TEXT[n.quelle] ?? n.quelle)}${o?.privat ? ' · Ort privat, nicht gezeigt' : o?.ungefaehr ? ' · Ort ungefähr' : !o ? ' · ohne Ort' : ''}</span></div>`; }).join('')}</div>
+    <p class="small muted" style="margin:0">Zum Löschen eine Notiz zur Seite wischen.</p>
+    ${V.notizSicht?.art === 'fahrt' && liste.some(n => notizOrt(n)?.p) ? '<div id="nKarte" class="tkarte nkarte" aria-label="Orte der Notizen"></div>' : ''}</details>`;
+}
+let notizKarte = null;
+function notizKarteZeichnen(f, liste) {
+  if (notizKarte) { notizKarte.remove(); notizKarte = null; }
+  const el = $('nKarte'); if (!el || !el.offsetParent) return;
+  const farbe = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#0E8F7E', r = privatRadius();
+  const orte = r ? beruehrt([f], privatOrte(), r) : [], alle = [];
+  notizKarte = L.map(el, { zoomControl: false, attributionControl: true });
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '© OpenStreetMap' }).addTo(notizKarte);
+  for (const ab of unscharf(f.punkte || [], orte.map(o => o.p), r)) { const ll = ab.map(p => [p[0], p[1]]); L.polyline(ll, { color: farbe, weight: 4, opacity: 0.7 }).addTo(notizKarte); alle.push(...ll); }
+  alle.push(...notizMarker(notizKarte, liste));
+  if (alle.length) notizKarte.fitBounds(L.latLngBounds(alle), { padding: [24, 24], maxZoom: 16 });
+}
+// Stecknadeln für Notizen mit Ort; Ergebnis: die Koordinaten für fitBounds
+function notizMarker(karte, liste) {
+  const pts = [];
+  for (const n of liste) {
+    const o = notizOrt(n); if (!o?.p) continue;
+    L.circleMarker(o.p, { radius: 7, color: '#fff', weight: 2, fillColor: '#E0A84A', fillOpacity: 1 })
+      .bindTooltip(`🗒 ${uhrzeit(n.t)} ${n.text.length > 40 ? n.text.slice(0, 39) + '…' : n.text}${o.ungefaehr ? ' (ungefähr)' : ''}`).addTo(karte);
+    pts.push(o.p);
+  }
+  return pts;
+}
+function notizSichtNeu() {
+  const s = V.notizSicht; if (!s || !sheetOffen()) return;
+  if (s.art === 'fahrt' && V.fk) fkSheet(); else if (s.art === 'tag') tagestourSheet(s.tag);
+}
+function notizLoeschen(i) {
+  const n = notizListe()[i]; if (!n) return;
+  notizListe().splice(i, 1); sichern(); V.notizenAuf = true; notizSichtNeu(); render();
+  devlog.log('notizen', { geloescht: n.t });
+  toast('Notiz gelöscht', () => {
+    const l = notizListe(); l.splice(Math.min(i, l.length), 0, n); sichern(); notizSichtNeu(); render();
+    devlog.log('notizen', { zurueck: n.t });
+  });
+}
+// Einzeln zur Seite wischen (links oder rechts), ab gut einem Drittel der Breite gelöscht
+function notizenWischbar(wurzel) {
+  for (const z of wurzel.querySelectorAll('.nz')) {
+    let x0 = null, dx = 0;
+    z.addEventListener('pointerdown', e => { x0 = e.clientX; dx = 0; z.setPointerCapture(e.pointerId); z.style.transition = 'none'; });
+    z.addEventListener('pointermove', e => { if (x0 == null) return; dx = e.clientX - x0; z.style.transform = `translateX(${dx}px)`; z.style.opacity = String(1 - Math.min(0.7, Math.abs(dx) / z.offsetWidth)); });
+    const los = () => {
+      if (x0 == null) return; x0 = null; z.style.transition = '';
+      if (Math.abs(dx) > z.offsetWidth * 0.35) { z.style.transform = `translateX(${Math.sign(dx) * z.offsetWidth}px)`; z.style.opacity = '0'; setTimeout(() => notizLoeschen(Number(z.dataset.nz)), 150); }
+      else { z.style.transform = ''; z.style.opacity = ''; }
+    };
+    z.addEventListener('pointerup', los); z.addEventListener('pointercancel', los);
+  }
+}
+// Neue Notiz (src/notizen.js): speichern, Verlauf und offene Ansichten auffrischen
+function notizNeu(n) {
+  const l = notizListe();
+  if (l.some(x => x.t === n.t && x.text === n.text)) return;   // doppelt abgeholt
+  l.splice(l.findLastIndex(x => x.t <= n.t) + 1, 0, n);
+  if (l.length > 3000) l.splice(0, l.length - 3000);
+  sichern();
+  if (n.quelle === 'teilen') toast(`Notiz übernommen${eigen.offen?.status === 'faehrt' ? ' (zur laufenden Fahrt)' : ''}`);
+  if (V.tab === 'fahrten' && !sheetOffen()) render(); else notizSichtNeu();
+}
+// Letzter Standort für eine neue Notiz: GPS-Punkt (auch beim Warten), sonst die laufende Fahrt, sonst der Abstellort
+function letzterOrt() {
+  const g = V.devGps;
+  if (g?.lat != null && g?.lon != null && V.devGpsT) return { lat: g.lat, lon: g.lon, t: V.devGpsT };
+  const p = eigen.offen?.status === 'faehrt' ? eigen.offen.punkte?.at(-1) : null;
+  if (p) return { lat: p[0], lon: p[1], t: Date.now() };
+  return eigen.parkplatz ? { lat: eigen.parkplatz.p[0], lon: eigen.parkplatz.p[1], t: eigen.parkplatz.t } : null;
+}
 let tourKarte = null;
 function tagestourSheet(tag) {
   const tf = fahrten().filter(f => f.tag === tag); if (!tf.length) return;
+  V.notizSicht = { art: 'tag', tag };
   const t = tagestour(tf), r = privatRadius();
   sheet(`<div class="label">Tagestour · ${esc(tag)}</div>
     <div class="stat3">
@@ -1274,13 +1373,15 @@ function tagestourSheet(tag) {
     <p class="small" style="margin:0">${[t.hm ? `↑ ${t.hm} Hm` : '', t.geladen ? `⚡ +${t.geladen} % geladen` : '', t.kalt ? `❄️ Kaltstart${t.nachtMin != null ? `, Nacht ${t.nachtMin} °C` : ''}` : '', t.km >= 1 && t.verbraucht ? `${de(t.verbraucht / t.km, 2)} %/km` : ''].filter(Boolean).join(' · ')}</p>
     <div id="tKarte" class="tkarte" aria-label="Karte der Tagestour"></div>
     ${tourHoehe(t)}${tourAkku(t)}
-    <div class="list small">${t.fahrten.map(f => `<div class="between"><span>${esc(f.von)}–${esc(f.nach)} · ${km(f.km)}${f.kalt ? ' ❄️' : ''}${f.endeQuelle === 'vorschlag' ? ' <span class="muted">(geschätzt)</span>' : ''}</span><b class="mono">${f.start} → ${f.ende} %</b></div>`).join('')}</div>
+    <div class="list small">${t.fahrten.map(f => `<div class="between"><span>${esc(f.von)}–${esc(f.nach)} · ${km(f.km)}${f.kalt ? ' ❄️' : ''}${f.endeQuelle === 'vorschlag' ? ' <span class="muted">(geschätzt)</span>' : ''}${notizZahl(f) ? ` · 🗒 ${notizZahl(f)}` : ''}</span><b class="mono">${f.start} → ${f.ende} %</b></div>`).join('')}</div>
+    ${notizBlock(notizenDesTages(tag, notizListe(), datum))}
     <p class="small muted" style="margin:0">${r ? `Zuhause und eigene Ladeorte sind auf ${r} m unscharf (Einstellungen).` : 'Unschärfe ist aus (Einstellungen).'} Karte: © OpenStreetMap.</p>
     ${r && !eigen.zuhause ? `<p class="small warn" style="margin:0">Noch kein Zuhause festgelegt: Die Strecke an deiner Haustür ist sichtbar. Einstellungen → „Hier ist Zuhause“.</p>` : ''}
     <button class="btn primary block" data-act="close">Schließen</button>`, 'tour');
-  requestAnimationFrame(() => tourKarteZeichnen(t, r));
+  notizenAnbinden();
+  requestAnimationFrame(() => tourKarteZeichnen(t, r, notizenDesTages(tag, notizListe(), datum)));
 }
-function tourKarteZeichnen(t, r) {
+function tourKarteZeichnen(t, r, notizenTag = []) {
   if (tourKarte) { tourKarte.remove(); tourKarte = null; }
   const el = $('tKarte'); if (!el) return;
   const farbe = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#0E8F7E';
@@ -1299,6 +1400,7 @@ function tourKarteZeichnen(t, r) {
     L.circle(m, { radius: r, color: '#E0A84A', weight: 2, dashArray: '6 6', fillOpacity: 0.12 }).bindTooltip(`${o.name} (unscharf)`, { permanent: true, direction: 'top' }).addTo(tourKarte);
     alle.push(m);
   }
+  alle.push(...notizMarker(tourKarte, notizenTag));
   if (alle.length) tourKarte.fitBounds(L.latLngBounds(alle), { padding: [24, 24] });
   else el.innerHTML = '<p class="small muted" style="padding:12px;margin:0">Für diesen Tag ist keine Strecke aufgezeichnet (nur nachgetragene Fahrten).</p>';
 }
@@ -1396,7 +1498,7 @@ const tracker = createTracker({
   onLog(typ, daten) {
     devlog.log(typ, daten);
     if (typ === 'gps') {
-      V.devGps = daten;
+      V.devGps = daten; V.devGpsT = Date.now();   // auch der Ort neuer Notizen
       // Ende-Dialog offen und das Auto fährt los: Dialog weicht (nur bei echtem Tempo, nicht schon beim Kandidaten)
       if (sheetArt() === 'ende' && document.visibilityState === 'visible') autoWeiter({ kandidatZaehlt: false });
     }
@@ -1572,13 +1674,13 @@ function settingsSheet() {
       ${devlog.aktiv() ? `<p class="small mono muted" id="devInfo" style="margin:0">Logs werden gezählt …</p>
         <div class="grid2"><button class="btn" data-act="devTeilen">Logs teilen</button>${V.devLoeschen
           ? `<button class="btn danger" data-act="devLoeschenJa">Wirklich löschen</button>` : `<button class="btn" data-act="devLoeschen">Logs löschen</button>`}</div>
-        <button class="btn block" data-act="konsole">Konsole: Logs und Sticky-Notizen live</button>
+        <button class="btn block" data-act="konsole">Konsole: Logs und Notizen live</button>
         <label class="switch" for="gpsVoll"><span><b>Warten: volle GPS-Rate</b><br><span class="small muted">Ortet beim Warten jede Sekunde wie früher, für dichte Logs. Kostet viel Handy-Akku (bis 9 h Wachhalten am Tag). Aus: Sparmodus, schaltet erst bei Tempo auf 1 s.</span></span>
           <input type="checkbox" id="gpsVoll" ${eigen.gpsVoll ? 'checked' : ''}></label>
         <div class="field"><label for="ruheTakt">Warten: Ortung in Ruhe alle</label><select id="ruheTakt"${eigen.gpsVoll ? ' disabled' : ''}>${RUHE_TAKTE.map(ms => `<option value="${ms}" ${ms === (eigen.ruheTakt ?? RUHE_TAKT) ? 'selected' : ''}>${ms / 1000} s${ms === RUHE_TAKT ? ' (Standard)' : ''}</option>`).join('')}</select>
           <span class="small muted">Kürzer bemerkt den Fahrtbeginn früher, länger spart Akku. Ohne Entwicklermodus gilt immer ${RUHE_TAKT / 1000} s.</span></div>` : ''}
     </section>
-    ${V.loeschen ? `<p class="small bad" style="margin:0">Alle ${fahrten().length} Fahrten und ${ladungen().length} Ladevorgänge werden gelöscht. Das lässt sich nicht rückgängig machen.</p>
+    ${V.loeschen ? `<p class="small bad" style="margin:0">Alle ${fahrten().length} Fahrten, ${ladungen().length} Ladevorgänge${notizListe().length ? `, ${notizListe().length} Notizen` : ''} und der Verlauf werden gelöscht. Das lässt sich nicht rückgängig machen.</p>
       <div class="grid2"><button class="btn" data-act="loeschenNein">Abbrechen</button><button class="btn danger" data-act="loeschenJa">Endgültig löschen</button></div>`
       : `<button class="btn block danger" data-act="loeschen">Alle Daten löschen</button>`}
     <section class="card list">
@@ -1713,7 +1815,7 @@ document.addEventListener('click', e => {
     }
     case 'fahrtKorr': {
       const f = fahrten().find(x => x.id === d.id); if (!f) break;
-      V.fk = { id: f.id, start: f.start, ende: f.ende, startQ: f.startQuelle, endeQ: f.endeQuelle }; fkSheet(); break;
+      V.fk = { id: f.id, start: f.start, ende: f.ende, startQ: f.startQuelle, endeQ: f.endeQuelle }; V.notizSicht = { art: 'fahrt' }; V.notizenAuf = false; fkSheet(); break;
     }
     case 'fkStart': V.fkRad = 'start'; socSheet('Akku beim Start', V.fk.start, ['fkRadOk', 'Übernehmen'], 'Wert vom Microlino-Display beim Losfahren.'); break;
     case 'fkEnde': V.fkRad = 'ende'; socSheet('Akku am Ende', V.fk.ende, ['fkRadOk', 'Übernehmen'], 'Wert vom Microlino-Display beim Abstellen.'); break;
@@ -1759,7 +1861,8 @@ document.addEventListener('click', e => {
     case 'zielFavorit': zielPruefen(favoriten()[Number(d.i)]); break;
     case 'ohneAkku': ohneAkkuOeffnen(Number(d.i)); break;
     case 'tagAbschluss': tagSheet(); break;
-    case 'tagestour': tagestourSheet(d.tag); break;
+    case 'tagestour': V.notizenAuf = false; tagestourSheet(d.tag); break;
+    case 'verlauf': konsole.oeffnen($('app'), 'verlauf'); break;
     case 'tagSpeichern': tagSpeichern(); break;
     case 'wegeHolen': {
       const r = V.zroute, z = V.zielwahl; if (!r?.start || !z) break;
@@ -1836,20 +1939,20 @@ document.addEventListener('click', e => {
     case 'loeschenNein': V.loeschen = false; settingsSheet(); break;
     case 'loeschenJa': {
       const { erfassung, parkplatzMerken, entwickler, zuhause, favoriten: fav, startlisteGesetzt, ladestrom: a, reserve: rs, ladekarte: lk, ladeErfahrung, fotoExport, bm6: g6, ladeorte, gpsVoll, ruheTakt: rt } = eigen;   // Einstellungen, Ziele, Ladeorte und Lade-Erfahrung bleiben
-      eigen = { ...LEER, akku: eigen.akku, erfassung, parkplatzMerken, entwickler, zuhause, favoriten: fav, startlisteGesetzt, ladestrom: a, reserve: rs, ladekarte: lk, ladeErfahrung, fotoExport, bm6: g6, ladeorte, gpsVoll, ruheTakt: rt }; foto.alleLoeschen(); V.loeschen = false; sichern(); tracker.setModus(zielModus());
+      eigen = { ...LEER, akku: eigen.akku, erfassung, parkplatzMerken, entwickler, zuhause, favoriten: fav, startlisteGesetzt, ladestrom: a, reserve: rs, ladekarte: lk, ladeErfahrung, fotoExport, bm6: g6, ladeorte, gpsVoll, ruheTakt: rt }; foto.alleLoeschen(); ereignisse.loeschen(); V.loeschen = false; sichern(); tracker.setModus(zielModus());
       overlay(''); render(); toast('Alle Daten gelöscht'); break;
     }
     case 'csv':
-      if (navigator.clipboard) navigator.clipboard.writeText(csvText(fahrten(), { fotos: eigen.fotoExport })).then(() => toast('Fahrtenbuch als Text kopiert')).catch(() => toast('Kopieren nicht möglich'));
+      if (navigator.clipboard) navigator.clipboard.writeText(csvText(fahrten(), { fotos: eigen.fotoExport, notizen: notizListe() })).then(() => toast('Fahrtenbuch als Text kopiert')).catch(() => toast('Kopieren nicht möglich'));
       else toast('Kopieren nicht möglich');
       break;
     case 'csvTeilen':
-      teilen(csvText(fahrten(), { fotos: eigen.fotoExport }), eigen.fotoExport ? fotosVon(fahrten()) : [])
+      teilen(csvText(fahrten(), { fotos: eigen.fotoExport, notizen: notizListe() }), eigen.fotoExport ? fotosVon(fahrten()) : [])
         .then(r => { if (r === 'heruntergeladen') toast('CSV heruntergeladen'); })
         .catch(e => { console.warn(e); toast('Teilen nicht möglich'); });
       break;
     case 'csvSpeichern':
-      csvSpeichern(csvText(fahrten(), { fotos: eigen.fotoExport }), eigen.fotoExport ? fotosVon(fahrten()) : [])
+      csvSpeichern(csvText(fahrten(), { fotos: eigen.fotoExport, notizen: notizListe() }), eigen.fotoExport ? fotosVon(fahrten()) : [])
         .then(ort => toast(`Gespeichert: ${ort}${eigen.fotoExport && fotosVon(fahrten()).length ? ` und ${fotosVon(fahrten()).length} Fotos in fotos/` : ''}`))
         .catch(e => { console.warn(e); toast('Speichern nicht möglich. Über „Teilen“ geht es auch, z. B. nach OneDrive.'); });
       break;
@@ -1971,8 +2074,17 @@ function fkSheet() {
     <div class="grid2" style="margin-top:12px"><div class="field"><label>Akku Start</label><button class="btn block mono" data-act="fkStart" aria-label="Akku Start ${k.start} Prozent, zum Ändern tippen">${k.start} %</button></div>
     <div class="field"><label>Akku Ende</label><button class="btn block mono" data-act="fkEnde" aria-label="Akku Ende ${k.ende} Prozent, zum Ändern tippen">${k.ende} %</button></div></div>
     <p class="small bad" id="fkFehler" hidden></p>
+    ${notizBlock(notizenDerFahrt(f, notizListe(), fahrten()))}
     <button class="btn primary block" data-act="fkSpeichern">Speichern</button>
     <button class="btn block" data-act="close">Abbrechen</button>`);
+  notizenAnbinden(() => notizKarteZeichnen(f, notizenDerFahrt(f, notizListe(), fahrten())));
+}
+// Nach dem Zeichnen eines Dialogs mit Notizblock: wischen, Auf/Zu merken, Karte beim Aufklappen
+function notizenAnbinden(karte = null) {
+  const d = $('overlay').querySelector('details.notizen'); if (!d) return;
+  notizenWischbar(d);
+  d.addEventListener('toggle', () => { V.notizenAuf = d.open; if (d.open && karte) requestAnimationFrame(karte); });
+  if (d.open && karte) requestAnimationFrame(karte);
 }
 function fkSpeichern() {
   const k = V.fk, f = fahrten().find(x => x.id === k.id); if (!f) return overlay('');
@@ -1988,6 +2100,7 @@ function fkSpeichern() {
 const ladeEntwurf = () => eigen.ladeEntwurf && Date.now() - eigen.ladeEntwurf.t < 12 * 3600e3 ? eigen.ladeEntwurf : null;
 document.addEventListener('visibilitychange', () => {
   devlog.log('app', { sichtbar: document.visibilityState === 'visible' });
+  if (document.hidden) ereignisse.jetztSichern();   // Android beendet die App im Hintergrund manchmal ohne Vorwarnung
   if (document.visibilityState !== 'visible') { sichern(); devlog.flush(); return; }   // beim Wegwechseln sofort sichern
   waechter();
   if (!sheetOffen()) { if (V.fahrtAnsicht) fahrtAnzeigeAktualisieren(); else render(); }
@@ -2008,7 +2121,8 @@ window.addEventListener('unhandledrejection', e => devlog.log('fehler', { quelle
   // Zuhause legt jeder selbst fest, sonst läge auch die Unschärfe im Logbuch um Bexbach statt um das eigene Haus.
   // Wer die Liste schon hat (startlisteGesetzt), behält sie.
   if (eigen.entwickler) await devlog.setAktiv(true);
-  notizen.starten();
+  notizen.starten({ ort: letzterOrt, neu: notizNeu });
+  ereignisse.laden().then(() => { if (V.tab === 'fahrten' && !sheetOffen()) render(); });
   devlog.log('app', { start: true, offen: eigen.offen?.status ?? null, erfassung: eigen.erfassung, fahrten: eigen.fahrten.length });
   render();
   if (NATIV) LocalNotifications.addListener('localNotificationActionPerformed', a => { devlog.log('meldung', { getippt: a?.notification?.id }); setTimeout(pruefeOffen, 300); }).catch(() => {});
