@@ -3,6 +3,13 @@
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
 ## Noch nicht in einer APK
+- **Tempolimits überall:** Die App baut den Cache für das Zuhause selbst aus Overpass (OpenStreetMap), nicht mehr aus
+  den Kacheln für Saarland/RLP auf GitHub Pages. Standard 25 km (≈ 35 Kacheln), „Auf 40 km erweitern“ lädt nur
+  die fehlenden nach. Je 0,1°-Kachel eine kleine Abfrage, mit Pause,
+  Wartezeit bei Überlast und Ersatzserver; Fortschritt „Kachel x von n“, ein Abbruch macht dort weiter. Umrechnung
+  gemeinsam mit dem Prüfwerkzeug in `src/tempolimit-osm.js`, implizite Werte als Ländertabelle (DE, CH, AT, IT, FR),
+  verkehrsberuhigt/Begegnungszone je Land. Neu ausgewertet wird auch `maxspeed:type` (z. B. `DE:rural`), daher in
+  Bexbach einige Straßen mehr mit Limit. Die alten Kacheln (`docs/tempolimit/`, 16 MB) sind aus dem Repo entfernt. Tests `tests/tempolimit-osm.test.js`. SPEC-tempolimit.md „Cache aus Overpass“
 - **Winterzuschlag pauschal** statt des gelernten Kältezuschlags (der griff erst mit je 3 Fahrten unter und über 5 °C,
   stand also bei 0): unter 10 °C +10 %, unter 5 °C +20 %, unter 0 °C +30 %, für Heizen und kalten Akku zusammen.
   Gilt für Reichweite, Ziel-Check, Schätzung während der Fahrt und Tagesabschluss. Der gelernte Verbrauch wird je

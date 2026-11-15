@@ -1523,11 +1523,13 @@ async function erfassungSetzen(an) {
 // Einstellungen → Tempolimit: laden, Stand, Namensnennung (ODbL)
 function tlEinstellung() {
   const t = tempolimit.info(), weit = t && eigen.zuhause && distanz(t.zuhause, eigen.zuhause.p) > 5000;
-  return `<p class="small" style="margin:0">Zeigt während der Fahrt das Tempolimit der Straße als großes Schild. Nur Anzeige, keine Warnung und kein Ton; das Display bleibt dabei an. Daten: ${tempolimit.QUELLE} (OpenStreetMap, ODbL), Saarland und Rheinland-Pfalz. Ohne Eintrag zeigt das Schild „?“.</p>
+  return `<p class="small" style="margin:0">Zeigt während der Fahrt das Tempolimit der Straße als großes Schild. Nur Anzeige, keine Warnung und kein Ton; das Display bleibt dabei an. Ohne Eintrag zeigt das Schild „?“.</p>
+    <p class="small muted" style="margin:0">Daten: ${tempolimit.QUELLE} (OpenStreetMap, ODbL), geladen über Overpass. Die App holt sie selbst für ${tempolimit.RADIUS_KM} km um dein Zuhause, überall auf der Welt. Das sind etwa 35 kleine Abfragen an einen öffentlichen Server, je nach dessen Auslastung 5–30 Minuten; App dabei offen lassen. Bricht es ab, macht der Knopf dort weiter. „Auf ${tempolimit.RADIUS_GROSS_KM} km erweitern“ holt danach etwa 45 Abfragen dazu. Danach braucht das Schild kein Netz.</p>
     <p class="small warn" style="margin:0"><b>Nur zur Orientierung.</b> Es gelten immer die Schilder an der Straße. Die Daten können veraltet oder falsch sein; Baustellen, Wechselschilder und zeitliche Limits fehlen ganz.</p>
     ${t ? `<label class="switch" for="tlSchildAn"><span><b>Schild während der Fahrt zeigen</b><br><span class="small muted">Aus: nur der Akku oben, Display bleibt trotzdem wach.</span></span><input type="checkbox" id="tlSchildAn" ${eigen.tlSchild !== false ? 'checked' : ''}></label>` : ''}
     ${t ? `<p class="small muted" style="margin:0">${t.stuecke} Straßenstücke im Umkreis von ${t.radiusKm} km · Stand ${esc(t.stand.split('-').reverse().join('.'))} · geladen ${datum(t.geladen)}${weit ? ' · <span class="warn">gilt für das alte Zuhause</span>' : ''}</p>` : ''}
-    ${eigen.zuhause ? `<div class="grid2"><button class="btn${t ? '' : ' block'}" data-act="tlLaden"${V.tlLaeuft ? ' disabled' : ''}>${V.tlLaeuft ? `Lade … ${V.tlLaeuft}` : t ? 'Neu laden' : `Tempolimits laden (${tempolimit.RADIUS_KM} km, etwa 4 MB)`}</button>${t ? `<button class="btn" data-act="tlWeg">Entfernen</button>` : ''}</div>`
+    ${eigen.zuhause ? `<div class="grid2"><button class="btn${t ? '' : ' block'}" data-act="tlLaden"${V.tlLaeuft ? ' disabled' : ''}>${V.tlLaeuft ? `${V.tlLaeuft}` : t ? 'Neu laden' : `Tempolimits laden (${tempolimit.RADIUS_KM} km)`}</button>${t ? `<button class="btn" data-act="tlWeg">Entfernen</button>` : ''}</div>
+      ${t && !weit && t.radiusKm < tempolimit.RADIUS_GROSS_KM && !V.tlLaeuft ? `<button class="btn block" data-act="tlErweitern">Auf ${tempolimit.RADIUS_GROSS_KM} km erweitern</button>` : ''}`
       : '<p class="small muted" style="margin:0">Dafür zuerst „Hier ist Zuhause“ tippen.</p>'}`;
 }
 function settingsSheet() {
@@ -1806,12 +1808,15 @@ document.addEventListener('click', e => {
         .finally(() => { V.ladeLaeuft = null; if ($('ladekarte')) settingsSheet(); render(); });
       break;
     }
-    case 'tlLaden': {
+    case 'tlLaden': case 'tlErweitern': {
       if (!eigen.zuhause || V.tlLaeuft) break;
-      V.tlLaeuft = 'startet'; settingsSheet();
-      tempolimit.herunterladen(eigen.zuhause.p, (i, n) => { V.tlLaeuft = `${i + 1} von ${n}`; if ($('ladekarte')) settingsSheet(); })
-        .then(d => { devlog.log('tempolimit', { geladen: d.stuecke, bytes: d.bytes, stand: d.stand }); toast(`Tempolimits geladen (${de(d.bytes / 1e6, 1)} MB), gehen jetzt offline`); })
-        .catch(e => { toast(`Tempolimits nicht geladen: ${e.message}`); devlog.log('fehler', { quelle: 'tempolimit', text: e.message }); })
+      V.tlLaeuft = 'Lade …'; settingsSheet();
+      const gross = d.act === 'tlErweitern';
+      tempolimit.herunterladen(eigen.zuhause.p, (i, n) => { V.tlLaeuft = `Kachel ${i} von ${n}`; if ($('ladekarte')) settingsSheet(); },
+        { km: gross ? tempolimit.RADIUS_GROSS_KM : tempolimit.RADIUS_KM, erweitern: gross,
+          onVersuch: v => devlog.log('tempolimit', { overpass: v.server, versuch: v.versuch, fehler: v.fehler }) })
+        .then(d => { devlog.log('tempolimit', { geladen: d.stuecke, kacheln: d.kacheln, abgefragt: d.abgefragt, km: d.radiusKm, bytes: d.bytes, stand: d.stand }); toast(`Tempolimits geladen (${de(d.bytes / 1e6, 1)} MB), gehen jetzt offline`); })
+        .catch(e => { toast(`Tempolimits nicht fertig (${e.message}). Später noch mal tippen, es geht dort weiter.`); devlog.log('fehler', { quelle: 'tempolimit', text: e.message }); })
         .finally(() => { V.tlLaeuft = null; if ($('ladekarte')) settingsSheet(); });
       break;
     }

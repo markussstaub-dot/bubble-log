@@ -1,17 +1,28 @@
 // Tempolimit groß anzeigen (SPEC-tempolimit.md): OSM-maxspeed um das Zuhause offline, Zuordnung GPS → Straße.
-// Kacheln zu 0,1° aus docs/tempolimit/ (GitHub Pages, erzeugt mit tools/tempolimit.mjs) einmal herunterladen und als
-// Datei speichern (≈ 4–5 MB, zu groß für Preferences). Vorlage: ladecache.js.
+// Seit 15.11.2026 baut die App den Cache selbst aus Overpass (überall auf der Welt, kein eigenes Hosting): je Kachel zu
+// 0,1° eine kleine Abfrage, Umrechnung in src/tempolimit-osm.js, Ergebnis als Datei (≈ 4–5 MB, zu groß für Preferences).
 //
 // Limit-Code wie in den Kacheln: Zahl = km/h, 0 = keine Begrenzung, -1 = Schrittgeschwindigkeit, null = unbekannt („?“);
 // -2 nur in den Kacheln: Einbahnstraße in dieser Richtung, wird nie zugeordnet.
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
+import { KACHEL, kachelVon, overpassAbfrage, ausOverpass } from './tempolimit-osm.js';
 
 const NATIV = Capacitor.isNativePlatform();
 const DATEI = 'tempolimit.json';
-const BASIS = import.meta.env?.DEV ? '/docs/tempolimit/' : 'https://markussstaub-dot.github.io/bubble-log/tempolimit/';
-export const RADIUS_KM = 40;
+const TEIL = 'tempolimit-teil';   // fertige Kacheln eines laufenden Ladens, damit ein Abbruch dort weitermacht
+export const RADIUS_KM = 25;        // Standard: Alltagsradius, ≈ 35 Kacheln (Markus 15.11.2026)
+export const RADIUS_GROSS_KM = 40;  // „Auf 40 km erweitern“ lädt nur die fehlenden Kacheln nach
 export const QUELLE = '© OpenStreetMap-Mitwirkende';
+// Overpass (SPEC-tempolimit.md „Cache aus Overpass“): nacheinander, Pause zwischen den Kacheln, bei Überlast warten,
+// dann der nächste Server. Einen User-Agent kann eine Web-App nicht setzen (verbotener Header).
+export const OVERPASS = {
+  SERVER: ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter'],
+  PAUSE: 1000,                       // ms zwischen zwei Kacheln
+  WARTEN: [10000, 30000, 60000],     // ms nach 429/504/Timeout, danach nächster Server
+  TIMEOUT: 120000,                   // ms je Abfrage
+  RUNDEN: 2,                         // so oft alle Server durchprobieren, bevor das Laden abbricht (weiter beim nächsten Tippen)
+};
 
 // Zuordnung (Spec: ≈ 20 m, ≈ 45°, Wechsel nach 2–3 gleichen Fixes)
 export const ZUORDNUNG = {
@@ -23,7 +34,6 @@ export const ZUORDNUNG = {
 };
 
 const R = 6371000, RAD = Math.PI / 180, EINBAHN = -2;
-const KACHEL = 10;   // pro Grad
 
 // Kacheln, deren Rechteck den Kreis berührt
 export function kachelnUm([lat, lon], km = RADIUS_KM) {
@@ -37,11 +47,37 @@ export function kachelnUm([lat, lon], km = RADIUS_KM) {
   return out;
 }
 
-async function json(url) {
-  const r = await fetch(url, { signal: AbortSignal.timeout(30000) });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return r.json();
+const schlafen = ms => new Promise(r => setTimeout(r, ms));
+// Eine Kachel von Overpass, mit Wartezeiten und Ersatzserver. Gibt die Antwort (JSON) zurück oder wirft.
+export async function overpassKachel(key, { fetchFn = fetch, warten = schlafen, S = OVERPASS, onVersuch = () => {} } = {}) {
+  let letzter;
+  for (let runde = 0; runde < (S.RUNDEN ?? 1); runde++) for (const server of S.SERVER) {
+    for (let v = 0; v <= S.WARTEN.length; v++) {
+      try {
+        const r = await fetchFn(server, {
+          method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: 'data=' + encodeURIComponent(overpassAbfrage(key)), signal: AbortSignal.timeout(S.TIMEOUT),
+        });
+        if (r.ok) {
+          const j = await r.json();
+          if (!/runtime error|timed out|out of memory/i.test(j.remark ?? '')) return j;
+          letzter = new Error(`Overpass: ${j.remark}`);
+        } else {
+          letzter = new Error(`HTTP ${r.status}`);
+          if (![429, 502, 503, 504].includes(r.status)) break;   // anderer Fehler: gleich nächster Server
+        }
+      } catch (e) { letzter = e; }
+      onVersuch({ server, runde: runde + 1, versuch: v + 1, fehler: letzter.message });
+      if (v < S.WARTEN.length) await warten(S.WARTEN[v]);
+    }
+  }
+  throw letzter;
 }
+
+const fs = { directory: Directory.Data, encoding: Encoding.UTF8 };
+async function leseJson(path) { try { return JSON.parse((await Filesystem.readFile({ path, ...fs })).data); } catch { return null; } }
+const schreibeJson = (path, d) => Filesystem.writeFile({ path, data: JSON.stringify(d), recursive: true, ...fs });
+const teilWeg = () => Filesystem.rmdir({ path: TEIL, directory: Directory.Data, recursive: true }).catch(() => {});
 
 // ---------- Daten ----------
 let daten = null;      // { stand, quelle, zuhause, radiusKm, geladen, w: [[id, vor, rück, c], …] }
@@ -63,20 +99,44 @@ function aufbauen(d) {
   });
 }
 
-export async function herunterladen(zuhause, fortschritt = () => {}) {
-  const index = await json(BASIS + 'index.json');
-  const keys = kachelnUm(zuhause).filter(k => index.kacheln[k]);
-  if (!keys.length) throw new Error('Für diesen Ort gibt es keine Tempolimit-Daten (nur Saarland und Rheinland-Pfalz).');
-  const w = [];
+// Cache für das Zuhause bauen. fortschritt(fertig, n) nach jeder Kachel. Ein abgebrochenes Laden für dasselbe Zuhause
+// macht an der letzten fertigen Kachel weiter (Teildateien in TEIL). opt.km: Umkreis (Standard RADIUS_KM);
+// opt.erweitern: Kacheln aus dem vorhandenen Cache übernehmen, nur die fehlenden laden. opt.fetchFn/warten für Tests,
+// opt.onVersuch fürs Devlog.
+export async function herunterladen(zuhause, fortschritt = () => {}, opt = {}) {
+  const km = opt.km ?? RADIUS_KM, keys = kachelnUm(zuhause, km), kopf = { zuhause: zuhause.map(x => +x.toFixed(4)) };
+  const alt = await leseJson(`${TEIL}/kopf.json`);
+  if (!alt || JSON.stringify(alt.zuhause) !== JSON.stringify(kopf.zuhause)) { await teilWeg(); await schreibeJson(`${TEIL}/kopf.json`, kopf); }
+  const vorhanden = opt.erweitern ? vorhandeneKacheln(zuhause) : null;
+  const w = [], staende = [];
+  let abgefragt = 0;
   for (const [i, k] of keys.entries()) {
-    fortschritt(i, keys.length);
-    w.push(...(await json(`${BASIS}${k}.json`)).w);
+    let teil = vorhanden?.has(k) ? { w: vorhanden.get(k), stand: daten.stand } : await leseJson(`${TEIL}/${k}.json`);
+    if (!teil) {
+      if (abgefragt++ && OVERPASS.PAUSE) await (opt.warten ?? schlafen)(OVERPASS.PAUSE);
+      teil = ausOverpass(await overpassKachel(k, opt), k);
+      await schreibeJson(`${TEIL}/${k}.json`, teil);
+    }
+    w.push(...teil.w); if (teil.stand) staende.push(teil.stand);
+    fortschritt(i + 1, keys.length);
   }
-  const d = { stand: index.stand, quelle: index.quelle, zuhause, radiusKm: RADIUS_KM, geladen: Date.now(), w };
+  const d = { stand: staende.sort()[0] ?? new Date().toISOString().slice(0, 10), quelle: `${QUELLE} (ODbL), über Overpass`, zuhause, radiusKm: km, geladen: Date.now(), w };
   const text = JSON.stringify(d);
-  await Filesystem.writeFile({ path: DATEI, data: text, directory: Directory.Data, encoding: Encoding.UTF8 });
+  await Filesystem.writeFile({ path: DATEI, data: text, ...fs });
+  await teilWeg();
   aufbauen(d);
-  return { ...info(), bytes: text.length };
+  return { ...info(), bytes: text.length, kacheln: keys.length, abgefragt };
+}
+// Vorhandener Cache für dasselbe Zuhause → Map(kachel → Einträge) für alle Kacheln seines Umkreises (auch leere).
+// Jedes Stück liegt ganz in einer Kachel (tempolimit-osm.js teilen), die Mitte seines ersten Segments sagt welche.
+export function vorhandeneKacheln(zuhause) {
+  if (!daten?.zuhause || !daten.radiusKm || Math.abs(daten.zuhause[0] - zuhause[0]) > 1e-4 || Math.abs(daten.zuhause[1] - zuhause[1]) > 1e-4) return null;
+  const keys = kachelnUm(zuhause, daten.radiusKm), m = new Map(keys.map(k => [k, []]));
+  for (const e of daten.w) {
+    const c = e[3], k = kachelVon((c[0] + c[2] / 2) / 1e5, (c[1] + c[3] / 2) / 1e5);
+    (m.get(k) ?? m.get(keys[0])).push(e);   // gerundet knapp über die Grenze: trotzdem behalten
+  }
+  return m;
 }
 
 export async function laden() {
@@ -88,6 +148,7 @@ export async function laden() {
 
 export async function loeschen() {
   daten = stuecke = nah = null;
+  await teilWeg();
   await Filesystem.deleteFile({ path: DATEI, directory: Directory.Data }).catch(() => {});
 }
 

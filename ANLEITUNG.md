@@ -78,12 +78,19 @@ oder das GPS schon Bewegung meldet (Kandidat) und die App vorn ist, bleibt das D
 (`Fahrsensoren.bildschirmWach`: Fenster-Flag und `setKeepScreenOn`, dazu Screen Wake Lock). Devlog `display`: `wach`,
 `flag`/`view` (vom Plugin bestätigt), `wakeLock`, bei Fehlschlag `fehlgeschlagen`.
 
-- **Daten:** OSM `maxspeed` (bzw. `maxspeed:forward/backward`, `zone:maxspeed`, verkehrsberuhigt = Schritt), ODbL,
-  „© OpenStreetMap-Mitwirkende“. Einstellungen → Tempolimit lädt die Kacheln im Umkreis von 40 km um Zuhause
-  (≈ 3,8 MB) und speichert sie als Datei `tempolimit.json` (`Directory.Data`, nicht Preferences).
-- **Kacheln erzeugen:** Extrakte von https://download.geofabrik.de/europe/germany/ (Saarland, Rheinland-Pfalz) laden,
-  dann `node tools/tempolimit.mjs saarland-latest.osm.pbf rheinland-pfalz-latest.osm.pbf` (≈ 15 s). Ergebnis:
-  0,1°-Kacheln in `docs/tempolimit/` (≈ 15 MB) mit `index.json`; nach dem Push liegen sie auf GitHub Pages.
+- **Daten:** OSM `maxspeed` (bzw. `maxspeed:forward/backward`, `zone:maxspeed`, `source:maxspeed`, `maxspeed:type`,
+  verkehrsberuhigt je Land), ODbL, „© OpenStreetMap-Mitwirkende“. Umrechnung in `src/tempolimit-osm.js`, implizite
+  Werte (`CH:rural` …) in der Tabelle `LAENDER` (DE, CH, AT, IT, FR).
+- **Laden aus Overpass** (seit 15.11.2026, überall auf der Welt): Einstellungen → Tempolimit holt für jede 0,1°-Kachel
+  im Umkreis von 25 km um Zuhause (≈ 35 Kacheln; „Auf 40 km erweitern“ übernimmt die
+  vorhandenen und holt ≈ 45 dazu) eine kleine Overpass-Abfrage, nacheinander mit 1 s Pause.
+  Bei 429/50x/Timeout 10, 30, 60 s warten, dann Ersatzserver (`OVERPASS` in `src/tempolimit.js`). Fertige Kacheln
+  liegen in `tempolimit-teil/`, ein Abbruch macht beim nächsten Tippen dort weiter. Am Ende entsteht
+  `tempolimit.json` (`Directory.Data`, nicht Preferences), gleiches Format wie früher. Devlog `tempolimit` mit
+  `overpass`/`versuch`/`fehler` bei jedem Fehlversuch.
+- **Prüfwerkzeug:** `node tools/tempolimit.mjs saarland-latest.osm.pbf rheinland-pfalz-latest.osm.pbf` baut dieselben
+  Kacheln aus Geofabrik-Extrakten nach `docs/tempolimit/` (früherer Weg, zum Vergleich; seit 15.11.2026 nicht
+  mehr im Repo und in `.gitignore`).
   Straßen ohne Limit sind mit dabei, damit die App dort „?“ zeigt und nicht die Nachbarstraße nimmt; Einbahnstraßen
   sperren die Gegenrichtung (sonst nähme die Autobahn die Gegenfahrbahn).
 - **Zuordnung** (`src/tempolimit.js`, Werte in `ZUORDNUNG`): nächster Abschnitt bis 20 m, Fahrtrichtung höchstens 45°
@@ -93,7 +100,7 @@ oder das GPS schon Bewegung meldet (Kandidat) und die App vorn ist, bleibt das D
   Position; beim Laden `geladen`, `bytes`, `stand`. Codes: Zahl = km/h, 0 = keine Begrenzung, -1 = Schritt, null = „?“.
 - **Im Sim-Tab** zeigt ein kleineres Schild oben rechts auf der Karte dasselbe.
 - Fehlt: Baustellen, Wechselverkehrszeichen, zeitliche Limits (`maxspeed:conditional`), Gebiete außerhalb von
-  Saarland und Rheinland-Pfalz.
+  25 bzw. 40 km um Zuhause.
 
 ## Sensoren während einer Fahrt
 
@@ -336,8 +343,9 @@ die Fahrt dort und die App fragt den Akkustand ab.
 | `src/route.js` | Ziel-Check: Ortssuche, Straßenroute, Höhenmeter entlang der Route |
 | `src/laden.js`, `src/ladepunkte.json` | Ladepunkte offline: Umkreis, entlang der Route, Ladezeit |
 | `tools/ladepunkte.mjs` | erzeugt `ladepunkte.json` aus dem Ladesäulenregister |
-| `src/tempolimit.js` | Tempolimit: Kacheln laden/speichern, Zuordnung GPS → Straße, Schild, Display wach (Tests: `tests/tempolimit.test.js`) |
-| `tools/tempolimit.mjs`, `docs/tempolimit/` | erzeugt die Tempolimit-Kacheln aus Geofabrik-Extrakten (eigener kleiner PBF-Leser) |
+| `src/tempolimit-osm.js` | Tempolimit: OSM-Tags → Limit, Ländertabelle, Vereinfachen/Teilen, Overpass-Abfrage (Tests: `tests/tempolimit-osm.test.js`) |
+| `src/tempolimit.js` | Tempolimit: Kacheln aus Overpass laden/speichern, Zuordnung GPS → Straße, Schild, Display wach (Tests: `tests/tempolimit.test.js`) |
+| `tools/tempolimit.mjs` | Prüfwerkzeug: Tempolimit-Kacheln aus Geofabrik-Extrakten (eigener kleiner PBF-Leser), nur lokal |
 | `src/fahrsim.js` | Sim-Tab: Fahrphysik (auch Joystick), 2D-Karte, Mini-Microlino |
 | `src/simtab.js` | Sim-Tab: Oberfläche, Anzeige, Joystick/Tasten, Umschalten auf 3D |
 | `src/sim3d/` | 3D-Ansicht: `index.js` (Bild, Kameras), `microlino.js`, `welt.js` (Sim-Welt, Kollision), `licht.js`, `ziele.js`, `geo.js` |

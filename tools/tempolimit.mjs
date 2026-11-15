@@ -1,47 +1,23 @@
-// Tempolimits aus OpenStreetMap (SPEC-tempolimit.md): Geofabrik-Extrakte (.osm.pbf) → Kacheln zu 0,1° × 0,1° in
-// docs/tempolimit/ (GitHub Pages). Die App lädt die Kacheln im Umkreis von 40 km um das Zuhause (src/tempolimit.js).
+// Tempolimits aus OpenStreetMap (SPEC-tempolimit.md), Prüfwerkzeug: Geofabrik-Extrakte (.osm.pbf) → Kacheln zu
+// 0,1° × 0,1° in docs/tempolimit/. Die App baut ihren Cache seit 15.11.2026 selbst aus Overpass (src/tempolimit.js);
+// beide benutzen dieselbe Umrechnung (src/tempolimit-osm.js), die Kacheln hier dienen zum Vergleich.
 //
-// Aufruf: node tools/tempolimit.mjs <saarland-latest.osm.pbf> <rheinland-pfalz-latest.osm.pbf> [--bbox S,W,N,O]
-// Extrakte: https://download.geofabrik.de/europe/germany/  (Overpass taugt für große Gebiete nicht, 07.11.2026 überlastet)
+// Aufruf: node tools/tempolimit.mjs <saarland-latest.osm.pbf> <rheinland-pfalz-latest.osm.pbf> [--bbox S,W,N,O] [--land DE]
+// Extrakte: https://download.geofabrik.de/europe/germany/
 //
-// Kachel „493_72“ = südwestliche Ecke 49,3° N / 7,2° O. Inhalt: { w: [[wegId, vor, rück, [lat0, lon0, dLat, dLon, …]], …] }
-//   vor/rück: Limit in Wegrichtung bzw. dagegen (maxspeed:forward/backward vor maxspeed): km/h, 0 = keine Begrenzung
-//   („none“), -1 = Schrittgeschwindigkeit („walk“), -2 = Einbahnstraße, diese Richtung gibt es nicht, null = unbekannt. Koordinaten in 1e-5 Grad, ab dem 2. Punkt als
-//   Differenz. Straßen ohne Limit sind mit null dabei, damit die App dort „?“ zeigt statt die Nachbarstraße zu nehmen.
-//   Geometrie vereinfacht (Douglas-Peucker, 5 m). Lange Wege werden an den Kachelgrenzen geteilt.
+// Format der Kacheln und Umrechnung: src/tempolimit-osm.js.
 // Eigener kleiner PBF-Leser (Blob → zlib → PrimitiveBlock) mit dem Paket pbf, kein osmium nötig.
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { inflateSync } from 'node:zlib';
 import { PbfReader } from 'pbf';
+import { wegLimits, landAusTags, teilen, strecke } from '../src/tempolimit-osm.js';
 
 const args = process.argv.slice(2);
 const bboxArg = args.includes('--bbox') ? args.splice(args.indexOf('--bbox'), 2)[1].split(',').map(Number) : null;
+const LAND = args.includes('--land') ? args.splice(args.indexOf('--land'), 2)[1] : 'DE';   // für living_street ohne Limit
 const dateien = args;
 if (!dateien.length) { console.error('Aufruf: node tools/tempolimit.mjs <extrakt.osm.pbf> […] [--bbox S,W,N,O]'); process.exit(1); }
 const ZIEL = new URL('../docs/tempolimit/', import.meta.url);
-const TOLERANZ = 5;   // m, Vereinfachung
-const KACHEL = 10;    // Kacheln pro Grad (0,1°)
-
-// Straßen, auf denen ein Auto fährt. service/track nur, wenn ein Limit dran steht (sonst Parkplätze und Einfahrten en masse).
-const STRASSEN = new Set(['motorway', 'motorway_link', 'trunk', 'trunk_link', 'primary', 'primary_link', 'secondary', 'secondary_link',
-  'tertiary', 'tertiary_link', 'unclassified', 'residential', 'living_street', 'road']);
-const NUR_MIT_LIMIT = new Set(['service', 'track']);
-
-// maxspeed-Wert → km/h | 0 (none) | -1 (walk) | null
-const IMPLIZIT = { 'DE:urban': 50, 'DE:rural': 100, 'DE:motorway': 0, 'DE:living_street': -1, 'DE:bicycle_road': 30, 'DE:zone30': 30, 'DE:zone:30': 30, 'DE:zone20': 20, 'DE:zone:20': 20, 'DE:zone10': 10, 'DE:zone:10': 10 };
-export function limit(v) {
-  if (v == null) return null;
-  v = v.trim();
-  if (v === 'none') return 0;
-  if (v === 'walk') return -1;
-  if (v in IMPLIZIT) return IMPLIZIT[v];
-  const m = /^(\d{1,3})(\s*mph)?$/.exec(v);
-  if (!m) return null;   // signals, variable, „50;30“ …
-  return m[2] ? Math.round(Number(m[1]) * 1.609) : Number(m[1]);
-}
-// zone:maxspeed=DE:30 bzw. source:maxspeed=DE:zone30 als Ersatz, wenn maxspeed fehlt
-const zone = t => limit(t['zone:maxspeed']?.replace(/^DE:(\d+)$/, '$1')) ?? (t['source:maxspeed'] in IMPLIZIT ? IMPLIZIT[t['source:maxspeed']] : null);
-
 // ---------- PBF lesen ----------
 function* bloecke(datei) {
   const buf = readFileSync(datei);
@@ -116,14 +92,9 @@ for (const d of dateien) {
   for (const blk of bloecke(d)) {
     if (blk.typ !== 'OSMData') continue;
     wege(block(blk.daten), (id, t, refs) => {
-      const hw = t.highway; if (!hw || gefunden.has(id) || t.area === 'yes') return;
-      const allg = limit(t.maxspeed) ?? zone(t) ?? (hw === 'living_street' ? -1 : null);   // verkehrsberuhigt = Schritt (StVO)
-      let f = limit(t['maxspeed:forward']) ?? allg, b = limit(t['maxspeed:backward']) ?? allg;
-      // Einbahnstraße: Gegenrichtung gibt es nicht (-2), sonst nähme die App auf der Autobahn die Gegenfahrbahn
-      const ow = t.oneway, einbahn = ['yes', 'true', '1'].includes(ow) || (ow !== 'no' && (hw === 'motorway' || ['roundabout', 'circular'].includes(t.junction)));
-      if (einbahn) b = -2; else if (ow === '-1') f = -2;
-      if (!STRASSEN.has(hw) && !(NUR_MIT_LIMIT.has(hw) && (f != null || b != null))) return;
-      gefunden.set(id, { f, b, refs, klasse: hw.replace('_link', '') }); refAnzahl += refs.length;
+      if (!t.highway || gefunden.has(id)) return;
+      const l = wegLimits(t, landAusTags(t) ?? LAND); if (!l) return;
+      gefunden.set(id, { ...l, refs }); refAnzahl += refs.length;
     });
   }
   console.log(`${d}: ${gefunden.size} Wege bisher`);
@@ -148,50 +119,19 @@ for (const d of dateien) {
 }
 
 // ---------- Vereinfachen, teilen, schreiben ----------
-const R = 6371000, RAD = Math.PI / 180;
-function douglasPeucker(pkt) {   // pkt: [[lat, lon]], Toleranz in Metern (lokal eben)
-  if (pkt.length < 3) return pkt;
-  const k = Math.cos(pkt[0][0] * RAD), xy = pkt.map(([a, b]) => [b * RAD * R * k, a * RAD * R]);
-  const behalten = new Uint8Array(pkt.length); behalten[0] = behalten[pkt.length - 1] = 1;
-  const stapel = [[0, pkt.length - 1]];
-  while (stapel.length) {
-    const [s, e] = stapel.pop(); let max = 0, idx = -1;
-    const [x1, y1] = xy[s], [x2, y2] = xy[e], dx = x2 - x1, dy = y2 - y1, l2 = dx * dx + dy * dy;
-    for (let i = s + 1; i < e; i++) {
-      const [x, y] = xy[i]; let t = l2 ? ((x - x1) * dx + (y - y1) * dy) / l2 : 0; t = Math.max(0, Math.min(1, t));
-      const d = Math.hypot(x - (x1 + t * dx), y - (y1 + t * dy)); if (d > max) { max = d; idx = i; }
-    }
-    if (max > TOLERANZ) { behalten[idx] = 1; stapel.push([s, idx], [idx, e]); }
-  }
-  return pkt.filter((_, i) => behalten[i]);
-}
-const kachelVon = (a, b) => `${Math.floor(a * KACHEL)}_${Math.floor(b * KACHEL)}`;
 const imBereich = ([a, b]) => !bboxArg || (a >= bboxArg[0] && b >= bboxArg[1] && a <= bboxArg[2] && b <= bboxArg[3]);
 const kacheln = new Map(), statistik = {};
 let fehlend = 0, punkte = 0;
-const strecke = p => { let s = 0; for (let i = 1; i < p.length; i++) { const k = Math.cos(p[i][0] * RAD); s += R * RAD * Math.hypot(p[i][0] - p[i - 1][0], (p[i][1] - p[i - 1][1]) * k); } return s; };
 for (const [id, w] of gefunden) {
   const roh = [];
   for (const r of w.refs) { const i = suche(r); if (i < 0 || Number.isNaN(lat[i])) { fehlend++; continue; } roh.push([lat[i], lon[i]]); }
   if (roh.length < 2 || !roh.some(imBereich)) continue;
   const st = statistik[w.klasse] ??= { km: 0, mit: 0 }, km = strecke(roh) / 1000;
   st.km += km; if ((w.f ?? -2) !== -2 || (w.b ?? -2) !== -2) st.mit += km;
-  const p = douglasPeucker(roh);
-  // an Kachelgrenzen teilen: jedes Teilstück gehört zur Kachel seiner Mitte
-  let stueck = [p[0]], kachel = null;
-  const abgeben = () => {
-    if (stueck.length < 2) return;
-    const c = []; let la0 = 0, lo0 = 0;
-    for (const [a, b] of stueck) { const A = Math.round(a * 1e5), B = Math.round(b * 1e5); c.push(A - la0, B - lo0); la0 = A; lo0 = B; }
-    if (!kacheln.has(kachel)) kacheln.set(kachel, []);
-    kacheln.get(kachel).push([id, w.f, w.b, c]); punkte += stueck.length;
-  };
-  for (let i = 1; i < p.length; i++) {
-    const k = kachelVon((p[i - 1][0] + p[i][0]) / 2, (p[i - 1][1] + p[i][1]) / 2);
-    if (kachel && k !== kachel) { abgeben(); stueck = [p[i - 1]]; }
-    kachel = k; stueck.push(p[i]);
-  }
-  abgeben();
+  teilen(id, w.f, w.b, roh, (k, eintrag) => {
+    if (!kacheln.has(k)) kacheln.set(k, []);
+    kacheln.get(k).push(eintrag); punkte += eintrag[3].length / 2;
+  });
 }
 
 mkdirSync(ZIEL, { recursive: true });
@@ -199,7 +139,7 @@ for (const f of readdirSync(ZIEL)) if (f.endsWith('.json')) rmSync(new URL(f, ZI
 const index = {
   quelle: '© OpenStreetMap-Mitwirkende (ODbL), Auszug von Geofabrik',
   stand: staende.filter(Boolean).map(d => d.toISOString().slice(0, 10)).sort()[0] ?? new Date().toISOString().slice(0, 10),
-  kachelGrad: 1 / KACHEL, kacheln: {},
+  kachelGrad: 0.1, kacheln: {},
 };
 let bytes = 0;
 for (const [k, w] of kacheln) {

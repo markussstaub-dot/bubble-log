@@ -11,7 +11,9 @@ daraus deinen Verbrauch.
 - **Laden:** Ladepunkte im Umkreis (Ladesäulenregister der Bundesnetzagentur, CC BY 4.0), Ladevorgänge protokollieren.
 - **12-V-Bordspannung:** mit einem BM6-Batteriewächter, inklusive Beleg für die Werkstatt.
 - **Tempolimit-Schild:** zeigt während der Fahrt das Limit der Straße groß an, offline aus OpenStreetMap
-  (© OpenStreetMap-Mitwirkende, ODbL; bisher Saarland und Rheinland-Pfalz).
+  (© OpenStreetMap-Mitwirkende, ODbL). Die App lädt die Daten selbst über Overpass für 25 km um das eigene Zuhause
+  (auf Wunsch 40 km), überall auf der Welt (je nach Server 5–30 Minuten, danach offline). Implizite Werte wie `CH:rural` nach Ländertabelle
+  (DE, CH, AT, IT, FR).
   **Nur zur Orientierung: Es gelten immer die Schilder an der Straße.** Die Daten können veraltet oder falsch sein,
   Baustellen, Wechselschilder und zeitliche Limits fehlen. Korrekturen gehören in OpenStreetMap.
 

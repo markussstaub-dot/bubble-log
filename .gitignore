@@ -17,3 +17,6 @@ Thumbs.db
 
 # Rohe Devlogs vom Handy (per adb geholt), nur lokal
 logs/
+
+# Tempolimit-Kacheln vom Prüfwerkzeug (tools/tempolimit.mjs), nur lokal zum Vergleich
+docs/tempolimit/
