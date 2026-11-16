@@ -3,6 +3,9 @@
 Neueste oben. Die Versionsnummer steht in der App unter Einstellungen ganz unten.
 
 ## Noch nicht in einer APK
+
+## Bubble-Log-2045 (16.11.2026, Version 2026.11.16-2045)
+Per adb über 1122 installiert, Daten bleiben. Als GitHub-Release veröffentlicht (Nachfolger von 1716).
 - **Notizen für alle** (SPEC-konsole.md): Notizen sind eigene Daten (`eigen.notizen`), nicht mehr nur Devlog-Zeilen,
   und kommen ohne Entwicklermodus an. Bubble Log ist Teilen-Ziel für Text (`ACTION_SEND` text/plain): Jede App kann
   so eine Notiz schicken, Zeit = Empfang, Ort = letzter GPS-Punkt. Der Sticky-Broadcast bleibt (Signatur).
